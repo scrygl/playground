@@ -109,18 +109,19 @@
 <div id="intro">
   <div class="sub">gravity well</div>
   <h1>A&nbsp;GALAXY&nbsp;OF&nbsp;GALAXIES</h1>
-  <div class="tag">you are a speck of gravity. pull stars into orbit and grow. dart through a <b style="color:#ff8a8a">bigger</b> well to siphon its swarm; ram a <b style="color:#9cf0a8">smaller</b> core to swallow it whole.</div>
+  <div class="tag">you are a speck of gravity. pull stars into orbit and grow. dart through a <b style="color:#ff8a8a">bigger</b> well to siphon its swarm; pin a <b style="color:#9cf0a8">smaller</b> core to devour it. burn your own stars to boost away.</div>
   <button id="dive" type="button">dive in ↯</button>
 </div>
 
 <div id="stats" class="panel">
   <div class="big">mass <b id="mass">0</b></div>
+  <div class="row">swarm&nbsp; <b id="swarm">0</b> <span style="opacity:.55">(boost fuel)</span></div>
   <div class="row">stars&nbsp; <b id="stars">0</b></div>
   <div class="row">reach&nbsp; <b id="reach">0</b></div>
   <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
 </div>
 <div id="toast"></div>
-<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back · R reset · ` dev</div>
+<div id="hint" class="panel">hold click / space to boost · scroll peek · esc back · R reset · ` dev</div>
 
 <div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
 <div id="dev">
@@ -158,6 +159,7 @@ const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const intro = document.getElementById('intro');
 const massEl = document.getElementById('mass');
+const swarmEl = document.getElementById('swarm');
 const starsEl = document.getElementById('stars');
 const reachEl = document.getElementById('reach');
 const rankEl = document.getElementById('rank');
@@ -216,6 +218,8 @@ const TUNE_DEF = {
   steal: 6,     // siphon rate baseline
   growth: 1,    // star mass yield (newly spawned stars)
   bots: 6,      // rival count (applies on R reset)
+  boost: 1.85,  // boost thrust multiplier (burns orbiters as fuel)
+  devour: 1.4,  // seconds a devour channel takes to finish
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
 try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw_tune') || '{}'), { paused: false }); } catch (e) {}
@@ -284,6 +288,7 @@ function buildWorld() {
     const n = Math.round(TOTAL * (gal.r / wsum));
     for (let k = 0; k < n; k++) { const s = makeStar(gal); seatStar(s, gal); stars.push(s); }
   }
+  baseStarCount = stars.length;
 }
 function respawnStar(s) {
   const gal = galaxies[(Math.random() * galaxies.length) | 0];
@@ -311,6 +316,8 @@ class Well {
     this.collected = 0;
     this.think = rand(0, 0.4); this.target = null; this.state = 'feed';
     this.flash = 0; this._steal = 0;
+    this.doom = null;           // active devour channel: { by: Well, t: 0..1 }
+    this.boosting = false; this.boostT = 0;
   }
   mass()   { return this.coreMass + this.orbMass; }
   // reach grows sub-linearly (mass^0.42) so large wells stop ballooning —
@@ -327,14 +334,14 @@ class Well {
   // seat a body into a coherent near-circular orbit at its arrival radius, with
   // a little eccentricity for life. Real 1/r^2 gravity then evolves it — orbits
   // precess, vary in speed, and the whole disk stays bound within the reach.
-  _admit(rx, ry, star) {
+  _admit(rx, ry, star, inward = 0) {
     const r = Math.hypot(rx, ry) + 1e-3;
     const soft = this.coreR() * 0.7;
     const vC = Math.sqrt(TUNE.grav * this.mass() / (r + soft));   // circular speed here
     const tx = -ry / r * this.spin, ty = rx / r * this.spin; // tangential (spin dir)
     const rhx = rx / r, rhy = ry / r;                        // radial unit
     const speed = vC * rand(0.84, 1.06);                     // spread -> disk thickness
-    const vr = vC * rand(-0.12, 0.12);                       // slight eccentricity
+    const vr = vC * (rand(-0.12, 0.12) - inward);            // inward > 0 -> flows in visibly
     this.orbiters.push({
       rx, ry, rvx: tx * speed + rhx * vr, rvy: ty * speed + rhy * vr,
       x: 0, y: 0, px: 0, py: 0,
@@ -347,9 +354,19 @@ class Well {
   captureStar(star) {                          // hand a free star into orbit at its arrival point
     this._admit(star.x - this.x, star.y - this.y, star);
   }
-  receiveOrbiter(o) {                          // a siphoned star arrives at the outer edge
-    const r = this.reachR() * rand(0.55, 0.82), a = rand(0, TAU);
-    this._admit(Math.cos(a) * r, Math.sin(a) * r, o);
+  // a stolen star arrives WHERE IT WAS TAKEN — it visibly streams across the
+  // gap and spirals into the new owner's disk instead of teleporting
+  receiveOrbiter(o) {
+    let rx, ry;
+    if (o.wx !== undefined) {
+      rx = o.wx - this.x; ry = o.wy - this.y;
+      const r = Math.hypot(rx, ry) + 1e-3, maxR = this.reachR() * 1.1;
+      if (r > maxR) { rx *= maxR / r; ry *= maxR / r; }
+    } else {
+      const rr = this.reachR() * rand(0.55, 0.82), a = rand(0, TAU);
+      rx = Math.cos(a) * rr; ry = Math.sin(a) * rr;
+    }
+    this._admit(rx, ry, o, 0.4);
   }
   _cap() {                                     // fold the smallest into the dense core
     while (this.orbiters.length > ORB_CAP) {
@@ -370,7 +387,8 @@ class Well {
     }
     const o = this.orbiters.splice(mi, 1)[0];
     this.orbMass -= o.mass;
-    return { size: o.size, warm: o.warm, mass: o.mass };  // strip to a plain star
+    // plain star payload, carrying its world position so transfers can travel
+    return { size: o.size, warm: o.warm, mass: o.mass, wx: o.x, wy: o.y };
   }
 }
 
@@ -401,19 +419,21 @@ function respawnWell(w, mass) {
   w.y = gal.y + rand(-gal.r, gal.r) * 0.4;
   w.coreMass = mass; w.orbMass = 0; w.orbiters = [];
   w.vx = w.vy = 0; w.target = null; w.think = rand(0, 0.4);
+  w.doom = null; w.boosting = false; w._steal = 0;
 }
 function consume(strong, weak) {
   bursts.push({ x: weak.x, y: weak.y, r0: weak.coreR() * 1.5, t: 1, hue: strong.hue });
+  if (strong.isPlayer || weak.isPlayer) shake = 1;
   strong.coreMass += weak.coreMass;
   for (const o of weak.orbiters) {
-    if (strong.orbiters.length < ORB_CAP) strong.receiveOrbiter(o);
-    else { strong.coreMass += o.mass; strong.orbMass += 0; }
+    if (strong.orbiters.length < ORB_CAP)
+      strong.receiveOrbiter({ size: o.size, warm: o.warm, mass: o.mass, wx: o.x, wy: o.y });
+    else strong.coreMass += o.mass;
   }
-  strong.orbiters.length && strong._cap();
-  weak.orbiters = []; weak.orbMass = 0;
+  weak.orbiters = []; weak.orbMass = 0; weak.doom = null;
   strong.flash = 1;
-  if (weak.isPlayer) { respawnWell(weak, 8); showToast('consumed — regrown'); }
-  else if (strong.isPlayer) { respawnWell(weak, rand(6, 14)); showToast('swallowed a rival'); }
+  if (weak.isPlayer) { respawnWell(weak, 8); showToast('devoured — regrown far away'); }
+  else if (strong.isPlayer) { respawnWell(weak, rand(6, 14)); showToast('rival devoured'); }
   else respawnWell(weak, rand(6, 14));
 }
 
@@ -424,6 +444,9 @@ function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show
 let beams = [];     // active siphon links this frame (rebuilt each tick)
 const bursts = [];  // expanding shock rings from consumes
 const siphonState = { raiding: false, raided: false, wasRaiding: false, wasRaided: false };
+let shake = 0;                                  // screen shake on devours
+let prevPDoom = false, prevDevour = false;      // rising-edge toast tracking
+let baseStarCount = 0;                          // world star pool size (ejected stars are extra)
 
 /* --------------------------- camera ----------------------------- */
 const cam = { x: 0, y: 0, zoom: 0.1 };
@@ -456,12 +479,18 @@ window.addEventListener('pointermove', e => {
   mouse.sx = e.clientX; mouse.sy = e.clientY;
 });
 document.getElementById('dive').addEventListener('click', enterPlay);
+let boostHeld = false;
+canvas.addEventListener('pointerdown', () => { if (mode === 'play') boostHeld = true; });
+window.addEventListener('pointerup', () => boostHeld = false);
+window.addEventListener('blur', () => boostHeld = false);
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') backToOverview();
+  else if (e.key === ' ') { boostHeld = true; e.preventDefault(); }
   else if (e.key === 'r' || e.key === 'R') resetGame();          // dev reset
   else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
   else if (e.key === 'p' || e.key === 'P') togglePause();
 });
+window.addEventListener('keyup', e => { if (e.key === ' ') boostHeld = false; });
 function resetGame() {
   buildWorld(); spawnWells();
   anim = null; mode = 'overview';
@@ -484,6 +513,8 @@ const PARAMS = [
   ['reachK',  'reach scale',    8,   30,   0.5 ],
   ['speed',   'well thrust',    0.3, 2.5,  0.05],
   ['steal',   'siphon rate',    0,   20,   0.5 ],
+  ['boost',   'boost power',    1,   3,    0.05],
+  ['devour',  'devour time',    0.4, 3,    0.1 ],
   ['growth',  'star yield ®',   0.2, 3,    0.05],
   ['bots',    'bot count ®',    0,   12,   1   ],
 ];
@@ -656,14 +687,29 @@ function drawWell(w) {
   ctx.fillStyle = bloom;
   ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
   starMark(sx, sy, clamp(cc * 1.1, 6, 20), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
+
+  // devour channel: an arc fills around the doomed core — red when it's bad
+  // news for you, green when you're the one devouring
+  if (w.doom) {
+    const t = clamp01(w.doom.t);
+    const col = w.isPlayer ? [255, 70, 70] : (w.doom.by === player ? [138, 240, 150] : [255, 120, 80]);
+    const rA = Math.max(cc * 2.2, 14);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = rgba(col, 0.22);
+    ctx.beginPath(); ctx.arc(sx, sy, rA, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = rgba(col, 0.92);
+    ctx.beginPath(); ctx.arc(sx, sy, rA, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
+  }
 }
 function drawEffects(dt) {
   ctx.globalCompositeOperation = 'lighter';
-  // siphon beams: dotted flow from victim toward raider
+  // siphon beams: bright dashed flow from victim toward raider
   for (const bm of beams) {
     const [x0, y0] = toScreen(bm.x0, bm.y0), [x1, y1] = toScreen(bm.x1, bm.y1);
-    ctx.strokeStyle = rgba(bm.hue, 0.5); ctx.lineWidth = 1.4;
-    ctx.setLineDash([2, 9]); ctx.lineDashOffset = -(perfNow * 90) % 11;
+    ctx.strokeStyle = rgba(bm.hue, 0.18); ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = rgba(bm.hue, 0.75); ctx.lineWidth = 2;
+    ctx.setLineDash([3, 8]); ctx.lineDashOffset = -(perfNow * 120) % 11;
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     ctx.setLineDash([]); ctx.lineDashOffset = 0;
   }
@@ -750,6 +796,13 @@ function botThink(w, dt) {
   w.think -= dt;
   if (w.think > 0) return;
   w.think = 0.35;
+  // escaping a devour channel overrides everything — boost away hard
+  if (w.doom) {
+    const by = w.doom.by;
+    w.target = [w.x + (w.x - by.x) * 3, w.y + (w.y - by.y) * 3];
+    w.state = 'flee'; w.boosting = true;
+    return;
+  }
   const myMass = w.mass();
   let threat = null, tD = 1e9, prey = null, pD = 1e9;
   for (const o of wells) {
@@ -758,23 +811,55 @@ function botThink(w, dt) {
     if (o.mass() > myMass * 1.15 && d < 1600 && d < tD) { threat = o; tD = d; }
     if (o.mass() * 1.15 < myMass && o.orbiters.length > 3 && d < 1400 && d < pD) { prey = o; pD = d; }
   }
-  if (threat) { w.target = [w.x + (w.x - threat.x), w.y + (w.y - threat.y)]; w.state = 'flee'; return; }
-  if (prey)   { w.target = [prey.x, prey.y]; w.state = 'hunt'; return; }
+  if (threat) {
+    w.target = [w.x + (w.x - threat.x), w.y + (w.y - threat.y)];
+    w.state = 'flee'; w.boosting = tD < 600;      // burn stars to escape
+    return;
+  }
+  if (prey) {
+    w.target = [prey.x, prey.y];
+    w.state = 'hunt'; w.boosting = pD < 700 && w.orbiters.length > 8;  // burn to close
+    return;
+  }
   let bx = w.x, by = w.y, bd = 1e9;              // sample the field for nearby food
   for (let k = 0; k < 48; k++) {
     const s = stars[(Math.random() * stars.length) | 0];
     const d = Math.hypot(s.x - w.x, s.y - w.y);
     if (d < bd) { bd = d; bx = s.x; by = s.y; }
   }
-  w.target = [bx, by]; w.state = 'feed';
+  w.target = [bx, by]; w.state = 'feed'; w.boosting = false;
+}
+// boost: throw one of your own stars backward for thrust — momentum for mass
+function ejectStar(w, dirx, diry) {
+  const o = w.popOuter(); if (!o) return;
+  let gal = galaxies[0], bg = 1e18;              // nearest galaxy anchors its drift
+  for (const g of galaxies) { const dd = (g.x-w.x)*(g.x-w.x) + (g.y-w.y)*(g.y-w.y); if (dd < bg) { bg = dd; gal = g; } }
+  const s = makeStar(gal, 0.5);
+  s.size = o.size; s.warm = o.warm; s.mass = o.mass;
+  s.x = w.x - dirx * (w.coreR() + 8);
+  s.y = w.y - diry * (w.coreR() + 8);
+  s.vx = -dirx * 460 + w.vx * 0.4;
+  s.vy = -diry * 460 + w.vy * 0.4;
+  s.gx = gal.x; s.gy = gal.y; s.GM = gal.GM; s.gspin = gal.omega < 0 ? -1 : 1;
+  s.immuneW = w; s.immuneT = 1.3;                // can't instantly re-eat your exhaust
+  s.transient = true;
+  stars.push(s);
+  w.flash = Math.max(w.flash, 0.2);
 }
 function moveWell(w, dt) {
   if (!w.target) return;
   const dx = w.target[0] - w.x, dy = w.target[1] - w.y;
   const d = Math.hypot(dx, dy) + 1e-4;
-  const spd = Math.min(w.maxSpeed() * TUNE.speed, d * 3.2);
+  const canBoost = w.boosting && w.orbiters.length > 0;
+  let sMax = w.maxSpeed() * TUNE.speed;
+  if (canBoost) sMax *= TUNE.boost;
+  const spd = Math.min(sMax, d * 3.2);
   w.vx = dx / d * spd; w.vy = dy / d * spd;
   w.x += w.vx * dt; w.y += w.vy * dt;
+  if (canBoost) {                                // thrust costs a star every beat
+    w.boostT -= dt;
+    if (w.boostT <= 0) { w.boostT = 0.22; ejectStar(w, dx / d, dy / d); }
+  }
   const pr = Math.hypot(w.x, w.y), lim = WORLD_R - w.coreR();
   if (pr > lim) { w.x *= lim / pr; w.y *= lim / pr; }
 }
@@ -784,7 +869,9 @@ function moveWell(w, dt) {
 // reins free stars toward their circular flow so the arms persist, and a
 // capture assist (swirl + drag) warps infall into a sweep instead of a slingshot.
 function updateStars(dt, live) {
-  for (const s of stars) {
+  for (let si = stars.length - 1; si >= 0; si--) {
+    const s = stars[si];
+    if (s.immuneT > 0) { s.immuneT -= dt; if (s.immuneT <= 0) s.immuneW = null; }
     // --- home galaxy gravity ---
     const dxg = s.gx - s.x, dyg = s.gy - s.y;
     const rg = Math.hypot(dxg, dyg) + 1e-4;
@@ -795,6 +882,7 @@ function updateStars(dt, live) {
     let best = null, bestPull = 0, bd = 0, bdx = 0, bdy = 0, brr = 0;
     if (live) {
       for (const w of wells) {
+        if (w === s.immuneW && s.immuneT > 0) continue;   // fresh exhaust
         const dx = w.x - s.x, dy = w.y - s.y;
         const rr = w.reachR();
         if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
@@ -837,7 +925,9 @@ function updateStars(dt, live) {
     if (best && bd < brr * CAPTURE_BAND) {
       best.captureStar(s);
       if (best.isPlayer) best.collected++;
-      respawnStar(s);
+      // ejected exhaust stars are extra — retire them instead of respawning
+      if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
+      else respawnStar(s);
       continue;
     }
 
@@ -920,6 +1010,7 @@ function updateOrbiters(simDt) {
   }
 }
 function wellClashes(dt) {
+  for (const w of wells) w._doomFresh = false;
   for (let i = 0; i < wells.length; i++) {
     for (let j = i + 1; j < wells.length; j++) {
       const a = wells[i], b = wells[j];
@@ -927,10 +1018,23 @@ function wellClashes(dt) {
       const small = big === a ? b : a;
       const d = Math.hypot(big.x - small.x, big.y - small.y);
 
-      // BIG can only win by engulfing the small core — and small is fast,
-      // so catching it is hard. This is the only way a large well grows by combat.
-      if (d < big.coreR() * 0.7 && big.mass() > small.mass() * CONSUME_RATIO) {
-        consume(big, small); continue;
+      // DEVOUR CHANNEL: pin the smaller core inside yours and a red arc fills
+      // over TUNE.devour seconds while its swarm drains — it can still boost
+      // free. Only completes if you hold the pin. The only combat kill.
+      if (d < big.coreR() + small.coreR() * 0.6 && big.mass() > small.mass() * CONSUME_RATIO) {
+        if (!small.doom || small.doom.by !== big) small.doom = { by: big, t: 0 };
+        small.doom.t += dt / TUNE.devour;
+        small._doomFresh = true;
+        big._steal += 12 * dt;                    // the channel force-drains the victim
+        let drained = 0;
+        while (big._steal >= 1 && small.orbiters.length) {
+          const o = small.popOuter();
+          if (o) big.receiveOrbiter(o);
+          big._steal -= 1; drained++;
+        }
+        if (drained) beams.push({ x0: small.x, y0: small.y, x1: big.x, y1: big.y, hue: big.hue });
+        big.flash = Math.max(big.flash, 0.4);
+        if (small.doom.t >= 1) { consume(big, small); continue; }
       }
 
       // SIPHON favours the underdog: the smaller well, diving into the bigger
@@ -956,6 +1060,13 @@ function wellClashes(dt) {
       }
     }
   }
+  // devour channels decay fast once the victim slips the pin
+  for (const w of wells) {
+    if (w.doom && !w._doomFresh) {
+      w.doom.t -= dt * 1.2;
+      if (w.doom.t <= 0) w.doom = null;
+    }
+  }
 }
 
 /* ----------------------------- loop ----------------------------- */
@@ -975,17 +1086,25 @@ function frame(now) {
     if (live) {
       const [tx, ty] = toWorld(mouse.sx, mouse.sy);
       player.target = [tx, ty];
+      player.boosting = boostHeld;
       for (const w of wells) { if (!w.isPlayer) botThink(w, simDt); moveWell(w, simDt); }
     }
     updateStars(simDt, live);
     if (live) {
       beams = []; siphonState.raiding = false; siphonState.raided = false;
       wellClashes(simDt);
-      // announce siphon state on the rising edge only
-      if (siphonState.raiding && !siphonState.wasRaiding) showToast('siphoning ↯');
-      else if (siphonState.raided && !siphonState.wasRaided) showToast('being siphoned!');
+      // announce siphon state on the rising edge only (devour warnings outrank)
+      if (siphonState.raiding && !siphonState.wasRaiding && !player.doom) showToast('siphoning ↯');
+      else if (siphonState.raided && !siphonState.wasRaided && !player.doom) showToast('being siphoned!');
       siphonState.wasRaiding = siphonState.raiding;
       siphonState.wasRaided = siphonState.raided;
+      // devour warnings on their rising edges
+      const pDoom = !!player.doom;
+      if (pDoom && !prevPDoom) showToast('⚠ being devoured — boost away!');
+      prevPDoom = pDoom;
+      const devouring = wells.some(x => x.doom && x.doom.by === player);
+      if (devouring && !prevDevour) showToast('devouring…');
+      prevDevour = devouring;
     }
     updateOrbiters(simDt);
   }
@@ -1013,6 +1132,15 @@ function frame(now) {
     cam.y += (0 - cam.y) * Math.min(1, dt * 2);
   }
 
+  // screen shake on devours (world-space jitter so zoom doesn't change feel)
+  let jx = 0, jy = 0;
+  if (shake > 0) {
+    const j = shake * shake * 7 / cam.zoom;
+    jx = gauss() * j; jy = gauss() * j;
+    shake = Math.max(0, shake - dt * 1.6);
+  }
+  cam.x += jx; cam.y += jy;
+
   drawBackground();
   drawGalaxyGlows();
   drawStars();
@@ -1024,11 +1152,23 @@ function frame(now) {
   if (mode !== 'overview') drawMinimap();
   if (mode === 'play') drawCursor();
 
+  // danger vignette while a devour channel is eating you
+  if (mode === 'play' && player.doom) {
+    const t = clamp01(player.doom.t);
+    const g = ctx.createRadialGradient(W/2, H/2, MINSIDE * 0.3, W/2, H/2, MINSIDE * 0.8);
+    g.addColorStop(0, 'rgba(255,40,40,0)');
+    g.addColorStop(1, `rgba(255,32,32,${(0.10 + 0.30*t) * (0.75 + 0.25*Math.sin(perfNow*9))})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  cam.x -= jx; cam.y -= jy;
+
   // toast fade
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('show'); }
 
   // hud
   massEl.textContent = Math.round(player.mass()).toLocaleString();
+  swarmEl.textContent = player.orbiters.length;
   starsEl.textContent = player.collected.toLocaleString();
   reachEl.textContent = Math.round(player.reachR()).toLocaleString();
   let rank = 1; const pm = player.mass();
