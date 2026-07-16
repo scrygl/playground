@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twinkle Cells — agar visual</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #14061f; }
+  #stage { display: block; width: 100vw; height: 100vh; }
+
+  .hud {
+    position: fixed; left: 16px; bottom: 14px;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    color: #d9b6ff; letter-spacing: .04em;
+    text-shadow: 0 0 8px rgba(120,40,180,.6);
+    pointer-events: none; user-select: none; opacity: .8;
+  }
+  .hud b { color: #ffe9a8; font-weight: 600; }
+  .hint {
+    position: fixed; right: 16px; bottom: 14px;
+    font: 12px/1.5 ui-monospace, Menlo, monospace;
+    color: #a884c8; opacity: .55; pointer-events: none; user-select: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div class="hud">twinkle&nbsp;cells &nbsp;·&nbsp; <b id="count">0</b> drifting</div>
+<div class="hint">move the mouse — the field leans toward you</div>
+
+<script>
+/* ------------------------------------------------------------------ *
+ *  Twinkle Cells
+ *  A pre-game visual for an agar-like toy. Each "cell" is a diamond
+ *  of squares — bright yellow/white core, orange satellites, faint
+ *  purple outer dots — twinkling like a tiny constellation:
+ *
+ *              .
+ *              o
+ *          . o [] o .
+ *              o
+ *              .
+ *
+ *  Palette leans on a MATLAB-ish sunset ramp (deep purple -> magenta
+ *  -> orange -> gold -> white).
+ * ------------------------------------------------------------------ */
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const countEl = document.getElementById('count');
+
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---- sunset ramp: t in [0,1] from cool core-halo to warm core ---- *
+ * We sample this per-cell to tint the whole constellation, and per
+ * ring (core / satellite / dot) to fade brightness outward.          */
+const STOPS = [
+  [0.00, [ 34,  6,  48]],   // deep purple (space)
+  [0.18, [ 78, 14, 110]],   // violet
+  [0.38, [150, 34, 120]],   // magenta
+  [0.58, [214, 74,  86]],   // rose-red
+  [0.74, [246, 132, 52]],   // orange
+  [0.88, [255, 198, 92]],   // gold
+  [1.00, [255, 250, 224]],  // near-white
+];
+function ramp(t) {
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  for (let i = 1; i < STOPS.length; i++) {
+    if (t <= STOPS[i][0]) {
+      const [t0, c0] = STOPS[i - 1];
+      const [t1, c1] = STOPS[i];
+      const f = (t - t0) / (t1 - t0);
+      return [
+        c0[0] + (c1[0] - c0[0]) * f,
+        c0[1] + (c1[1] - c0[1]) * f,
+        c0[2] + (c1[2] - c0[2]) * f,
+      ];
+    }
+  }
+  return STOPS[STOPS.length - 1][1];
+}
+const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+
+/* -------------------------- the cells ---------------------------- */
+const rand = (a, b) => a + Math.random() * (b - a);
+const TAU = Math.PI * 2;
+
+class Cell {
+  constructor() { this.reset(true); }
+  reset(spawnAnywhere) {
+    this.x = spawnAnywhere ? rand(0, W) : rand(-40, W + 40);
+    this.y = spawnAnywhere ? rand(0, H) : rand(-40, H + 40);
+    // unit = size of the central square. Everything scales from it.
+    this.unit = rand(4, 26);
+    // gentle drift
+    const dir = rand(0, TAU), spd = rand(2, 12) / this.unit; // big = slow
+    this.vx = Math.cos(dir) * spd;
+    this.vy = Math.sin(dir) * spd;
+    this.spin = rand(-0.15, 0.15);
+    this.rot = rand(0, TAU);
+    // twinkle
+    this.phase = rand(0, TAU);
+    this.twSpeed = rand(0.6, 2.2);
+    // warmth of this cell along the sunset ramp (base tint)
+    this.warm = rand(0.35, 0.95);
+  }
+
+  step(dt, tsec, mx, my, ml) {
+    this.x += this.vx * dt * 60;
+    this.y += this.vy * dt * 60;
+    this.rot += this.spin * dt;
+
+    // mouse lean — the whole field drifts subtly toward the cursor
+    if (ml) {
+      const dx = mx - this.x, dy = my - this.y;
+      const d = Math.hypot(dx, dy) + 0.001;
+      const pull = Math.min(60 / d, 0.6);
+      this.x += (dx / d) * pull * dt * 20;
+      this.y += (dy / d) * pull * dt * 20;
+    }
+
+    // wrap
+    const m = 60;
+    if (this.x < -m) this.x = W + m; else if (this.x > W + m) this.x = -m;
+    if (this.y < -m) this.y = H + m; else if (this.y > H + m) this.y = -m;
+
+    this.tw = 0.55 + 0.45 * Math.sin(tsec * this.twSpeed + this.phase);
+  }
+
+  // draw one square centered at (0,0) in local space
+  static sq(u, color, alpha) {
+    ctx.fillStyle = rgba(color, alpha);
+    ctx.fillRect(-u / 2, -u / 2, u, u);
+  }
+
+  draw() {
+    const u = this.unit;
+    const tw = this.tw;                 // 0.1 .. 1 twinkle
+    const gap = u * 1.7;                // spacing between diamond rings
+
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+
+    // ---- soft halo (purple) behind the whole thing ----
+    const haloR = gap * 2.6;
+    const g = ctx.createRadialGradient(0, 0, u * 0.3, 0, 0, haloR);
+    const haloC = ramp(this.warm * 0.5);
+    g.addColorStop(0, rgba(haloC, 0.16 * tw));
+    g.addColorStop(1, rgba(haloC, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, haloR, 0, TAU);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // colors along the ramp: outer(dot) cool -> core hot+twinkle
+    const cCore = ramp(Math.min(1, this.warm + 0.25 * tw));  // yellow/white
+    const cSat  = ramp(this.warm * 0.72);                    // orange/rose
+    const cDot  = ramp(this.warm * 0.4);                     // purple/magenta
+
+    // ---- outer dots '.' at distance 2 (N/E/S/W) ----
+    const du = u * 0.32;
+    for (const [ox, oy] of [[0,-2],[0,2],[-2,0],[2,0]]) {
+      ctx.save();
+      ctx.translate(ox * gap, oy * gap);
+      Cell.sq(du, cDot, 0.5 * tw);
+      ctx.restore();
+    }
+
+    // ---- satellites 'o' at distance 1 (N/E/S/W) ----
+    const su = u * 0.6;
+    for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      ctx.save();
+      ctx.translate(ox * gap, oy * gap);
+      Cell.sq(su, cSat, 0.72 * tw);
+      ctx.restore();
+    }
+
+    // ---- central square '[]' ----
+    Cell.sq(u, cCore, Math.min(1, 0.85 * tw + 0.15));
+    // hot inner pip for the sparkle
+    Cell.sq(u * 0.42, ramp(1), Math.min(1, tw));
+
+    ctx.restore();
+  }
+}
+
+/* -------------------------- background --------------------------- */
+function drawBackground(tsec) {
+  // sunset vertical wash
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0.0, '#1b0730');
+  bg.addColorStop(0.45, '#2a0a3a');
+  bg.addColorStop(0.75, '#4a1140');
+  bg.addColorStop(1.0, '#742138');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // faint drifting grid — the "arena" floor
+  const gridSize = 46;
+  const off = (tsec * 6) % gridSize;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(190,120,220,0.06)';
+  ctx.beginPath();
+  for (let x = -off; x <= W; x += gridSize) {
+    ctx.moveTo(x, 0); ctx.lineTo(x, H);
+  }
+  for (let y = -off; y <= H; y += gridSize) {
+    ctx.moveTo(0, y); ctx.lineTo(W, y);
+  }
+  ctx.stroke();
+
+  // a warm glow low on the horizon
+  const gg = ctx.createRadialGradient(W * 0.5, H * 1.05, 0, W * 0.5, H * 1.05, H * 0.9);
+  gg.addColorStop(0, 'rgba(255,150,70,0.10)');
+  gg.addColorStop(1, 'rgba(255,150,70,0)');
+  ctx.fillStyle = gg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* --------------------------- the loop ---------------------------- */
+let cells = [];
+function populate() {
+  const target = Math.round((W * H) / 26000);
+  cells = Array.from({ length: Math.max(28, Math.min(180, target)) }, () => new Cell());
+  countEl.textContent = cells.length;
+}
+populate();
+window.addEventListener('resize', populate);
+
+const mouse = { x: 0, y: 0, live: false };
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.live = true; });
+window.addEventListener('mouseleave', () => { mouse.live = false; });
+// drop a fresh cluster on click
+window.addEventListener('pointerdown', e => {
+  for (let i = 0; i < 6; i++) {
+    const c = new Cell();
+    c.x = e.clientX + rand(-30, 30);
+    c.y = e.clientY + rand(-30, 30);
+    cells.push(c);
+  }
+  if (cells.length > 240) cells.splice(0, cells.length - 240);
+  countEl.textContent = cells.length;
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  const tsec = now / 1000;
+
+  drawBackground(tsec);
+
+  // sort by size so small ones sit behind big glows (cheap depth)
+  cells.sort((a, b) => a.unit - b.unit);
+  for (const c of cells) {
+    c.step(dt, tsec, mouse.x, mouse.y, mouse.live);
+    c.draw();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
