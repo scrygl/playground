@@ -233,7 +233,7 @@ const TUNE_DEF = {
   dots: 4,      // outer dot squares '.' (0 / 4 / 8)
   dotSize: 0.32,// outer dot size as a fraction of the core square
   twinkle: 1,   // twinkle depth (0 = steady, 1.5 = deep flicker)
-  bgNoise: 0.22,// square-noise background strength (travel/parallax cue)
+  bgStars: 0.55,// background starfield brightness (travel/parallax cue)
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
 try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw_tune') || '{}'), { paused: false }); } catch (e) {}
@@ -542,7 +542,7 @@ const PARAMS = [
   ['dots',    'outer dots',     0,   8,    4   ],
   ['dotSize', 'dot size',       0,   0.8,  0.02],
   ['twinkle', 'twinkle',        0,   1.5,  0.05],
-  ['bgNoise', 'bg noise',       0,   0.4,  0.01],
+  ['bgStars', 'bg stars',       0,   1,    0.05],
 ];
 const devPanel = document.getElementById('dev');
 const devRows = document.getElementById('devrows');
@@ -635,41 +635,42 @@ function starMark(sx, sy, u, warm, tw, spin) {
   ctx.restore();
 }
 
-/* square-noise backdrop: multi-scale blocky value noise (fBm filtered
- * through squares). Two parallax layers anchored to world movement give
- * a strong travel cue even in empty space. Tile is seamless (cell sizes
- * divide the tile), drawn as a repeating pattern. */
-const noiseTile = (() => {
-  const T = 256, c = document.createElement('canvas');
-  c.width = T; c.height = T;
-  const g = c.getContext('2d');
-  for (const [cell, amp] of [[32, 0.5], [16, 0.3], [8, 0.2]]) {   // fBm octaves
-    for (let y = 0; y < T; y += cell)
-      for (let x = 0; x < T; x += cell) {
-        // modulate both ways so the field keeps its depth (not a purple wash)
-        g.fillStyle = Math.random() < 0.5
-          ? `rgba(170,120,235,${Math.random() * amp})`
-          : `rgba(4,1,10,${Math.random() * amp})`;
-        g.fillRect(x, y, cell, cell);
-      }
-  }
-  return c;
-})();
-let noisePat = null;
-function drawNoise() {
-  if (TUNE.bgNoise <= 0.001) return;
-  if (!noisePat) noisePat = ctx.createPattern(noiseTile, 'repeat');
+/* distant starfield backdrop: three parallax depth layers of tiny star-
+ * squares. Each layer pans at d× camera speed and scales with a softened
+ * zoom exponent (far layers respond less), so panning streams past you
+ * and zooming reads as actually diving through depth. Positions wrap in
+ * screen space so coverage holds at every zoom. */
+const BG_LAYERS = [
+  { d: 0.15, n: 90, s: 1.0 },     // farthest, faintest
+  { d: 0.35, n: 70, s: 1.4 },
+  { d: 0.62, n: 50, s: 1.9 },     // nearest background layer
+];
+const bgStarLayers = BG_LAYERS.map(L => Array.from({ length: L.n }, () => ({
+  u: rand(0, 4096), v: rand(0, 4096),
+  size: rand(0.7, 1.6) * L.s,
+  warm: rand(0.15, 0.75),
+  ph: rand(0, TAU), tws: rand(0.4, 1.6),
+})));
+const wrapv = (x, m) => ((x % m) + m) % m;
+function drawBgStars() {
+  const A = TUNE.bgStars;
+  if (A <= 0.005) return;
   ctx.save();
-  for (const [par, phase, amp] of [[0.35, 0, 0.6], [0.7, 137, 1]]) {
-    const ox = ((-cam.x * cam.zoom * par + phase) % 256 + 256) % 256;
-    const oy = ((-cam.y * cam.zoom * par + phase) % 256 + 256) % 256;
-    ctx.globalAlpha = TUNE.bgNoise * amp;
-    ctx.translate(ox, oy);
-    ctx.fillStyle = noisePat;
-    ctx.fillRect(-ox - 256, -oy - 256, W + 512, H + 512);
-    ctx.translate(-ox, -oy);
+  ctx.globalCompositeOperation = 'lighter';
+  const SW = W + 60, SH = H + 60;
+  for (let li = 0; li < BG_LAYERS.length; li++) {
+    const { d } = BG_LAYERS[li];
+    const zl = Math.pow(cam.zoom, 0.4 + 0.45 * d);   // depth-softened zoom response
+    const layerA = A * (0.45 + 0.28 * li);
+    for (const st of bgStarLayers[li]) {
+      const X = wrapv(st.u * 37 * zl - cam.x * d * cam.zoom, SW) - 30;
+      const Y = wrapv(st.v * 37 * zl - cam.y * d * cam.zoom, SH) - 30;
+      const tw = 0.55 + 0.45 * Math.sin(perfNow * st.tws + st.ph);
+      const s = Math.min(3.5, st.size * (0.7 + 0.6 * zl));
+      ctx.fillStyle = rgba(ramp(st.warm), layerA * tw);
+      ctx.fillRect(X - s/2, Y - s/2, s, s);
+    }
   }
-  ctx.globalAlpha = 1;
   ctx.restore();
 }
 function drawBackground() {
@@ -680,7 +681,7 @@ function drawBackground() {
   g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
   g.addColorStop(1, 'rgba(8,3,18,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  drawNoise();
+  drawBgStars();
 }
 function drawGalaxyGlows() {
   ctx.globalCompositeOperation = 'lighter';
