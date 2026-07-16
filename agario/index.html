@@ -3,39 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Twinkle Cells — agar visual</title>
+<title>Twinkle Galaxy — agar visual</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; overflow: hidden; background: #14061f; }
-  #stage { display: block; width: 100vw; height: 100vh; }
+  html, body { height: 100%; overflow: hidden; background: #0a0416; }
+  #stage { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
 
   .hud {
     position: fixed; left: 16px; bottom: 14px;
     font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
     color: #d9b6ff; letter-spacing: .04em;
     text-shadow: 0 0 8px rgba(120,40,180,.6);
-    pointer-events: none; user-select: none; opacity: .8;
+    pointer-events: none; user-select: none; opacity: .82;
   }
   .hud b { color: #ffe9a8; font-weight: 600; }
   .hint {
     position: fixed; right: 16px; bottom: 14px;
     font: 12px/1.5 ui-monospace, Menlo, monospace;
-    color: #a884c8; opacity: .55; pointer-events: none; user-select: none;
+    color: #a884c8; opacity: .5; pointer-events: none; user-select: none;
   }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
-<div class="hud">twinkle&nbsp;cells &nbsp;·&nbsp; <b id="count">0</b> drifting</div>
-<div class="hint">move the mouse — the field leans toward you</div>
+<div class="hud">twinkle&nbsp;galaxy &nbsp;·&nbsp; <b id="count">0</b> cells</div>
+<div class="hint">drag to swing the disk · scroll to zoom · click to fling a spray</div>
 
 <script>
 /* ------------------------------------------------------------------ *
- *  Twinkle Cells
- *  A pre-game visual for an agar-like toy. Each "cell" is a diamond
- *  of squares — bright yellow/white core, orange satellites, faint
- *  purple outer dots — twinkling like a tiny constellation:
+ *  Twinkle Galaxy
+ *  A dense spiral disk of agar-style "cells". Each cell is a little
+ *  square that twinkles; the larger ones bloom into the diamond mark:
  *
  *              .
  *              o
@@ -43,8 +42,10 @@
  *              o
  *              .
  *
- *  Palette leans on a MATLAB-ish sunset ramp (deep purple -> magenta
- *  -> orange -> gold -> white).
+ *  Cells are placed on logarithmic spiral arms and rotate with
+ *  differential (inner-faster) speed, so the arms wind over time.
+ *  Color rides a MATLAB-ish sunset ramp keyed to radius: white-gold
+ *  core -> orange -> magenta -> deep purple rim.
  * ------------------------------------------------------------------ */
 
 const canvas = document.getElementById('stage');
@@ -64,17 +65,15 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---- sunset ramp: t in [0,1] from cool core-halo to warm core ---- *
- * We sample this per-cell to tint the whole constellation, and per
- * ring (core / satellite / dot) to fade brightness outward.          */
+/* ---- MATLAB-ish sunset ramp, sampled per cell by radius ---- */
 const STOPS = [
-  [0.00, [ 34,  6,  48]],   // deep purple (space)
-  [0.18, [ 78, 14, 110]],   // violet
-  [0.38, [150, 34, 120]],   // magenta
-  [0.58, [214, 74,  86]],   // rose-red
-  [0.74, [246, 132, 52]],   // orange
-  [0.88, [255, 198, 92]],   // gold
-  [1.00, [255, 250, 224]],  // near-white
+  [0.00, [255, 252, 232]],  // white-gold  (core)
+  [0.14, [255, 216, 120]],  // gold
+  [0.32, [248, 148, 58]],   // orange
+  [0.52, [226, 84,  96]],   // rose-red
+  [0.70, [176, 44, 132]],   // magenta
+  [0.86, [96,  22, 128]],   // violet
+  [1.00, [40,  10,  60]],   // deep purple (rim)
 ];
 function ramp(t) {
   t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -93,184 +92,199 @@ function ramp(t) {
   return STOPS[STOPS.length - 1][1];
 }
 const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
-
-/* -------------------------- the cells ---------------------------- */
 const rand = (a, b) => a + Math.random() * (b - a);
 const TAU = Math.PI * 2;
+// gaussian-ish for natural scatter
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
+/* --------------------------- galaxy ------------------------------ */
+const view = {
+  tilt: 0.52,        // disk foreshortening (y-squash)
+  roll: -0.35,       // whole-disk rotation, radians
+  zoom: 1,
+  cx: 0, cy: 0,      // set on layout
+};
+
+const ARMS = 3;
+const WIND = 2.6;    // how tightly arms wrap
+let MAXR = 1;
 
 class Cell {
-  constructor() { this.reset(true); }
-  reset(spawnAnywhere) {
-    this.x = spawnAnywhere ? rand(0, W) : rand(-40, W + 40);
-    this.y = spawnAnywhere ? rand(0, H) : rand(-40, H + 40);
-    // unit = size of the central square. Everything scales from it.
-    this.unit = rand(4, 26);
-    // gentle drift
-    const dir = rand(0, TAU), spd = rand(2, 12) / this.unit; // big = slow
-    this.vx = Math.cos(dir) * spd;
-    this.vy = Math.sin(dir) * spd;
-    this.spin = rand(-0.15, 0.15);
-    this.rot = rand(0, TAU);
+  constructor() { this.reset(); }
+  reset() {
+    // radius: dense in the middle, thinning outward
+    const rr = Math.pow(Math.random(), 0.62);
+    this.r = rr;                                  // normalized 0..1
+    // which arm + winding angle + angular scatter (tighter near core)
+    const arm = (Math.floor(Math.random() * ARMS) / ARMS) * TAU;
+    const scatter = gauss() * (0.28 + 0.5 * rr);
+    this.a = arm + rr * WIND * TAU + scatter;
+    // differential rotation — inner spins faster
+    this.omega = 0.045 * (0.22 + 0.78 / (rr + 0.18));
+    // size: a few big anchors, mostly small motes
+    const big = Math.random() < 0.06;
+    this.unit = big ? rand(9, 20) : rand(1.4, 5.5);
+    this.big = big && this.unit > 11;
     // twinkle
     this.phase = rand(0, TAU);
-    this.twSpeed = rand(0.6, 2.2);
-    // warmth of this cell along the sunset ramp (base tint)
-    this.warm = rand(0.35, 0.95);
+    this.twSpeed = rand(0.7, 2.6);
+    // warmth keyed to radius, with a little jitter
+    this.warm = Math.min(1, Math.max(0, this.r + gauss() * 0.06));
   }
 
-  step(dt, tsec, mx, my, ml) {
-    this.x += this.vx * dt * 60;
-    this.y += this.vy * dt * 60;
-    this.rot += this.spin * dt;
+  step(dt) { this.a += this.omega * dt; }
 
-    // mouse lean — the whole field drifts subtly toward the cursor
-    if (ml) {
-      const dx = mx - this.x, dy = my - this.y;
-      const d = Math.hypot(dx, dy) + 0.001;
-      const pull = Math.min(60 / d, 0.6);
-      this.x += (dx / d) * pull * dt * 20;
-      this.y += (dy / d) * pull * dt * 20;
+  draw(scale, spin) {
+    // polar -> tilted screen position
+    const rad = this.r * MAXR * scale;
+    const ang = this.a + spin;
+    let px = Math.cos(ang) * rad;
+    let py = Math.sin(ang) * rad * view.tilt;
+    // roll the disk
+    const cr = Math.cos(view.roll), sr = Math.sin(view.roll);
+    const x = view.cx + (px * cr - py * sr);
+    const y = view.cy + (px * sr + py * cr);
+
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * this.twSpeed + this.phase);
+    const cCore = ramp(this.warm * 0.9);
+    const u = this.unit * scale;
+
+    if (!this.big) {
+      // cheap glowing mote for the vast majority
+      ctx.fillStyle = rgba(cCore, Math.min(1, 0.35 + 0.6 * tw));
+      const s = u * (0.7 + 0.5 * tw);
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+      return;
     }
 
-    // wrap
-    const m = 60;
-    if (this.x < -m) this.x = W + m; else if (this.x > W + m) this.x = -m;
-    if (this.y < -m) this.y = H + m; else if (this.y > H + m) this.y = -m;
-
-    this.tw = 0.55 + 0.45 * Math.sin(tsec * this.twSpeed + this.phase);
-  }
-
-  // draw one square centered at (0,0) in local space
-  static sq(u, color, alpha) {
-    ctx.fillStyle = rgba(color, alpha);
-    ctx.fillRect(-u / 2, -u / 2, u, u);
-  }
-
-  draw() {
-    const u = this.unit;
-    const tw = this.tw;                 // 0.1 .. 1 twinkle
-    const gap = u * 1.7;                // spacing between diamond rings
-
+    // full diamond "star cell" for the anchors
+    const gap = u * 1.7;
     ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rot);
+    ctx.translate(x, y);
+    ctx.rotate(this.a * 0.5);
 
-    // ---- soft halo (purple) behind the whole thing ----
-    const haloR = gap * 2.6;
-    const g = ctx.createRadialGradient(0, 0, u * 0.3, 0, 0, haloR);
-    const haloC = ramp(this.warm * 0.5);
-    g.addColorStop(0, rgba(haloC, 0.16 * tw));
-    g.addColorStop(1, rgba(haloC, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(0, 0, haloR, 0, TAU);
-    ctx.fill();
+    const cSat = ramp(Math.min(1, this.warm * 0.9 + 0.12));
+    const cDot = ramp(Math.min(1, this.warm * 0.9 + 0.28));
 
-    ctx.globalCompositeOperation = 'lighter';
-
-    // colors along the ramp: outer(dot) cool -> core hot+twinkle
-    const cCore = ramp(Math.min(1, this.warm + 0.25 * tw));  // yellow/white
-    const cSat  = ramp(this.warm * 0.72);                    // orange/rose
-    const cDot  = ramp(this.warm * 0.4);                     // purple/magenta
-
-    // ---- outer dots '.' at distance 2 (N/E/S/W) ----
     const du = u * 0.32;
     for (const [ox, oy] of [[0,-2],[0,2],[-2,0],[2,0]]) {
-      ctx.save();
-      ctx.translate(ox * gap, oy * gap);
-      Cell.sq(du, cDot, 0.5 * tw);
-      ctx.restore();
+      ctx.fillStyle = rgba(cDot, 0.5 * tw);
+      ctx.fillRect(ox*gap - du/2, oy*gap - du/2, du, du);
     }
-
-    // ---- satellites 'o' at distance 1 (N/E/S/W) ----
     const su = u * 0.6;
     for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-      ctx.save();
-      ctx.translate(ox * gap, oy * gap);
-      Cell.sq(su, cSat, 0.72 * tw);
-      ctx.restore();
+      ctx.fillStyle = rgba(cSat, 0.72 * tw);
+      ctx.fillRect(ox*gap - su/2, oy*gap - su/2, su, su);
     }
-
-    // ---- central square '[]' ----
-    Cell.sq(u, cCore, Math.min(1, 0.85 * tw + 0.15));
-    // hot inner pip for the sparkle
-    Cell.sq(u * 0.42, ramp(1), Math.min(1, tw));
-
+    ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
+    ctx.fillRect(-u/2, -u/2, u, u);
+    ctx.fillStyle = rgba(ramp(0), Math.min(1, tw));   // white pip
+    ctx.fillRect(-u*0.21, -u*0.21, u*0.42, u*0.42);
     ctx.restore();
   }
 }
 
-/* -------------------------- background --------------------------- */
-function drawBackground(tsec) {
-  // sunset vertical wash
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0.0, '#1b0730');
-  bg.addColorStop(0.45, '#2a0a3a');
-  bg.addColorStop(0.75, '#4a1140');
-  bg.addColorStop(1.0, '#742138');
-  ctx.fillStyle = bg;
+/* ------------------------- transient sprays ---------------------- */
+const sprays = [];
+class Spray {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    const dir = rand(0, TAU), spd = rand(40, 260);
+    this.vx = Math.cos(dir) * spd; this.vy = Math.sin(dir) * spd;
+    this.life = 1; this.unit = rand(2, 6);
+    this.warm = rand(0.05, 0.5);
+    this.phase = rand(0, TAU); this.twSpeed = rand(2, 5);
+  }
+  step(dt) {
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    this.vx *= 0.96; this.vy *= 0.96;
+    this.life -= dt * 0.6;
+  }
+  draw() {
+    if (this.life <= 0) return;
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * this.twSpeed + this.phase);
+    const c = ramp(this.warm);
+    const s = this.unit * (0.7 + 0.6 * tw);
+    ctx.fillStyle = rgba(c, Math.min(1, this.life) * (0.4 + 0.6 * tw));
+    ctx.fillRect(this.x - s/2, this.y - s/2, s, s);
+  }
+}
+
+/* --------------------------- backdrop ---------------------------- */
+function drawBackground() {
+  ctx.fillStyle = '#0a0416';
   ctx.fillRect(0, 0, W, H);
 
-  // faint drifting grid — the "arena" floor
-  const gridSize = 46;
-  const off = (tsec * 6) % gridSize;
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(190,120,220,0.06)';
-  ctx.beginPath();
-  for (let x = -off; x <= W; x += gridSize) {
-    ctx.moveTo(x, 0); ctx.lineTo(x, H);
-  }
-  for (let y = -off; y <= H; y += gridSize) {
-    ctx.moveTo(0, y); ctx.lineTo(W, y);
-  }
-  ctx.stroke();
-
-  // a warm glow low on the horizon
-  const gg = ctx.createRadialGradient(W * 0.5, H * 1.05, 0, W * 0.5, H * 1.05, H * 0.9);
-  gg.addColorStop(0, 'rgba(255,150,70,0.10)');
-  gg.addColorStop(1, 'rgba(255,150,70,0)');
-  ctx.fillStyle = gg;
+  // deep-space vignette wash, warm toward center
+  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.max(W, H) * 0.75);
+  g.addColorStop(0.0, 'rgba(70,20,90,0.42)');
+  g.addColorStop(0.4, 'rgba(40,12,64,0.28)');
+  g.addColorStop(1.0, 'rgba(10,4,22,0)');
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 }
 
-/* --------------------------- the loop ---------------------------- */
+function drawCore(scale) {
+  // bright bloom at the galactic center
+  const r = MAXR * scale * 0.26;
+  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, r);
+  g.addColorStop(0.0, 'rgba(255,252,236,0.95)');
+  g.addColorStop(0.18, 'rgba(255,222,140,0.7)');
+  g.addColorStop(0.5, 'rgba(240,120,80,0.28)');
+  g.addColorStop(1.0, 'rgba(150,40,120,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(view.cx, view.cy, r, 0, TAU);
+  ctx.fill();
+}
+
+/* ----------------------------- loop ------------------------------ */
 let cells = [];
 function populate() {
-  const target = Math.round((W * H) / 26000);
-  cells = Array.from({ length: Math.max(28, Math.min(180, target)) }, () => new Cell());
-  countEl.textContent = cells.length;
+  view.cx = W / 2; view.cy = H / 2;
+  MAXR = Math.min(W, H) * 0.52;
+  const target = Math.round((W * H) / 1500);
+  const n = Math.max(500, Math.min(2200, target));
+  cells = Array.from({ length: n }, () => new Cell());
+  countEl.textContent = n.toLocaleString();
 }
 populate();
 window.addEventListener('resize', populate);
 
-const mouse = { x: 0, y: 0, live: false };
-window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.live = true; });
-window.addEventListener('mouseleave', () => { mouse.live = false; });
-// drop a fresh cluster on click
-window.addEventListener('pointerdown', e => {
-  for (let i = 0; i < 6; i++) {
-    const c = new Cell();
-    c.x = e.clientX + rand(-30, 30);
-    c.y = e.clientY + rand(-30, 30);
-    cells.push(c);
-  }
-  if (cells.length > 240) cells.splice(0, cells.length - 240);
-  countEl.textContent = cells.length;
+/* interaction: drag to roll, wheel to zoom, click to spray */
+let dragging = false, lastX = 0;
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX;
+  for (let i = 0; i < 26; i++) sprays.push(new Spray(e.clientX, e.clientY));
 });
+window.addEventListener('pointerup', () => dragging = false);
+window.addEventListener('pointermove', e => {
+  if (dragging) { view.roll += (e.clientX - lastX) * 0.004; lastX = e.clientX; }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  view.zoom = Math.max(0.5, Math.min(2.4, view.zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
+}, { passive: false });
 
-let last = performance.now();
+let perfNow = 0, last = performance.now(), spin = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  const tsec = now / 1000;
+  perfNow = now / 1000;
+  spin += dt * 0.02;               // slow overall wheel
 
-  drawBackground(tsec);
+  drawBackground();
 
-  // sort by size so small ones sit behind big glows (cheap depth)
-  cells.sort((a, b) => a.unit - b.unit);
-  for (const c of cells) {
-    c.step(dt, tsec, mouse.x, mouse.y, mouse.live);
-    c.draw();
+  const scale = view.zoom;
+  ctx.globalCompositeOperation = 'lighter';
+  drawCore(scale);
+  // draw rim-first so the bright core sits on top
+  cells.sort((a, b) => b.r - a.r);
+  for (const c of cells) { c.step(dt); c.draw(scale, spin); }
+
+  for (let i = sprays.length - 1; i >= 0; i--) {
+    sprays[i].step(dt); sprays[i].draw();
+    if (sprays[i].life <= 0) sprays.splice(i, 1);
   }
   ctx.globalCompositeOperation = 'source-over';
 
