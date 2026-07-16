@@ -22,6 +22,11 @@
   #stats b { color: #ffd98a; font-weight: 600; }
   #stats .rank b { color: #ffe6ad; }
   #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
+  #state {
+    left: 50%; bottom: 52px; transform: translateX(-50%);
+    font-size: 13px; letter-spacing: .14em; text-align: center;
+    color: #b795d8; text-shadow: 0 0 12px rgba(120,40,180,.8);
+  }
 
   #toast {
     position: fixed; left: 50%; top: 32%; transform: translate(-50%,-50%);
@@ -124,6 +129,7 @@
   <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
 </div>
 <div id="toast"></div>
+<div id="state" class="panel"></div>
 <div id="hint" class="panel">hold click / space to boost · scroll peek · esc back · R reset · ` dev</div>
 
 <div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
@@ -167,6 +173,7 @@ const starsEl = document.getElementById('stars');
 const reachEl = document.getElementById('reach');
 const rankEl = document.getElementById('rank');
 const toastEl = document.getElementById('toast');
+const stateEl = document.getElementById('state');
 
 let W = 0, H = 0, DPR = 1, MINSIDE = 1;
 function resize() {
@@ -462,6 +469,11 @@ let shake = 0;                                  // screen shake on devours
 let prevPDoom = false, prevDevour = false;      // rising-edge toast tracking
 let baseStarCount = 0;                          // world star pool size (ejected stars are extra)
 
+// floating mass receipts: '+3★' when stars flow in, '−2★' when they're taken
+const floaters = [];
+let gainAcc = 0, lossAcc = 0, floatT = 0;
+function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
+
 /* --------------------------- camera ----------------------------- */
 const cam = { x: 0, y: 0, zoom: 0.1 };
 const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
@@ -750,21 +762,36 @@ function drawWell(w) {
   ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
   ctx.setLineDash([]);
 
-  // threat / prey read on rivals: red = it can swallow you, green = you can swallow it.
-  // the SOLID inner ring is the "bite zone" — overlap cores to eat.
-  if (!w.isPlayer && player && !player._dead) {
+  // zone painting: the color marks the ZONE, not the well, so danger and
+  // opportunity stop sharing one ambiguous ring.
+  //   giant  -> amber field ring  = dive in and siphon its swarm
+  //             red core disc     = the mouth: crossing it starts YOUR devour
+  //   prey   -> green pin ring    = get your core inside it to devour them
+  if (!w.isPlayer) {
     const pm = player.mass(), wm = w.mass();
-    let mark = null;
-    if (wm > pm * CONSUME_RATIO) mark = [255, 86, 86];
-    else if (pm > wm * CONSUME_RATIO) mark = [138, 240, 150];
-    if (mark) {
-      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 3);
-      ctx.strokeStyle = rgba(mark, 0.25 + 0.25 * pulse); ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 6]);
-      ctx.beginPath(); ctx.arc(sx, sy, rr * 0.97, 0, TAU); ctx.stroke();
+    const dP = Math.hypot(player.x - w.x, player.y - w.y);
+    if (wm > pm * CONSUME_RATIO) {
+      const inField = dP < w.reachR();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = rgba([255, 190, 90], inField ? 0.5 : 0.18);
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.arc(sx, sy, rr * 0.985, 0, TAU); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.strokeStyle = rgba(mark, 0.5); ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(sx, sy, Math.max(cc * 0.7, 4), 0, TAU); ctx.stroke();
+      const mouthR = Math.max((w.coreR() + player.coreR() * 0.6) * cam.zoom, 8);
+      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 4);
+      ctx.fillStyle = rgba([255, 60, 60], (inField ? 0.16 : 0.07) + 0.06 * pulse);
+      ctx.beginPath(); ctx.arc(sx, sy, mouthR, 0, TAU); ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = rgba([255, 80, 80], inField ? 0.75 : 0.3);
+      ctx.beginPath(); ctx.arc(sx, sy, mouthR, 0, TAU); ctx.stroke();
+    } else if (pm > wm * CONSUME_RATIO) {
+      const pinR = Math.max((player.coreR() + w.coreR() * 0.6) * cam.zoom, 8);
+      const closeK = clamp01(1 - dP / (player.reachR() * 2));
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = rgba([138, 240, 150], 0.25 + 0.5 * closeK);
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.arc(sx, sy, pinR, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -787,7 +814,7 @@ function drawWell(w) {
   bloom.addColorStop(1, rgba(w.hue, 0));
   ctx.fillStyle = bloom;
   ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
-  starMark(sx, sy, clamp(cc * 1.1, 6, 20), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
+  starMark(sx, sy, clamp(cc * 1.1, 6, 44), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
 
   // devour channel: an arc fills around the doomed core — red when it's bad
   // news for you, green when you're the one devouring
@@ -800,7 +827,30 @@ function drawWell(w) {
     ctx.beginPath(); ctx.arc(sx, sy, rA, 0, TAU); ctx.stroke();
     ctx.strokeStyle = rgba(col, 0.92);
     ctx.beginPath(); ctx.arc(sx, sy, rA, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
+    if (w.isPlayer || w.doom.by === player) {
+      ctx.font = '600 11px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = rgba(col, 0.95);
+      ctx.fillText(Math.round(t * 100) + '%', sx, sy - rA - 7);
+    }
   }
+}
+// floating '+N★ / −N★' receipts so every mass flow has a visible cause
+function drawFloaters(dt) {
+  if (!floaters.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.font = '600 13px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'center';
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.t -= dt * 0.75;
+    if (f.t <= 0) { floaters.splice(i, 1); continue; }
+    const [x, y] = toScreen(f.x, f.y);
+    ctx.fillStyle = rgba(f.col, Math.min(1, f.t * 1.4));
+    ctx.fillText(f.txt, x, y - (1 - f.t) * 38);
+  }
+  ctx.restore();
 }
 function drawEffects(dt) {
   ctx.globalCompositeOperation = 'lighter';
@@ -878,6 +928,34 @@ function drawMinimap() {
   }
   ctx.restore();
   ctx.restore();
+}
+// one line of words that answers "what is happening to me right now, and why"
+function updateStateLine() {
+  if (mode !== 'play') { stateEl.textContent = ''; return; }
+  let txt = '', col = '#b795d8';
+  const pm = player.mass();
+  if (player.doom) {
+    txt = '⚠ BEING DEVOURED — BOOST AWAY'; col = '#ff6a6a';
+  } else {
+    const victim = wells.find(w => w.doom && w.doom.by === player);
+    if (victim) { txt = 'devouring rival — ' + Math.round(clamp01(victim.doom.t) * 100) + '%'; col = '#8ef09a'; }
+    else if (siphonState.raiding) { txt = 'siphoning their swarm ↯ — stay out of the red core'; col = '#ffd27e'; }
+    else if (siphonState.raided) { txt = 'a raider is draining you — chase it off or flee'; col = '#ff9a7e'; }
+    else {
+      let near = null, nd = 1e9;
+      for (const w of wells) {
+        if (w.isPlayer) continue;
+        const d = Math.hypot(w.x - player.x, w.y - player.y);
+        if (d < nd) { nd = d; near = w; }
+      }
+      if (near && nd < near.reachR() + player.reachR() * 2.5) {
+        if (near.mass() > pm * CONSUME_RATIO) { txt = 'giant nearby — dive its amber field to steal, avoid the red core'; col = '#ffd27e'; }
+        else if (pm > near.mass() * CONSUME_RATIO) { txt = 'prey nearby — pin your core inside its green ring'; col = '#8ef09a'; }
+      }
+    }
+  }
+  stateEl.textContent = txt;
+  stateEl.style.color = col;
 }
 function drawCursor() {
   const x = mouse.sx, y = mouse.sy;
@@ -1025,7 +1103,7 @@ function updateStars(dt, live) {
     // capture: hand off into a real orbit carrying its momentum
     if (best && bd < brr * CAPTURE_BAND) {
       best.captureStar(s);
-      if (best.isPlayer) best.collected++;
+      if (best.isPlayer) { best.collected++; gainAcc++; }
       // ejected exhaust stars are extra — retire them instead of respawning
       if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
       else respawnStar(s);
@@ -1133,7 +1211,11 @@ function wellClashes(dt) {
           if (o) big.receiveOrbiter(o);
           big._steal -= 1; drained++;
         }
-        if (drained) beams.push({ x0: small.x, y0: small.y, x1: big.x, y1: big.y, hue: big.hue });
+        if (drained) {
+          beams.push({ x0: small.x, y0: small.y, x1: big.x, y1: big.y, hue: big.hue });
+          if (big.isPlayer) gainAcc += drained;
+          if (small.isPlayer) lossAcc += drained;
+        }
         big.flash = Math.max(big.flash, 0.4);
         if (small.doom.t >= 1) { consume(big, small); continue; }
       }
@@ -1155,8 +1237,8 @@ function wellClashes(dt) {
         }
         beams.push({ x0: big.x, y0: big.y, x1: small.x, y1: small.y, hue: small.hue });
         if (took) {
-          if (small.isPlayer) siphonState.raiding = true;
-          if (big.isPlayer) siphonState.raided = true;
+          if (small.isPlayer) { siphonState.raiding = true; gainAcc += took; }
+          if (big.isPlayer) { siphonState.raided = true; lossAcc += took; }
         }
       }
     }
@@ -1206,6 +1288,14 @@ function frame(now) {
       const devouring = wells.some(x => x.doom && x.doom.by === player);
       if (devouring && !prevDevour) showToast('devouring…');
       prevDevour = devouring;
+      // aggregate mass receipts into readable floaters
+      floatT -= dt;
+      if (floatT <= 0) {
+        const fy = player.y - player.coreR() * 3 / Math.max(cam.zoom, 0.2);
+        if (gainAcc > 0) addFloater(player.x + rand(-8, 8), fy, '+' + gainAcc + '★', [255, 216, 130]);
+        if (lossAcc > 0) addFloater(player.x + rand(-8, 8), fy, '−' + lossAcc + '★', [255, 110, 110]);
+        gainAcc = 0; lossAcc = 0; floatT = 0.4;
+      }
     }
     updateOrbiters(simDt);
   }
@@ -1245,7 +1335,7 @@ function frame(now) {
   drawBackground();
   drawGalaxyGlows();
   drawStars();
-  if (mode !== 'overview') { for (const w of wells) drawWell(w); drawEffects(dt); }
+  if (mode !== 'overview') { for (const w of wells) drawWell(w); drawEffects(dt); drawFloaters(dt); }
   drawBoundary();
   ctx.globalCompositeOperation = 'source-over';
   const wantCursor = mode === 'play' ? 'none' : 'default';
@@ -1275,6 +1365,7 @@ function frame(now) {
   let rank = 1; const pm = player.mass();
   for (const w of wells) if (!w.isPlayer && w.mass() > pm) rank++;
   rankEl.textContent = '#' + rank + ' / ' + wells.length;
+  updateStateLine();
 
   requestAnimationFrame(frame);
 }
