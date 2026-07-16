@@ -22,13 +22,64 @@
     position: fixed; right: 16px; bottom: 14px;
     font: 12px/1.5 ui-monospace, Menlo, monospace;
     color: #a884c8; opacity: .5; pointer-events: none; user-select: none;
+    transition: opacity .6s ease;
   }
+
+  /* --- intro overlay --- */
+  #intro {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 26px; text-align: center;
+    pointer-events: none;               /* only the button is clickable */
+    transition: opacity .9s ease;
+  }
+  #intro.gone { opacity: 0; }
+  #intro h1 {
+    margin: 0;
+    font: 300 clamp(34px, 8vw, 88px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .22em; text-indent: .22em;
+    color: #fff;
+    text-shadow: 0 0 34px rgba(255,190,110,.55), 0 0 70px rgba(190,60,160,.35);
+  }
+  #intro .sub {
+    font: 12px/1.6 ui-monospace, Menlo, monospace;
+    letter-spacing: .38em; text-indent: .38em;
+    color: #e6b7ff; opacity: .72; text-transform: uppercase;
+  }
+  #dive {
+    pointer-events: auto; cursor: pointer;
+    margin-top: 6px;
+    padding: 13px 30px;
+    background: rgba(255,214,120,.06);
+    border: 1px solid rgba(255,205,120,.5);
+    border-radius: 999px;
+    color: #ffe6ad;
+    font: 600 13px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
+    backdrop-filter: blur(3px);
+    transition: background .25s ease, box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+  }
+  #dive:hover {
+    background: rgba(255,214,120,.16);
+    border-color: rgba(255,224,150,.9);
+    box-shadow: 0 0 34px rgba(255,180,90,.35);
+    transform: translateY(-1px);
+  }
+  #dive:active { transform: translateY(0); }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
+
+<div id="intro">
+  <div class="sub">an agar toy · work in progress</div>
+  <h1>TWINKLE&nbsp;GALAXY</h1>
+  <button id="dive" type="button">dive in ↯</button>
+</div>
+
 <div class="hud">twinkle&nbsp;galaxy &nbsp;·&nbsp; <b id="count">0</b> cells</div>
-<div class="hint">drag to swing the disk · scroll to zoom · click to fling a spray</div>
+<div class="hint" id="hint">drag to swing the disk · scroll to zoom</div>
 
 <script>
 /* ------------------------------------------------------------------ *
@@ -42,8 +93,12 @@
  *              o
  *              .
  *
- *  Cells are placed on logarithmic spiral arms and rotate with
- *  differential (inner-faster) speed, so the arms wind over time.
+ *  Two views, one continuous camera:
+ *    galaxy  — a tilted, slowly turning spiral disk floating in space
+ *    arena   — "dive in": the camera flies inward and the disk's tilt
+ *              equalizes to 1.0, flattening the ellipse into a true
+ *              circle — the circular game space, ringed by a boundary.
+ *
  *  Color rides a MATLAB-ish sunset ramp keyed to radius: white-gold
  *  core -> orange -> magenta -> deep purple rim.
  * ------------------------------------------------------------------ */
@@ -51,6 +106,8 @@
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const countEl = document.getElementById('count');
+const intro = document.getElementById('intro');
+const hint = document.getElementById('hint');
 
 let W = 0, H = 0, DPR = 1;
 function resize() {
@@ -93,54 +150,71 @@ function ramp(t) {
 }
 const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
 const rand = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = t => t < 0 ? 0 : t > 1 ? 1 : t;
+const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
 const TAU = Math.PI * 2;
-// gaussian-ish for natural scatter
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 
-/* --------------------------- galaxy ------------------------------ */
-const view = {
-  tilt: 0.52,        // disk foreshortening (y-squash)
-  roll: -0.35,       // whole-disk rotation, radians
-  zoom: 1,
-  cx: 0, cy: 0,      // set on layout
-};
+/* --------------------------- camera ------------------------------ */
+// the two poses the camera moves between
+const GALAXY = { tilt: 0.5, roll: -0.35, zoom: 0.56 };
+const ARENA  = { tilt: 1.0, roll:  0.0,  zoom: 0.92 };
+
+const view = { tilt: GALAXY.tilt, roll: GALAXY.roll, zoom: GALAXY.zoom, cx: 0, cy: 0 };
+let mode = 'galaxy';           // 'galaxy' | 'arena'
+let reveal = 0;                // 0 = galaxy look, 1 = arena look (boundary etc.)
+let anim = null;               // active transition
+
+function flyTo(target) {
+  const to = target === 'arena' ? ARENA : GALAXY;
+  anim = {
+    t: 0, dur: 2.4, target,
+    from: { tilt: view.tilt, roll: view.roll, zoom: view.zoom },
+    to,
+  };
+}
+function enterArena() {
+  if (mode === 'arena' || (anim && anim.target === 'arena')) return;
+  flyTo('arena');
+  intro.classList.add('gone');
+  hint.textContent = 'move to steer · scroll to zoom · esc to pull back out';
+}
+function backToGalaxy() {
+  if (mode === 'galaxy' && !anim) return;
+  flyTo('galaxy');
+  intro.classList.remove('gone');
+  hint.textContent = 'drag to swing the disk · scroll to zoom';
+}
 
 const ARMS = 3;
-const WIND = 2.6;    // how tightly arms wrap
+const WIND = 2.6;
 let MAXR = 1;
 
 class Cell {
   constructor() { this.reset(); }
   reset() {
-    // radius: dense in the middle, thinning outward
     const rr = Math.pow(Math.random(), 0.62);
-    this.r = rr;                                  // normalized 0..1
-    // which arm + winding angle + angular scatter (tighter near core)
+    this.r = rr;
     const arm = (Math.floor(Math.random() * ARMS) / ARMS) * TAU;
     const scatter = gauss() * (0.28 + 0.5 * rr);
     this.a = arm + rr * WIND * TAU + scatter;
-    // differential rotation — inner spins faster
     this.omega = 0.045 * (0.22 + 0.78 / (rr + 0.18));
-    // size: a few big anchors, mostly small motes
     const big = Math.random() < 0.06;
     this.unit = big ? rand(9, 20) : rand(1.4, 5.5);
     this.big = big && this.unit > 11;
-    // twinkle
     this.phase = rand(0, TAU);
     this.twSpeed = rand(0.7, 2.6);
-    // warmth keyed to radius, with a little jitter
     this.warm = Math.min(1, Math.max(0, this.r + gauss() * 0.06));
   }
 
   step(dt) { this.a += this.omega * dt; }
 
   draw(scale, spin) {
-    // polar -> tilted screen position
     const rad = this.r * MAXR * scale;
     const ang = this.a + spin;
     let px = Math.cos(ang) * rad;
     let py = Math.sin(ang) * rad * view.tilt;
-    // roll the disk
     const cr = Math.cos(view.roll), sr = Math.sin(view.roll);
     const x = view.cx + (px * cr - py * sr);
     const y = view.cy + (px * sr + py * cr);
@@ -150,14 +224,12 @@ class Cell {
     const u = this.unit * scale;
 
     if (!this.big) {
-      // cheap glowing mote for the vast majority
       ctx.fillStyle = rgba(cCore, Math.min(1, 0.35 + 0.6 * tw));
       const s = u * (0.7 + 0.5 * tw);
       ctx.fillRect(x - s / 2, y - s / 2, s, s);
       return;
     }
 
-    // full diamond "star cell" for the anchors
     const gap = u * 1.7;
     ctx.save();
     ctx.translate(x, y);
@@ -178,35 +250,9 @@ class Cell {
     }
     ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
     ctx.fillRect(-u/2, -u/2, u, u);
-    ctx.fillStyle = rgba(ramp(0), Math.min(1, tw));   // white pip
+    ctx.fillStyle = rgba(ramp(0), Math.min(1, tw));
     ctx.fillRect(-u*0.21, -u*0.21, u*0.42, u*0.42);
     ctx.restore();
-  }
-}
-
-/* ------------------------- transient sprays ---------------------- */
-const sprays = [];
-class Spray {
-  constructor(x, y) {
-    this.x = x; this.y = y;
-    const dir = rand(0, TAU), spd = rand(40, 260);
-    this.vx = Math.cos(dir) * spd; this.vy = Math.sin(dir) * spd;
-    this.life = 1; this.unit = rand(2, 6);
-    this.warm = rand(0.05, 0.5);
-    this.phase = rand(0, TAU); this.twSpeed = rand(2, 5);
-  }
-  step(dt) {
-    this.x += this.vx * dt; this.y += this.vy * dt;
-    this.vx *= 0.96; this.vy *= 0.96;
-    this.life -= dt * 0.6;
-  }
-  draw() {
-    if (this.life <= 0) return;
-    const tw = 0.5 + 0.5 * Math.sin(perfNow * this.twSpeed + this.phase);
-    const c = ramp(this.warm);
-    const s = this.unit * (0.7 + 0.6 * tw);
-    ctx.fillStyle = rgba(c, Math.min(1, this.life) * (0.4 + 0.6 * tw));
-    ctx.fillRect(this.x - s/2, this.y - s/2, s, s);
   }
 }
 
@@ -215,7 +261,6 @@ function drawBackground() {
   ctx.fillStyle = '#0a0416';
   ctx.fillRect(0, 0, W, H);
 
-  // deep-space vignette wash, warm toward center
   const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.max(W, H) * 0.75);
   g.addColorStop(0.0, 'rgba(70,20,90,0.42)');
   g.addColorStop(0.4, 'rgba(40,12,64,0.28)');
@@ -225,7 +270,6 @@ function drawBackground() {
 }
 
 function drawCore(scale) {
-  // bright bloom at the galactic center
   const r = MAXR * scale * 0.26;
   const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, r);
   g.addColorStop(0.0, 'rgba(255,252,236,0.95)');
@@ -236,6 +280,42 @@ function drawCore(scale) {
   ctx.beginPath();
   ctx.arc(view.cx, view.cy, r, 0, TAU);
   ctx.fill();
+}
+
+/* circular arena boundary — fades in as the disk equalizes */
+function drawArena(scale) {
+  if (reveal <= 0.001) return;
+  const R = MAXR * scale;
+
+  // darken the void outside the circle so the arena reads as contained
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.arc(view.cx, view.cy, R, 0, TAU, true);   // even-odd hole
+  ctx.fillStyle = `rgba(6,2,14,${0.6 * reveal})`;
+  ctx.fill('evenodd');
+  ctx.restore();
+
+  // glowing rim
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(255,196,110,${0.5 * reveal})`;
+  ctx.shadowColor = 'rgba(255,170,90,0.9)';
+  ctx.shadowBlur = 22 * reveal;
+  ctx.beginPath();
+  ctx.arc(view.cx, view.cy, R, 0, TAU);
+  ctx.stroke();
+
+  // faint second ring, cool
+  ctx.lineWidth = 1;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = `rgba(190,110,220,${0.25 * reveal})`;
+  ctx.beginPath();
+  ctx.arc(view.cx, view.cy, R * 1.012, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /* ----------------------------- loop ------------------------------ */
@@ -251,11 +331,14 @@ function populate() {
 populate();
 window.addEventListener('resize', populate);
 
-/* interaction: drag to roll, wheel to zoom, click to spray */
+/* -------- interaction -------- */
+document.getElementById('dive').addEventListener('click', enterArena);
+window.addEventListener('keydown', e => { if (e.key === 'Escape') backToGalaxy(); });
+
+// drag to swing the disk (galaxy view only, when the camera is still)
 let dragging = false, lastX = 0;
 canvas.addEventListener('pointerdown', e => {
-  dragging = true; lastX = e.clientX;
-  for (let i = 0; i < 26; i++) sprays.push(new Spray(e.clientX, e.clientY));
+  if (mode === 'galaxy' && !anim) { dragging = true; lastX = e.clientX; }
 });
 window.addEventListener('pointerup', () => dragging = false);
 window.addEventListener('pointermove', e => {
@@ -263,7 +346,7 @@ window.addEventListener('pointermove', e => {
 });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  view.zoom = Math.max(0.5, Math.min(2.4, view.zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
+  view.zoom = Math.max(0.4, Math.min(2.6, view.zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
 }, { passive: false });
 
 let perfNow = 0, last = performance.now(), spin = 0;
@@ -271,22 +354,32 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   perfNow = now / 1000;
-  spin += dt * 0.02;               // slow overall wheel
+
+  // camera transition
+  if (anim) {
+    anim.t += dt;
+    const k = clamp01(anim.t / anim.dur);
+    const e = easeInOut(k);
+    view.tilt = lerp(anim.from.tilt, anim.to.tilt, e);
+    view.roll = lerp(anim.from.roll, anim.to.roll, e);
+    view.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
+    reveal = anim.target === 'arena' ? e : 1 - e;
+    if (k >= 1) { mode = anim.target; anim = null; }
+  }
+
+  // disk keeps turning; slower once you're inside the arena
+  spin += dt * (mode === 'arena' && !anim ? 0.06 : 0.02);
 
   drawBackground();
 
   const scale = view.zoom;
   ctx.globalCompositeOperation = 'lighter';
   drawCore(scale);
-  // draw rim-first so the bright core sits on top
   cells.sort((a, b) => b.r - a.r);
   for (const c of cells) { c.step(dt); c.draw(scale, spin); }
-
-  for (let i = sprays.length - 1; i >= 0; i--) {
-    sprays[i].step(dt); sprays[i].draw();
-    if (sprays[i].life <= 0) sprays.splice(i, 1);
-  }
   ctx.globalCompositeOperation = 'source-over';
+
+  drawArena(scale);
 
   requestAnimationFrame(frame);
 }
