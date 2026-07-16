@@ -641,19 +641,22 @@ function starMark(sx, sy, u, warm, tw, spin) {
  * and zooming reads as actually diving through depth. Positions wrap in
  * screen space so coverage holds at every zoom. */
 const BG_LAYERS = [
-  { d: 0.15, n: 90, s: 1.0 },     // farthest, faintest
-  { d: 0.35, n: 70, s: 1.4 },
-  { d: 0.62, n: 50, s: 1.9 },     // nearest background layer
+  { d: 0.15, n: 40, s: 1.6 },     // farthest, faintest
+  { d: 0.35, n: 30, s: 2.2 },
+  { d: 0.62, n: 22, s: 3.0 },     // nearest background layer
 ];
 const bgStarLayers = BG_LAYERS.map(L => Array.from({ length: L.n }, () => ({
   u: rand(0, 4096), v: rand(0, 4096),
-  size: rand(0.7, 1.6) * L.s,
+  size: rand(0.9, 1.5) * L.s,
   warm: rand(0.15, 0.75),
   ph: rand(0, TAU), tws: rand(0.4, 1.6),
 })));
 const wrapv = (x, m) => ((x % m) + m) % m;
 function drawBgStars() {
-  const A = TUNE.bgStars;
+  // fade the backdrop away as the camera pulls out — zoomed-out views stay
+  // clean, zoomed-in flight gets the parallax dressing
+  const fade = clamp01((cam.zoom - 0.10) / 0.3);
+  const A = TUNE.bgStars * fade;
   if (A <= 0.005) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -666,7 +669,7 @@ function drawBgStars() {
       const X = wrapv(st.u * 37 * zl - cam.x * d * cam.zoom, SW) - 30;
       const Y = wrapv(st.v * 37 * zl - cam.y * d * cam.zoom, SH) - 30;
       const tw = 0.55 + 0.45 * Math.sin(perfNow * st.tws + st.ph);
-      const s = Math.min(3.5, st.size * (0.7 + 0.6 * zl));
+      const s = st.size;                             // constant screen size — point sources
       ctx.fillStyle = rgba(ramp(st.warm), layerA * tw);
       ctx.fillRect(X - s/2, Y - s/2, s, s);
     }
