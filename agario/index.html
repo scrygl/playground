@@ -3,68 +3,62 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Twinkle Galaxy — agar visual</title>
+<title>Gravity Well — a fractal-galaxy agar toy</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; overflow: hidden; background: #0a0416; }
-  #stage { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+  html, body { height: 100%; overflow: hidden; background: #070311; }
+  #stage { display: block; width: 100vw; height: 100vh; cursor: none; }
 
-  .hud {
-    position: fixed; left: 16px; bottom: 14px;
+  .panel {
+    position: fixed; z-index: 3;
     font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
-    color: #d9b6ff; letter-spacing: .04em;
+    letter-spacing: .04em; user-select: none; pointer-events: none;
     text-shadow: 0 0 8px rgba(120,40,180,.6);
-    pointer-events: none; user-select: none; opacity: .82;
   }
-  .hud b { color: #ffe9a8; font-weight: 600; }
-  .hint {
-    position: fixed; right: 16px; bottom: 14px;
-    font: 12px/1.5 ui-monospace, Menlo, monospace;
-    color: #a884c8; opacity: .5; pointer-events: none; user-select: none;
-    transition: opacity .6s ease;
-  }
+  #stats { left: 16px; top: 14px; color: #d9b6ff; }
+  #stats .big { font-size: 20px; color: #ffe6ad; font-weight: 600; letter-spacing: .02em; }
+  #stats .row { opacity: .8; }
+  #stats b { color: #ffd98a; font-weight: 600; }
+  #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; transition: opacity .6s ease; }
 
-  /* --- intro overlay --- */
+  /* intro overlay */
   #intro {
     position: fixed; inset: 0; z-index: 5;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 26px; text-align: center;
-    pointer-events: none;               /* only the button is clickable */
-    transition: opacity .9s ease;
+    gap: 24px; text-align: center;
+    pointer-events: none; transition: opacity .9s ease;
   }
   #intro.gone { opacity: 0; }
-  #intro h1 {
-    margin: 0;
-    font: 300 clamp(34px, 8vw, 88px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
-    letter-spacing: .22em; text-indent: .22em;
-    color: #fff;
-    text-shadow: 0 0 34px rgba(255,190,110,.55), 0 0 70px rgba(190,60,160,.35);
-  }
   #intro .sub {
     font: 12px/1.6 ui-monospace, Menlo, monospace;
-    letter-spacing: .38em; text-indent: .38em;
+    letter-spacing: .4em; text-indent: .4em;
     color: #e6b7ff; opacity: .72; text-transform: uppercase;
   }
+  #intro h1 {
+    margin: 0;
+    font: 300 clamp(32px, 7.5vw, 82px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .16em; text-indent: .16em; color: #fff;
+    text-shadow: 0 0 34px rgba(255,190,110,.5), 0 0 70px rgba(190,60,160,.35);
+  }
+  #intro .tag {
+    max-width: 30ch;
+    font: 13px/1.7 ui-monospace, Menlo, monospace;
+    color: #c9a8e6; opacity: .7;
+  }
   #dive {
-    pointer-events: auto; cursor: pointer;
-    margin-top: 6px;
-    padding: 13px 30px;
-    background: rgba(255,214,120,.06);
-    border: 1px solid rgba(255,205,120,.5);
-    border-radius: 999px;
-    color: #ffe6ad;
-    font: 600 13px/1 ui-monospace, Menlo, monospace;
+    pointer-events: auto; cursor: pointer; margin-top: 4px;
+    padding: 13px 30px; border-radius: 999px;
+    background: rgba(255,214,120,.06); border: 1px solid rgba(255,205,120,.5);
+    color: #ffe6ad; font: 600 13px/1 ui-monospace, Menlo, monospace;
     letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
     backdrop-filter: blur(3px);
-    transition: background .25s ease, box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    transition: background .25s, box-shadow .25s, transform .25s, border-color .25s;
   }
   #dive:hover {
-    background: rgba(255,214,120,.16);
-    border-color: rgba(255,224,150,.9);
-    box-shadow: 0 0 34px rgba(255,180,90,.35);
-    transform: translateY(-1px);
+    background: rgba(255,214,120,.16); border-color: rgba(255,224,150,.9);
+    box-shadow: 0 0 34px rgba(255,180,90,.35); transform: translateY(-1px);
   }
   #dive:active { transform: translateY(0); }
 </style>
@@ -73,313 +67,455 @@
 <canvas id="stage"></canvas>
 
 <div id="intro">
-  <div class="sub">an agar toy · work in progress</div>
-  <h1>TWINKLE&nbsp;GALAXY</h1>
+  <div class="sub">gravity well</div>
+  <h1>A&nbsp;GALAXY&nbsp;OF&nbsp;GALAXIES</h1>
+  <div class="tag">you are a speck of gravity. pull in stars, grow your mass, and swallow the fractal whole.</div>
   <button id="dive" type="button">dive in ↯</button>
 </div>
 
-<div class="hud">twinkle&nbsp;galaxy &nbsp;·&nbsp; <b id="count">0</b> cells</div>
-<div class="hint" id="hint">drag to swing the disk · scroll to zoom</div>
+<div id="stats" class="panel">
+  <div class="big">mass <b id="mass">0</b></div>
+  <div class="row">stars&nbsp; <b id="stars">0</b></div>
+  <div class="row">reach&nbsp; <b id="reach">0</b></div>
+</div>
+<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back out</div>
 
 <script>
-/* ------------------------------------------------------------------ *
- *  Twinkle Galaxy
- *  A dense spiral disk of agar-style "cells". Each cell is a little
- *  square that twinkles; the larger ones bloom into the diamond mark:
+/* ==================================================================
+ *  GRAVITY WELL — a fractal-galaxy agar toy
  *
+ *  The whole map is one galaxy of galaxies: mini-spiral galaxies laid
+ *  out along a great spiral, each its own arms of star-squares with
+ *  clumped sub-clusters. You are a gravity well — stars inside your
+ *  reach spiral in and are absorbed, each one growing your mass, which
+ *  widens your reach so you pull from farther. Little cool stars are
+ *  common; big gold stars are rare and worth a lot.
+ *
+ *  Star squares keep the twinkle "diamond" mark from the visual:
  *              .
  *              o
  *          . o [] o .
  *              o
  *              .
- *
- *  Two views, one continuous camera:
- *    galaxy  — a tilted, slowly turning spiral disk floating in space
- *    arena   — "dive in": the camera flies inward and the disk's tilt
- *              equalizes to 1.0, flattening the ellipse into a true
- *              circle — the circular game space, ringed by a boundary.
- *
- *  Color rides a MATLAB-ish sunset ramp keyed to radius: white-gold
- *  core -> orange -> magenta -> deep purple rim.
- * ------------------------------------------------------------------ */
+ * ================================================================== */
 
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
-const countEl = document.getElementById('count');
 const intro = document.getElementById('intro');
 const hint = document.getElementById('hint');
+const massEl = document.getElementById('mass');
+const starsEl = document.getElementById('stars');
+const reachEl = document.getElementById('reach');
 
-let W = 0, H = 0, DPR = 1;
+let W = 0, H = 0, DPR = 1, MINSIDE = 1;
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
+  W = window.innerWidth; H = window.innerHeight; MINSIDE = Math.min(W, H);
   canvas.width = Math.floor(W * DPR);
   canvas.height = Math.floor(H * DPR);
-  canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 window.addEventListener('resize', resize);
 resize();
 
-/* ---- MATLAB-ish sunset ramp, sampled per cell by radius ---- */
+/* ---------- palette: MATLAB-ish sunset ramp by "grade" ---------- */
 const STOPS = [
-  [0.00, [255, 252, 232]],  // white-gold  (core)
-  [0.14, [255, 216, 120]],  // gold
-  [0.32, [248, 148, 58]],   // orange
-  [0.52, [226, 84,  96]],   // rose-red
-  [0.70, [176, 44, 132]],   // magenta
-  [0.86, [96,  22, 128]],   // violet
-  [1.00, [40,  10,  60]],   // deep purple (rim)
+  [0.00, [120, 46, 150]],   // cool purple  (small stars)
+  [0.22, [176, 44, 132]],   // magenta
+  [0.44, [226, 84,  96]],   // rose
+  [0.64, [248, 148, 58]],   // orange
+  [0.82, [255, 216, 120]],  // gold
+  [1.00, [255, 252, 232]],  // white-gold   (giant stars)
 ];
 function ramp(t) {
   t = t < 0 ? 0 : t > 1 ? 1 : t;
   for (let i = 1; i < STOPS.length; i++) {
     if (t <= STOPS[i][0]) {
-      const [t0, c0] = STOPS[i - 1];
-      const [t1, c1] = STOPS[i];
+      const [t0, c0] = STOPS[i-1], [t1, c1] = STOPS[i];
       const f = (t - t0) / (t1 - t0);
-      return [
-        c0[0] + (c1[0] - c0[0]) * f,
-        c0[1] + (c1[1] - c0[1]) * f,
-        c0[2] + (c1[2] - c0[2]) * f,
-      ];
+      return [c0[0]+(c1[0]-c0[0])*f, c0[1]+(c1[1]-c0[1])*f, c0[2]+(c1[2]-c0[2])*f];
     }
   }
-  return STOPS[STOPS.length - 1][1];
+  return STOPS[STOPS.length-1][1];
 }
 const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
 const rand = (a, b) => a + Math.random() * (b - a);
 const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 const clamp01 = t => t < 0 ? 0 : t > 1 ? 1 : t;
 const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
 const TAU = Math.PI * 2;
-const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 
-/* --------------------------- camera ------------------------------ */
-// the two poses the camera moves between
-const GALAXY = { tilt: 0.5, roll: -0.35, zoom: 0.56 };
-const ARENA  = { tilt: 1.0, roll:  0.0,  zoom: 0.92 };
+/* ------------------------- the world ---------------------------- */
+const WORLD_R = 4600;
+const galaxies = [];   // { x, y, r, omega }
+let stars = [];        // star squares
 
-const view = { tilt: GALAXY.tilt, roll: GALAXY.roll, zoom: GALAXY.zoom, cx: 0, cy: 0 };
-let mode = 'galaxy';           // 'galaxy' | 'arena'
-let reveal = 0;                // 0 = galaxy look, 1 = arena look (boundary etc.)
-let anim = null;               // active transition
-
-function flyTo(target) {
-  const to = target === 'arena' ? ARENA : GALAXY;
-  anim = {
-    t: 0, dur: 2.4, target,
-    from: { tilt: view.tilt, roll: view.roll, zoom: view.zoom },
-    to,
+function makeStar(gal, gradeBias) {
+  // grade 0 = small/cool/common, 1 = giant/gold/rare
+  const g = clamp01(Math.pow(Math.random(), 2.2) * (gradeBias ?? 1) + gauss()*0.04);
+  const size = lerp(1.3, 17, Math.pow(g, 1.4));
+  const s = {
+    gx: gal.x, gy: gal.y, om: gal.omega,
+    size,
+    mass: size * size * 0.55,
+    warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
+    big: g > 0.72,
+    phase: rand(0, TAU), tw: rand(0.7, 2.6),
+    captured: false, vx: 0, vy: 0, x: 0, y: 0,
   };
+  s.mass = size * size * 0.3;   // pace growth
+  return s;
 }
-function enterArena() {
-  if (mode === 'arena' || (anim && anim.target === 'arena')) return;
-  flyTo('arena');
+// place a star on its galaxy's spiral (arms + sub-clusters)
+function seatStar(s, gal, arms, wind) {
+  const rr = Math.pow(Math.random(), 0.6);
+  const arm = (Math.floor(Math.random() * arms) / arms) * TAU;
+  // sub-cluster clumping: snap some stars toward a few arm knots (fractal feel)
+  let ang = arm + rr * wind * TAU + gauss() * (0.18 + 0.4 * rr);
+  let hr = rr * gal.r;
+  if (Math.random() < 0.5) {                 // clump into a sub-cluster knot
+    const knot = Math.floor(rr * 5) / 5 + 0.1;
+    hr = knot * gal.r + gauss() * gal.r * 0.06;
+    ang = arm + knot * wind * TAU + gauss() * 0.14;
+  }
+  s.hr = hr; s.ha = ang;
+  s.gx = gal.x; s.gy = gal.y; s.om = gal.omega;
+  s.x = gal.x + Math.cos(ang) * hr;
+  s.y = gal.y + Math.sin(ang) * hr;
+  s.captured = false; s.vx = 0; s.vy = 0;
+}
+
+function buildWorld() {
+  galaxies.length = 0;
+  stars = [];
+  // galaxies laid along a great spiral -> the map is itself a galaxy
+  const N = 8;
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const ang = t * TAU * 1.35 + 0.6;
+    const rad = t * WORLD_R * 0.82;
+    const r = lerp(1050, 360, t) * rand(0.85, 1.12);
+    galaxies.push({
+      x: Math.cos(ang) * rad,
+      y: Math.sin(ang) * rad,
+      r,
+      omega: rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1),
+      arms: 2 + (Math.floor(Math.random()*3)),
+      wind: rand(1.8, 3.0),
+    });
+  }
+  // distribute a star budget across galaxies, weighted by size
+  const TOTAL = clamp(Math.round((W*H)/1400) * 2, 1600, 3200);
+  const wsum = galaxies.reduce((a, g) => a + g.r, 0);
+  for (const gal of galaxies) {
+    const n = Math.round(TOTAL * (gal.r / wsum));
+    for (let k = 0; k < n; k++) {
+      const s = makeStar(gal);
+      seatStar(s, gal, gal.arms, gal.wind);
+      stars.push(s);
+    }
+  }
+}
+function respawnStar(s) {
+  const gal = galaxies[(Math.random() * galaxies.length) | 0];
+  const fresh = makeStar(gal, 0.85);        // respawns skew small
+  Object.assign(s, fresh);
+  seatStar(s, gal, gal.arms ?? 3, gal.wind ?? 2.4);
+}
+
+/* --------------------------- player ----------------------------- */
+const player = { x: 0, y: 0, vx: 0, vy: 0, mass: 8, collected: 0 };
+const GR_K = 22, CORE_K = 3.0, PULL = 1300;
+const reachR  = () => GR_K * Math.sqrt(player.mass);
+const coreR   = () => CORE_K * Math.sqrt(player.mass);
+const maxSpeed = () => clamp(320 * Math.pow(60 / reachR(), 0.42), 55, 460);
+
+/* --------------------------- camera ----------------------------- */
+const cam = { x: 0, y: 0, zoom: 0.1 };
+const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
+const playZoom = () => clamp(0.34 * MINSIDE / reachR(), 0.05, 3.4);
+
+let mode = 'overview';    // overview | diving | play | rising
+let anim = null;
+function flyTo(target, to, dur) {
+  anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
+}
+function enterPlay() {
+  if (mode === 'play' || mode === 'diving') return;
+  mode = 'diving';
+  flyTo('play', { x: player.x, y: player.y, zoom: playZoom() }, 2.7);
   intro.classList.add('gone');
-  hint.textContent = 'move to steer · scroll to zoom · esc to pull back out';
 }
-function backToGalaxy() {
-  if (mode === 'galaxy' && !anim) return;
-  flyTo('galaxy');
+function backToOverview() {
+  if (mode === 'overview' || mode === 'rising') return;
+  mode = 'rising';
+  flyTo('overview', overviewCam(), 2.2);
   intro.classList.remove('gone');
-  hint.textContent = 'drag to swing the disk · scroll to zoom';
 }
 
-const ARMS = 3;
-const WIND = 2.6;
-let MAXR = 1;
+/* screen <-> world */
+const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
+const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.zoom + cam.y ];
 
-class Cell {
-  constructor() { this.reset(); }
-  reset() {
-    const rr = Math.pow(Math.random(), 0.62);
-    this.r = rr;
-    const arm = (Math.floor(Math.random() * ARMS) / ARMS) * TAU;
-    const scatter = gauss() * (0.28 + 0.5 * rr);
-    this.a = arm + rr * WIND * TAU + scatter;
-    this.omega = 0.045 * (0.22 + 0.78 / (rr + 0.18));
-    const big = Math.random() < 0.06;
-    this.unit = big ? rand(9, 20) : rand(1.4, 5.5);
-    this.big = big && this.unit > 11;
-    this.phase = rand(0, TAU);
-    this.twSpeed = rand(0.7, 2.6);
-    this.warm = Math.min(1, Math.max(0, this.r + gauss() * 0.06));
-  }
-
-  step(dt) { this.a += this.omega * dt; }
-
-  draw(scale, spin) {
-    const rad = this.r * MAXR * scale;
-    const ang = this.a + spin;
-    let px = Math.cos(ang) * rad;
-    let py = Math.sin(ang) * rad * view.tilt;
-    const cr = Math.cos(view.roll), sr = Math.sin(view.roll);
-    const x = view.cx + (px * cr - py * sr);
-    const y = view.cy + (px * sr + py * cr);
-
-    const tw = 0.5 + 0.5 * Math.sin(perfNow * this.twSpeed + this.phase);
-    const cCore = ramp(this.warm * 0.9);
-    const u = this.unit * scale;
-
-    if (!this.big) {
-      ctx.fillStyle = rgba(cCore, Math.min(1, 0.35 + 0.6 * tw));
-      const s = u * (0.7 + 0.5 * tw);
-      ctx.fillRect(x - s / 2, y - s / 2, s, s);
-      return;
-    }
-
-    const gap = u * 1.7;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(this.a * 0.5);
-
-    const cSat = ramp(Math.min(1, this.warm * 0.9 + 0.12));
-    const cDot = ramp(Math.min(1, this.warm * 0.9 + 0.28));
-
-    const du = u * 0.32;
-    for (const [ox, oy] of [[0,-2],[0,2],[-2,0],[2,0]]) {
-      ctx.fillStyle = rgba(cDot, 0.5 * tw);
-      ctx.fillRect(ox*gap - du/2, oy*gap - du/2, du, du);
-    }
-    const su = u * 0.6;
-    for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-      ctx.fillStyle = rgba(cSat, 0.72 * tw);
-      ctx.fillRect(ox*gap - su/2, oy*gap - su/2, su, su);
-    }
-    ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
-    ctx.fillRect(-u/2, -u/2, u, u);
-    ctx.fillStyle = rgba(ramp(0), Math.min(1, tw));
-    ctx.fillRect(-u*0.21, -u*0.21, u*0.42, u*0.42);
-    ctx.restore();
-  }
-}
-
-/* --------------------------- backdrop ---------------------------- */
-function drawBackground() {
-  ctx.fillStyle = '#0a0416';
-  ctx.fillRect(0, 0, W, H);
-
-  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.max(W, H) * 0.75);
-  g.addColorStop(0.0, 'rgba(70,20,90,0.42)');
-  g.addColorStop(0.4, 'rgba(40,12,64,0.28)');
-  g.addColorStop(1.0, 'rgba(10,4,22,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawCore(scale) {
-  const r = MAXR * scale * 0.26;
-  const g = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, r);
-  g.addColorStop(0.0, 'rgba(255,252,236,0.95)');
-  g.addColorStop(0.18, 'rgba(255,222,140,0.7)');
-  g.addColorStop(0.5, 'rgba(240,120,80,0.28)');
-  g.addColorStop(1.0, 'rgba(150,40,120,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(view.cx, view.cy, r, 0, TAU);
-  ctx.fill();
-}
-
-/* circular arena boundary — fades in as the disk equalizes */
-function drawArena(scale) {
-  if (reveal <= 0.001) return;
-  const R = MAXR * scale;
-
-  // darken the void outside the circle so the arena reads as contained
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.beginPath();
-  ctx.rect(0, 0, W, H);
-  ctx.arc(view.cx, view.cy, R, 0, TAU, true);   // even-odd hole
-  ctx.fillStyle = `rgba(6,2,14,${0.6 * reveal})`;
-  ctx.fill('evenodd');
-  ctx.restore();
-
-  // glowing rim
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = `rgba(255,196,110,${0.5 * reveal})`;
-  ctx.shadowColor = 'rgba(255,170,90,0.9)';
-  ctx.shadowBlur = 22 * reveal;
-  ctx.beginPath();
-  ctx.arc(view.cx, view.cy, R, 0, TAU);
-  ctx.stroke();
-
-  // faint second ring, cool
-  ctx.lineWidth = 1;
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = `rgba(190,110,220,${0.25 * reveal})`;
-  ctx.beginPath();
-  ctx.arc(view.cx, view.cy, R * 1.012, 0, TAU);
-  ctx.stroke();
-  ctx.restore();
-}
-
-/* ----------------------------- loop ------------------------------ */
-let cells = [];
-function populate() {
-  view.cx = W / 2; view.cy = H / 2;
-  MAXR = Math.min(W, H) * 0.52;
-  const target = Math.round((W * H) / 1500);
-  const n = Math.max(500, Math.min(2200, target));
-  cells = Array.from({ length: n }, () => new Cell());
-  countEl.textContent = n.toLocaleString();
-}
-populate();
-window.addEventListener('resize', populate);
-
-/* -------- interaction -------- */
-document.getElementById('dive').addEventListener('click', enterArena);
-window.addEventListener('keydown', e => { if (e.key === 'Escape') backToGalaxy(); });
-
-// drag to swing the disk (galaxy view only, when the camera is still)
-let dragging = false, lastX = 0;
-canvas.addEventListener('pointerdown', e => {
-  if (mode === 'galaxy' && !anim) { dragging = true; lastX = e.clientX; }
-});
-window.addEventListener('pointerup', () => dragging = false);
-window.addEventListener('pointermove', e => {
-  if (dragging) { view.roll += (e.clientX - lastX) * 0.004; lastX = e.clientX; }
-});
-canvas.addEventListener('wheel', e => {
+/* --------------------------- input ------------------------------ */
+const mouse = { sx: W/2, sy: H/2 };
+window.addEventListener('pointermove', e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
+document.getElementById('dive').addEventListener('click', enterPlay);
+window.addEventListener('keydown', e => { if (e.key === 'Escape') backToOverview(); });
+canvas.addEventListener('wheel', e => {   // let players peek out/in a touch
   e.preventDefault();
-  view.zoom = Math.max(0.4, Math.min(2.6, view.zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
+  cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
 }, { passive: false });
 
-let perfNow = 0, last = performance.now(), spin = 0;
-function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
-  perfNow = now / 1000;
+/* --------------------------- drawing ---------------------------- */
+function starMark(sx, sy, u, warm, tw, spin) {
+  const cCore = ramp(warm);
+  if (u < 3.2) {                       // cheap glowing mote
+    const s = u * (0.75 + 0.45 * tw);
+    ctx.fillStyle = rgba(cCore, Math.min(1, 0.4 + 0.55 * tw));
+    ctx.fillRect(sx - s/2, sy - s/2, s, s);
+    return;
+  }
+  const gap = u * 1.7;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(spin);
+  const cSat = ramp(Math.min(1, warm + 0.1));
+  const cDot = ramp(Math.max(0, warm - 0.28));
+  const du = u * 0.32;
+  for (const [ox, oy] of [[0,-2],[0,2],[-2,0],[2,0]]) {
+    ctx.fillStyle = rgba(cDot, 0.5 * tw);
+    ctx.fillRect(ox*gap - du/2, oy*gap - du/2, du, du);
+  }
+  const su = u * 0.6;
+  for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+    ctx.fillStyle = rgba(cSat, 0.72 * tw);
+    ctx.fillRect(ox*gap - su/2, oy*gap - su/2, su, su);
+  }
+  ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
+  ctx.fillRect(-u/2, -u/2, u, u);
+  ctx.fillStyle = rgba(ramp(1), Math.min(1, tw));
+  ctx.fillRect(-u*0.2, -u*0.2, u*0.4, u*0.4);
+  ctx.restore();
+}
 
-  // camera transition
+function drawBackground() {
+  ctx.fillStyle = '#070311';
+  ctx.fillRect(0, 0, W, H);
+  const [pcx, pcy] = toScreen(player.x, player.y);
+  const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
+  g.addColorStop(0, 'rgba(60,18,84,0.35)');
+  g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
+  g.addColorStop(1, 'rgba(8,3,18,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+function drawGalaxyGlows() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const gal of galaxies) {
+    const [sx, sy] = toScreen(gal.x, gal.y);
+    const R = gal.r * 0.5 * cam.zoom;
+    if (sx < -R || sx > W + R || sy < -R || sy > H + R) continue;
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, Math.max(6, R));
+    g.addColorStop(0, 'rgba(255,244,214,0.5)');
+    g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
+    g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
+    g.addColorStop(1, 'rgba(120,40,120,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(6, R), 0, TAU); ctx.fill();
+  }
+}
+
+function drawBoundary() {
+  const [sx, sy] = toScreen(0, 0);
+  const R = WORLD_R * cam.zoom;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.rect(0, 0, W, H);
+  ctx.arc(sx, sy, R, 0, TAU, true);
+  ctx.fillStyle = 'rgba(5,2,12,0.66)'; ctx.fill('evenodd');
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,196,110,0.32)';
+  ctx.shadowColor = 'rgba(255,170,90,0.8)'; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const [sx, sy] = toScreen(player.x, player.y);
+  const rr = reachR() * cam.zoom;
+  const cc = coreR() * cam.zoom;
+
+  // reach field
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(sx, sy, cc * 0.5, sx, sy, rr);
+  g.addColorStop(0, 'rgba(255,226,150,0.10)');
+  g.addColorStop(0.7, 'rgba(220,120,180,0.05)');
+  g.addColorStop(1, 'rgba(150,60,160,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,210,140,0.22)';
+  ctx.setLineDash([4, 7]);
+  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
+  ctx.restore();
+
+  // bright core
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const bloomR = Math.max(cc * 2.0, 10);
+  const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
+  bloom.addColorStop(0, 'rgba(255,252,236,0.95)');
+  bloom.addColorStop(0.3, 'rgba(255,220,140,0.6)');
+  bloom.addColorStop(1, 'rgba(240,120,90,0)');
+  ctx.fillStyle = bloom;
+  ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
+  // compact bright core — capped so it never balloons into flat slabs
+  starMark(sx, sy, clamp(cc * 1.1, 7, 22), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
+  ctx.restore();
+}
+
+// cursor reticle
+function drawCursor() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,225,160,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(mouse.sx, mouse.sy, 7, 0, TAU); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mouse.sx-11, mouse.sy); ctx.lineTo(mouse.sx-3, mouse.sy);
+  ctx.moveTo(mouse.sx+3, mouse.sy); ctx.lineTo(mouse.sx+11, mouse.sy);
+  ctx.moveTo(mouse.sx, mouse.sy-11); ctx.lineTo(mouse.sx, mouse.sy-3);
+  ctx.moveTo(mouse.sx, mouse.sy+3); ctx.lineTo(mouse.sx, mouse.sy+11);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ------------------------- simulation --------------------------- */
+function updatePlayer(dt) {
+  const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+  const dx = tx - player.x, dy = ty - player.y;
+  const d = Math.hypot(dx, dy) + 1e-4;
+  const spd = Math.min(maxSpeed(), d * 3.2);
+  player.vx = (dx / d) * spd;
+  player.vy = (dy / d) * spd;
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+  // keep inside the world disk
+  const pr = Math.hypot(player.x, player.y);
+  const lim = WORLD_R - coreR();
+  if (pr > lim) { player.x *= lim/pr; player.y *= lim/pr; }
+}
+
+function updateStars(dt, live) {
+  const rr = reachR(), rr2 = rr * rr;
+  const cAbsorb = coreR();
+  let collectedThis = 0, massGain = 0;
+  for (const s of stars) {
+    if (live) {
+      const dx = player.x - s.x, dy = player.y - s.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < rr2) {
+        if (!s.captured) {                 // enters the reach: seed orbital velocity
+          s.captured = true;
+          s.vx = -Math.sin(s.ha) * s.hr * s.om;
+          s.vy =  Math.cos(s.ha) * s.hr * s.om;
+        }
+        const d = Math.sqrt(d2) + 1e-4;
+        const f = 1 - d / rr;              // 0 at edge, 1 at center
+        const a = f * f * PULL * dt;
+        s.vx += (dx / d) * a;
+        s.vy += (dy / d) * a;
+        s.vx *= 0.986; s.vy *= 0.986;      // gentle drag -> spirals in
+        const v = Math.hypot(s.vx, s.vy);
+        if (v > 1400) { s.vx *= 1400/v; s.vy *= 1400/v; }
+        s.x += s.vx * dt; s.y += s.vy * dt;
+        if (d < cAbsorb + s.size * 0.4) {  // swallowed
+          massGain += s.mass; collectedThis++;
+          respawnStar(s);
+        }
+        continue;
+      }
+      if (s.captured) s.captured = false;
+    }
+    // free: rigid rotation around its galaxy center (structure preserved)
+    s.ha += s.om * dt;
+    s.x = s.gx + Math.cos(s.ha) * s.hr;
+    s.y = s.gy + Math.sin(s.ha) * s.hr;
+  }
+  if (massGain) {
+    player.mass += massGain;
+    player.collected += collectedThis;
+  }
+}
+
+function drawStars() {
+  ctx.globalCompositeOperation = 'lighter';
+  const m = 40;
+  for (const s of stars) {
+    const [sx, sy] = toScreen(s.x, s.y);
+    if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
+    const u = s.size * cam.zoom;
+    if (u < 0.35) continue;
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
+    starMark(sx, sy, u, s.warm, tw, s.captured ? perfNow*3 : s.ha*0.5);
+  }
+}
+
+/* ----------------------------- loop ----------------------------- */
+buildWorld();
+// seat the player in the dense central galaxy (galaxies[0] sits at the origin)
+(() => {
+  const gal = galaxies[0];
+  player.x = gal.x + gal.r * 0.4;
+  player.y = gal.y;
+  cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+})();
+
+let perfNow = 0, last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.045, (now - last) / 1000);
+  last = now; perfNow = now / 1000;
+
+  const live = (mode === 'play');
+
+  if (live) updatePlayer(dt);
+  updateStars(dt, live);
+
+  // camera
   if (anim) {
     anim.t += dt;
-    const k = clamp01(anim.t / anim.dur);
-    const e = easeInOut(k);
-    view.tilt = lerp(anim.from.tilt, anim.to.tilt, e);
-    view.roll = lerp(anim.from.roll, anim.to.roll, e);
-    view.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
-    reveal = anim.target === 'arena' ? e : 1 - e;
+    const k = clamp01(anim.t / anim.dur), e = easeInOut(k);
+    cam.x = lerp(anim.from.x, mode === 'diving' ? player.x : anim.to.x, e);
+    cam.y = lerp(anim.from.y, mode === 'diving' ? player.y : anim.to.y, e);
+    cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
     if (k >= 1) { mode = anim.target; anim = null; }
+  } else if (mode === 'play') {
+    // follow player; ease zoom toward size-appropriate level
+    cam.x += (player.x - cam.x) * Math.min(1, dt * 6);
+    cam.y += (player.y - cam.y) * Math.min(1, dt * 6);
+    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 2.2);
+  } else if (mode === 'overview') {
+    cam.x += (0 - cam.x) * Math.min(1, dt * 2);
+    cam.y += (0 - cam.y) * Math.min(1, dt * 2);
   }
 
-  // disk keeps turning; slower once you're inside the arena
-  spin += dt * (mode === 'arena' && !anim ? 0.06 : 0.02);
-
   drawBackground();
-
-  const scale = view.zoom;
-  ctx.globalCompositeOperation = 'lighter';
-  drawCore(scale);
-  cells.sort((a, b) => b.r - a.r);
-  for (const c of cells) { c.step(dt); c.draw(scale, spin); }
+  drawGalaxyGlows();
+  drawStars();
+  drawBoundary();
+  if (mode !== 'overview') drawPlayer();
   ctx.globalCompositeOperation = 'source-over';
+  if (mode === 'play') drawCursor();
 
-  drawArena(scale);
+  // hud
+  massEl.textContent = Math.round(player.mass).toLocaleString();
+  starsEl.textContent = player.collected.toLocaleString();
+  reachEl.textContent = Math.round(reachR()).toLocaleString();
 
   requestAnimationFrame(frame);
 }
