@@ -640,38 +640,47 @@ function starMark(sx, sy, u, warm, tw, spin) {
  * zoom exponent (far layers respond less), so panning streams past you
  * and zooming reads as actually diving through depth. Positions wrap in
  * screen space so coverage holds at every zoom. */
-const BG_LAYERS = [
-  { d: 0.15, n: 40, s: 1.6 },     // farthest, faintest
-  { d: 0.35, n: 30, s: 2.2 },
-  { d: 0.62, n: 22, s: 3.0 },     // nearest background layer
-];
-const bgStarLayers = BG_LAYERS.map(L => Array.from({ length: L.n }, () => ({
-  u: rand(0, 4096), v: rand(0, 4096),
-  size: rand(0.9, 1.5) * L.s,
-  warm: rand(0.15, 0.75),
-  ph: rand(0, TAU), tws: rand(0.4, 1.6),
-})));
-const wrapv = (x, m) => ((x % m) + m) % m;
+/* backdrop stars: FIXED in world space on a repeating world tile and drawn
+ * with the same camera transform as everything else — they move exactly
+ * like the world. No parallax factors, no wrap-jumps, no surprise motion.
+ * Screen size is clamped chunky (>=3px), each star has a zoom rank so the
+ * field thins out as you pull back, and the whole layer fades at distance. */
+const BG_TILE = 620;
+const bgTileStars = Array.from({ length: 14 }, () => ({
+  ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
+  ws: rand(2.2, 4.6),                  // world-units size
+  warm: rand(0.15, 0.7),
+  rank: Math.random(),                 // culling order when zoomed out
+  ph: rand(0, TAU), tws: rand(0.4, 1.4),
+}));
 function drawBgStars() {
-  // fade the backdrop away as the camera pulls out — zoomed-out views stay
-  // clean, zoomed-in flight gets the parallax dressing
-  const fade = clamp01((cam.zoom - 0.10) / 0.3);
+  const fade = clamp01((cam.zoom - 0.18) / 0.4);
   const A = TUNE.bgStars * fade;
   if (A <= 0.005) return;
+  const keep = clamp01(cam.zoom * 0.55);           // fewer stars as you pull back
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const SW = W + 60, SH = H + 60;
-  for (let li = 0; li < BG_LAYERS.length; li++) {
-    const { d } = BG_LAYERS[li];
-    const zl = Math.pow(cam.zoom, 0.4 + 0.45 * d);   // depth-softened zoom response
-    const layerA = A * (0.45 + 0.28 * li);
-    for (const st of bgStarLayers[li]) {
-      const X = wrapv(st.u * 37 * zl - cam.x * d * cam.zoom, SW) - 30;
-      const Y = wrapv(st.v * 37 * zl - cam.y * d * cam.zoom, SH) - 30;
-      const tw = 0.55 + 0.45 * Math.sin(perfNow * st.tws + st.ph);
-      const s = st.size;                             // constant screen size — point sources
-      ctx.fillStyle = rgba(ramp(st.warm), layerA * tw);
-      ctx.fillRect(X - s/2, Y - s/2, s, s);
+  const [wx0, wy0] = toWorld(-20, -20);
+  const [wx1, wy1] = toWorld(W + 20, H + 20);
+  const ix0 = Math.floor(wx0 / BG_TILE), ix1 = Math.floor(wx1 / BG_TILE);
+  const iy0 = Math.floor(wy0 / BG_TILE), iy1 = Math.floor(wy1 / BG_TILE);
+  if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) <= 400) {
+    for (let iy = iy0; iy <= iy1; iy++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        // de-phase each tile so the repetition doesn't read as a grid
+        const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
+        for (const st of bgTileStars) {
+          if (st.rank > keep) continue;
+          const wx = ix * BG_TILE + (st.ox + j * 300) % BG_TILE;
+          const wy = iy * BG_TILE + (st.oy + j * 520) % BG_TILE;
+          const [sx, sy] = toScreen(wx, wy);
+          if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
+          const s = clamp(st.ws * cam.zoom, 3, 9);
+          const tw = 0.6 + 0.4 * Math.sin(perfNow * st.tws + st.ph + j * 6);
+          ctx.fillStyle = rgba(ramp(st.warm), A * 0.5 * tw);
+          ctx.fillRect(sx - s/2, sy - s/2, s, s);
+        }
+      }
     }
   }
   ctx.restore();
