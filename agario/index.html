@@ -503,6 +503,41 @@ function drawBoundary() {
   ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
   ctx.restore();
 }
+function drawMinimap() {
+  const mmR = clamp(MINSIDE * 0.11, 56, 92);
+  const cxm = W - 20 - mmR, cym = 20 + mmR;
+  const scale = mmR / WORLD_R;                 // world is centered on (0,0)
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // dish + boundary
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU);
+  ctx.fillStyle = 'rgba(10,5,20,0.5)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,196,110,0.32)'; ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
+
+  // the slice of world currently on screen
+  const [wx0, wy0] = toWorld(0, 0);
+  const [wx1, wy1] = toWorld(W, H);
+  const rx = cxm + wx0 * scale, ry = cym + wy0 * scale;
+  const rw = (wx1 - wx0) * scale, rh = (wy1 - wy0) * scale;
+  ctx.fillStyle = 'rgba(226,208,255,0.07)'; ctx.fillRect(rx, ry, rw, rh);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,208,255,0.6)'; ctx.strokeRect(rx, ry, rw, rh);
+
+  // wells — colored dots, you outlined in white
+  for (const w of wells) {
+    const dx = cxm + w.x * scale, dy = cym + w.y * scale;
+    const r = clamp(Math.sqrt(w.mass()) * 0.06, 1.6, 5.5);
+    ctx.beginPath(); ctx.arc(dx, dy, r, 0, TAU);
+    ctx.fillStyle = rgba(w.hue, 0.95); ctx.fill();
+    if (w.isPlayer) { ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.stroke(); }
+  }
+  ctx.restore();
+  ctx.restore();
+}
 function drawCursor() {
   const x = mouse.sx, y = mouse.sy;
   ctx.save();
@@ -681,6 +716,7 @@ function frame(now) {
   ctx.globalCompositeOperation = 'source-over';
   const wantCursor = mode === 'play' ? 'none' : 'default';
   if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
+  if (mode !== 'overview') drawMinimap();
   if (mode === 'play') drawCursor();
 
   // toast fade
