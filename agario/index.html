@@ -83,10 +83,13 @@
   #dev {
     position: fixed; left: 16px; bottom: 40px; z-index: 6; display: none;
     min-width: 252px; padding: 10px 12px 9px;
+    max-height: calc(100vh - 120px); overflow-y: auto;
     background: rgba(14,7,26,.88); border: 1px solid rgba(190,120,220,.28);
     border-radius: 10px; backdrop-filter: blur(4px);
     font: 11px/1.7 ui-monospace, Menlo, monospace; color: #d9b6ff;
   }
+  .devsec { margin-top: 5px; font-size: 10px; letter-spacing: .22em;
+    text-transform: uppercase; color: #ffd98a; opacity: .65; }
   .devhead { display: flex; justify-content: space-between; margin-bottom: 6px;
     letter-spacing: .18em; text-transform: uppercase; color: #ffd98a; }
   .devrow { display: grid; grid-template-columns: 100px 1fr 42px; gap: 8px; align-items: center; }
@@ -220,6 +223,17 @@ const TUNE_DEF = {
   bots: 6,      // rival count (applies on R reset)
   boost: 1.85,  // boost thrust multiplier (burns orbiters as fuel)
   devour: 1.4,  // seconds a devour channel takes to finish
+  // --- square appearance ---
+  billboard: 0, // 1 = squares never rotate (video-game billboards)
+  starScale: 1, // global size multiplier for star squares
+  markAt: 3.2,  // px size at which a mote blooms into the full diamond mark
+  gap: 1.7,     // diamond pattern spacing (in units of the core square)
+  sats: 4,      // satellite squares 'o' in the ring (0 / 4 / 8)
+  satSize: 0.6, // satellite size as a fraction of the core square
+  dots: 4,      // outer dot squares '.' (0 / 4 / 8)
+  dotSize: 0.32,// outer dot size as a fraction of the core square
+  twinkle: 1,   // twinkle depth (0 = steady, 1.5 = deep flicker)
+  bgNoise: 0.22,// square-noise background strength (travel/parallax cue)
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
 try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw_tune') || '{}'), { paused: false }); } catch (e) {}
@@ -505,6 +519,7 @@ canvas.addEventListener('wheel', e => {
 
 /* --------------------------- dev panel --------------------------- */
 const PARAMS = [
+  ['#', 'sim'],
   ['time',    'sim speed',      0,   3,    0.05],
   ['grav',    'gravity G',      300, 6000, 50  ],
   ['lock',    'orbit lock',     0,   1,    0.05],
@@ -517,6 +532,17 @@ const PARAMS = [
   ['devour',  'devour time',    0.4, 3,    0.1 ],
   ['growth',  'star yield ®',   0.2, 3,    0.05],
   ['bots',    'bot count ®',    0,   12,   1   ],
+  ['#', 'squares'],
+  ['billboard','billboard',     0,   1,    1   ],
+  ['starScale','star scale',    0.4, 2.5,  0.05],
+  ['markAt',  'detail at px',   1,   12,   0.2 ],
+  ['gap',     'pattern gap',    1,   3,    0.05],
+  ['sats',    'satellites',     0,   8,    4   ],
+  ['satSize', 'sat size',       0,   1.2,  0.02],
+  ['dots',    'outer dots',     0,   8,    4   ],
+  ['dotSize', 'dot size',       0,   0.8,  0.02],
+  ['twinkle', 'twinkle',        0,   1.5,  0.05],
+  ['bgNoise', 'bg noise',       0,   0.4,  0.01],
 ];
 const devPanel = document.getElementById('dev');
 const devRows = document.getElementById('devrows');
@@ -524,6 +550,12 @@ const fpsEl = document.getElementById('fps');
 let devOpen = false;
 const devInputs = {};
 for (const [key, label, min, max, step] of PARAMS) {
+  if (key === '#') {                             // section header
+    const h = document.createElement('div');
+    h.className = 'devsec'; h.textContent = label;
+    devRows.appendChild(h);
+    continue;
+  }
   const row = document.createElement('div'); row.className = 'devrow';
   const lab = document.createElement('label'); lab.textContent = label;
   const inp = document.createElement('input');
@@ -545,7 +577,10 @@ function toggleDev(force) {
 document.getElementById('devchip').addEventListener('click', () => toggleDev());
 document.getElementById('devdefaults').addEventListener('click', () => {
   Object.assign(TUNE, TUNE_DEF); saveTune();
-  for (const [key] of PARAMS) { devInputs[key].inp.value = TUNE[key]; devInputs[key].val.textContent = TUNE[key]; }
+  for (const [key] of PARAMS) {
+    if (!devInputs[key]) continue;
+    devInputs[key].inp.value = TUNE[key]; devInputs[key].val.textContent = TUNE[key];
+  }
 });
 const pauseBtn = document.getElementById('devpause');
 function togglePause() {
@@ -555,29 +590,44 @@ function togglePause() {
 pauseBtn.addEventListener('click', togglePause);
 
 /* --------------------------- drawing ---------------------------- */
+// the star square — every aspect is dev-tunable (squares section of the panel)
 function starMark(sx, sy, u, warm, tw, spin) {
+  u *= TUNE.starScale;
+  tw = clamp01(1 - (1 - tw) * TUNE.twinkle);     // twinkle depth
   const cCore = ramp(warm);
-  if (u < 3.2) {
+  if (u < TUNE.markAt) {                          // small: a plain glowing mote
     const s = u * (0.75 + 0.45 * tw);
     ctx.fillStyle = rgba(cCore, Math.min(1, 0.4 + 0.55 * tw));
     ctx.fillRect(sx - s/2, sy - s/2, s, s);
     return;
   }
-  const gap = u * 1.7;
+  const gap = u * TUNE.gap;
   ctx.save();
-  ctx.translate(sx, sy); ctx.rotate(spin);
-  const cSat = ramp(Math.min(1, warm + 0.1));
-  const cDot = ramp(Math.max(0, warm - 0.28));
-  const du = u * 0.32;
-  for (const [ox, oy] of [[0,-2],[0,2],[-2,0],[2,0]]) {
+  ctx.translate(sx, sy);
+  if (TUNE.billboard < 0.5) ctx.rotate(spin);     // billboard = axis-aligned always
+  // outer dots '.' ring
+  const nd = Math.round(TUNE.dots), du = u * TUNE.dotSize;
+  if (nd > 0 && du > 0.05) {
+    const cDot = ramp(Math.max(0, warm - 0.28));
     ctx.fillStyle = rgba(cDot, 0.5 * tw);
-    ctx.fillRect(ox*gap - du/2, oy*gap - du/2, du, du);
+    for (let k = 0; k < nd; k++) {
+      const a = -Math.PI/2 + k * TAU / nd;
+      const ox = Math.cos(a) * gap * 2, oy = Math.sin(a) * gap * 2;
+      ctx.fillRect(ox - du/2, oy - du/2, du, du);
+    }
   }
-  const su = u * 0.6;
-  for (const [ox, oy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+  // satellite 'o' ring
+  const ns = Math.round(TUNE.sats), su = u * TUNE.satSize;
+  if (ns > 0 && su > 0.05) {
+    const cSat = ramp(Math.min(1, warm + 0.1));
     ctx.fillStyle = rgba(cSat, 0.72 * tw);
-    ctx.fillRect(ox*gap - su/2, oy*gap - su/2, su, su);
+    for (let k = 0; k < ns; k++) {
+      const a = -Math.PI/2 + k * TAU / ns;
+      const ox = Math.cos(a) * gap, oy = Math.sin(a) * gap;
+      ctx.fillRect(ox - su/2, oy - su/2, su, su);
+    }
   }
+  // central square + hot pip
   ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
   ctx.fillRect(-u/2, -u/2, u, u);
   ctx.fillStyle = rgba(ramp(1), Math.min(1, tw));
@@ -585,6 +635,43 @@ function starMark(sx, sy, u, warm, tw, spin) {
   ctx.restore();
 }
 
+/* square-noise backdrop: multi-scale blocky value noise (fBm filtered
+ * through squares). Two parallax layers anchored to world movement give
+ * a strong travel cue even in empty space. Tile is seamless (cell sizes
+ * divide the tile), drawn as a repeating pattern. */
+const noiseTile = (() => {
+  const T = 256, c = document.createElement('canvas');
+  c.width = T; c.height = T;
+  const g = c.getContext('2d');
+  for (const [cell, amp] of [[32, 0.5], [16, 0.3], [8, 0.2]]) {   // fBm octaves
+    for (let y = 0; y < T; y += cell)
+      for (let x = 0; x < T; x += cell) {
+        // modulate both ways so the field keeps its depth (not a purple wash)
+        g.fillStyle = Math.random() < 0.5
+          ? `rgba(170,120,235,${Math.random() * amp})`
+          : `rgba(4,1,10,${Math.random() * amp})`;
+        g.fillRect(x, y, cell, cell);
+      }
+  }
+  return c;
+})();
+let noisePat = null;
+function drawNoise() {
+  if (TUNE.bgNoise <= 0.001) return;
+  if (!noisePat) noisePat = ctx.createPattern(noiseTile, 'repeat');
+  ctx.save();
+  for (const [par, phase, amp] of [[0.35, 0, 0.6], [0.7, 137, 1]]) {
+    const ox = ((-cam.x * cam.zoom * par + phase) % 256 + 256) % 256;
+    const oy = ((-cam.y * cam.zoom * par + phase) % 256 + 256) % 256;
+    ctx.globalAlpha = TUNE.bgNoise * amp;
+    ctx.translate(ox, oy);
+    ctx.fillStyle = noisePat;
+    ctx.fillRect(-ox - 256, -oy - 256, W + 512, H + 512);
+    ctx.translate(-ox, -oy);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
 function drawBackground() {
   ctx.fillStyle = '#070311'; ctx.fillRect(0, 0, W, H);
   const [pcx, pcy] = toScreen(player.x, player.y);
@@ -593,6 +680,7 @@ function drawBackground() {
   g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
   g.addColorStop(1, 'rgba(8,3,18,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  drawNoise();
 }
 function drawGalaxyGlows() {
   ctx.globalCompositeOperation = 'lighter';
