@@ -72,6 +72,35 @@
     box-shadow: 0 0 34px rgba(255,180,90,.35); transform: translateY(-1px);
   }
   #dive:active { transform: translateY(0); }
+
+  /* dev panel */
+  #devchip {
+    position: fixed; left: 16px; bottom: 14px; z-index: 6;
+    font: 11px/1.4 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+    color: #a884c8; opacity: .55; cursor: pointer; user-select: none;
+  }
+  #devchip:hover { opacity: .9; }
+  #dev {
+    position: fixed; left: 16px; bottom: 40px; z-index: 6; display: none;
+    min-width: 252px; padding: 10px 12px 9px;
+    background: rgba(14,7,26,.88); border: 1px solid rgba(190,120,220,.28);
+    border-radius: 10px; backdrop-filter: blur(4px);
+    font: 11px/1.7 ui-monospace, Menlo, monospace; color: #d9b6ff;
+  }
+  .devhead { display: flex; justify-content: space-between; margin-bottom: 6px;
+    letter-spacing: .18em; text-transform: uppercase; color: #ffd98a; }
+  .devrow { display: grid; grid-template-columns: 100px 1fr 42px; gap: 8px; align-items: center; }
+  .devrow label { opacity: .8; }
+  .devrow span { text-align: right; color: #ffe6ad; }
+  .devrow input[type=range] { width: 100%; accent-color: #ffce7a; height: 3px; }
+  .devfoot { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .devfoot button {
+    font: 11px ui-monospace, Menlo, monospace; letter-spacing: .1em;
+    padding: 3px 10px; border-radius: 6px; cursor: pointer;
+    background: rgba(255,214,120,.08); border: 1px solid rgba(255,205,120,.35); color: #ffe6ad;
+  }
+  .devfoot button:hover { background: rgba(255,214,120,.18); }
+  .devnote { opacity: .5; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -91,7 +120,18 @@
   <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
 </div>
 <div id="toast"></div>
-<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back · R to reset</div>
+<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back · R reset · ` dev</div>
+
+<div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
+<div id="dev">
+  <div class="devhead"><span>tuning</span><span id="fps"></span></div>
+  <div id="devrows"></div>
+  <div class="devfoot">
+    <button id="devdefaults" type="button">defaults</button>
+    <button id="devpause" type="button">pause</button>
+    <span class="devnote">® on R reset</span>
+  </div>
+</div>
 
 <script>
 /* ==================================================================
@@ -164,6 +204,25 @@ const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
 const TAU = Math.PI * 2;
 const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 
+/* ------------------ dev tuning (press ` in game) ------------------ */
+const TUNE_DEF = {
+  time: 1,      // simulation speed multiplier
+  grav: 2100,   // gravitational constant (wells + galaxy cores)
+  lock: 0.55,   // 0 = pure Newton, 1 = orbits reined hard toward circles
+  perturb: 1,   // how much rival wells' fields warp a swarm
+  assist: 1,    // capture assist (swirl + drag) on infalling stars
+  reachK: 16,   // reach radius scale
+  speed: 1,     // well thrust multiplier
+  steal: 6,     // siphon rate baseline
+  growth: 1,    // star mass yield (newly spawned stars)
+  bots: 6,      // rival count (applies on R reset)
+};
+const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw_tune') || '{}'), { paused: false }); } catch (e) {}
+function saveTune() {
+  try { const { paused, ...t } = TUNE; localStorage.setItem('gw_tune', JSON.stringify(t)); } catch (e) {}
+}
+
 /* ------------------------- the world ---------------------------- */
 const WORLD_R = 4600;
 const galaxies = [];
@@ -173,8 +232,8 @@ function makeStar(gal, gradeBias) {
   const g = clamp01(Math.pow(Math.random(), 2.2) * (gradeBias ?? 1) + gauss()*0.04);
   const size = lerp(1.3, 17, Math.pow(g, 1.4));
   return {
-    gx: gal.x, gy: gal.y, om: gal.omega,
-    size, mass: size * size * 0.06,
+    gx: gal.x, gy: gal.y,
+    size, mass: size * size * 0.06 * TUNE.growth,
     warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
     phase: rand(0, TAU), tw: rand(0.7, 2.6),
     captured: false, vx: 0, vy: 0, x: 0, y: 0,
@@ -193,10 +252,15 @@ function seatStar(s, gal) {
     ang = arm + knot * wind * TAU + gauss() * 0.14;
   }
   s.hr = hr; s.ha = ang;
-  s.gx = gal.x; s.gy = gal.y; s.om = gal.omega;
+  s.gx = gal.x; s.gy = gal.y;
+  s.GM = gal.GM; s.gspin = gal.omega < 0 ? -1 : 1;
   s.x = gal.x + Math.cos(ang) * hr;
   s.y = gal.y + Math.sin(ang) * hr;
-  s.captured = false; s.vx = 0; s.vy = 0;
+  // seed a circular orbit around the home galaxy — physics owns it from here
+  const v = Math.sqrt(gal.GM / (hr + 30));
+  s.vx = -Math.sin(ang) * v * s.gspin;
+  s.vy =  Math.cos(ang) * v * s.gspin;
+  s.captured = false;
 }
 function buildWorld() {
   galaxies.length = 0; stars = [];
@@ -206,9 +270,11 @@ function buildWorld() {
     const ang = t * TAU * 1.35 + 0.6;
     const rad = t * WORLD_R * 0.82;
     const r = lerp(1050, 360, t) * rand(0.85, 1.12);
+    const omega = rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1);
     galaxies.push({
-      x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r,
-      omega: rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1),
+      x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r, omega,
+      // central mass sized so stars orbit near the old rigid speed mid-disk
+      GM: Math.pow(omega * r * 0.5, 2) * (r * 0.5 + 30),
       arms: 2 + (Math.floor(Math.random()*3)), wind: rand(1.8, 3.0),
     });
   }
@@ -226,12 +292,10 @@ function respawnStar(s) {
 }
 
 /* ---------------------- wells (player + bots) -------------------- */
-const GR_K = 16, CORE_K = 2.6, SIZE_EXP = 0.42, ORB_CAP = 72;
-const PULL = 900;         // radial infall accel on free stars
-const SWIRL = 1150;       // tangential accel -> stars arrive with angular momentum
+const CORE_K = 2.6, SIZE_EXP = 0.42, ORB_CAP = 72;
+const PULL = 900;         // base radial capture-assist accel on free stars
+const SWIRL = 1150;       // base tangential assist -> stars arrive with angular momentum
 const CAPTURE_BAND = 0.62;// convert a free star to an orbiter within this fraction of reach
-const GRAV = 2100;        // gravitational constant for the orbiting swarm (real 1/r^2)
-const STEAL_BASE = 6;     // orbiters/sec a raider peels, before scaling
 const BIG_SOFT = 320;     // attacker mass at which raiding effectiveness halves
 const CONSUME_RATIO = 1.35;
 
@@ -251,7 +315,7 @@ class Well {
   mass()   { return this.coreMass + this.orbMass; }
   // reach grows sub-linearly (mass^0.42) so large wells stop ballooning —
   // the snowball flattens and small wells stay competitive
-  reachR() { return GR_K * Math.pow(this.mass(), SIZE_EXP); }
+  reachR() { return TUNE.reachK * Math.pow(this.mass(), SIZE_EXP); }
   coreR()  { return CORE_K * Math.pow(this.mass(), SIZE_EXP); }
   // smaller wells are nimble; speed falls off as reach grows
   maxSpeed() { return clamp(250 * Math.pow(46 / this.reachR(), 0.5), 40, 380); }
@@ -266,7 +330,7 @@ class Well {
   _admit(rx, ry, star) {
     const r = Math.hypot(rx, ry) + 1e-3;
     const soft = this.coreR() * 0.7;
-    const vC = Math.sqrt(GRAV * this.mass() / (r + soft));   // circular speed here
+    const vC = Math.sqrt(TUNE.grav * this.mass() / (r + soft));   // circular speed here
     const tx = -ry / r * this.spin, ty = rx / r * this.spin; // tangential (spin dir)
     const rhx = rx / r, rhy = ry / r;                        // radial unit
     const speed = vC * rand(0.84, 1.06);                     // spread -> disk thickness
@@ -320,12 +384,13 @@ function spawnWells() {
   const gal0 = galaxies[0];
   player.x = gal0.x + gal0.r * 0.4; player.y = gal0.y;
   wells.push(player);
-  for (let i = 0; i < 6; i++) {
+  const nBots = Math.round(TUNE.bots);
+  for (let i = 0; i < nBots; i++) {
     const gal = galaxies[(i + 1) % galaxies.length];
     const w = new Well({
       x: gal.x + rand(-gal.r, gal.r) * 0.5,
       y: gal.y + rand(-gal.r, gal.r) * 0.5,
-      mass: rand(6, 16), hue: HUES[i], name: 'rival ' + (i + 1),
+      mass: rand(6, 16), hue: HUES[i % HUES.length], name: 'rival ' + (i + 1),
     });
     wells.push(w);
   }
@@ -386,11 +451,16 @@ const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.z
 
 /* --------------------------- input ------------------------------ */
 const mouse = { sx: W/2, sy: H/2 };
-window.addEventListener('pointermove', e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
+window.addEventListener('pointermove', e => {
+  if (e.target !== canvas) return;             // don't steer while on the dev panel
+  mouse.sx = e.clientX; mouse.sy = e.clientY;
+});
 document.getElementById('dive').addEventListener('click', enterPlay);
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') backToOverview();
-  else if (e.key === 'r' || e.key === 'R') resetGame();   // dev reset
+  else if (e.key === 'r' || e.key === 'R') resetGame();          // dev reset
+  else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
+  else if (e.key === 'p' || e.key === 'P') togglePause();
 });
 function resetGame() {
   buildWorld(); spawnWells();
@@ -403,6 +473,55 @@ canvas.addEventListener('wheel', e => {
   e.preventDefault();
   cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
 }, { passive: false });
+
+/* --------------------------- dev panel --------------------------- */
+const PARAMS = [
+  ['time',    'sim speed',      0,   3,    0.05],
+  ['grav',    'gravity G',      300, 6000, 50  ],
+  ['lock',    'orbit lock',     0,   1,    0.05],
+  ['perturb', 'rival warp',     0,   2,    0.05],
+  ['assist',  'capture assist', 0,   2,    0.05],
+  ['reachK',  'reach scale',    8,   30,   0.5 ],
+  ['speed',   'well thrust',    0.3, 2.5,  0.05],
+  ['steal',   'siphon rate',    0,   20,   0.5 ],
+  ['growth',  'star yield ®',   0.2, 3,    0.05],
+  ['bots',    'bot count ®',    0,   12,   1   ],
+];
+const devPanel = document.getElementById('dev');
+const devRows = document.getElementById('devrows');
+const fpsEl = document.getElementById('fps');
+let devOpen = false;
+const devInputs = {};
+for (const [key, label, min, max, step] of PARAMS) {
+  const row = document.createElement('div'); row.className = 'devrow';
+  const lab = document.createElement('label'); lab.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = TUNE[key];
+  const val = document.createElement('span'); val.textContent = TUNE[key];
+  inp.addEventListener('input', () => {
+    TUNE[key] = parseFloat(inp.value);
+    val.textContent = TUNE[key];
+    saveTune();
+  });
+  devInputs[key] = { inp, val };
+  row.append(lab, inp, val);
+  devRows.appendChild(row);
+}
+function toggleDev(force) {
+  devOpen = force ?? !devOpen;
+  devPanel.style.display = devOpen ? 'block' : 'none';
+}
+document.getElementById('devchip').addEventListener('click', () => toggleDev());
+document.getElementById('devdefaults').addEventListener('click', () => {
+  Object.assign(TUNE, TUNE_DEF); saveTune();
+  for (const [key] of PARAMS) { devInputs[key].inp.value = TUNE[key]; devInputs[key].val.textContent = TUNE[key]; }
+});
+const pauseBtn = document.getElementById('devpause');
+function togglePause() {
+  TUNE.paused = !TUNE.paused;
+  pauseBtn.textContent = TUNE.paused ? 'resume' : 'pause';
+}
+pauseBtn.addEventListener('click', togglePause);
 
 /* --------------------------- drawing ---------------------------- */
 function starMark(sx, sy, u, warm, tw, spin) {
@@ -476,7 +595,7 @@ function drawStars() {
     if (s.captured) {                      // streak along its infall velocity
       streak(s.x - s.vx*0.035, s.y - s.vy*0.035, s.x, s.y, ramp(s.warm), 0.28, Math.max(1, u*0.5));
     }
-    starMark(sx, sy, u, s.warm, tw, s.captured ? Math.atan2(s.vy, s.vx) : s.ha*0.5);
+    starMark(sx, sy, u, s.warm, tw, s.captured ? Math.atan2(s.vy, s.vx) : s.phase);
   }
 }
 function drawWell(w) {
@@ -653,79 +772,151 @@ function moveWell(w, dt) {
   if (!w.target) return;
   const dx = w.target[0] - w.x, dy = w.target[1] - w.y;
   const d = Math.hypot(dx, dy) + 1e-4;
-  const spd = Math.min(w.maxSpeed(), d * 3.2);
+  const spd = Math.min(w.maxSpeed() * TUNE.speed, d * 3.2);
   w.vx = dx / d * spd; w.vy = dy / d * spd;
   w.x += w.vx * dt; w.y += w.vy * dt;
   const pr = Math.hypot(w.x, w.y), lim = WORLD_R - w.coreR();
   if (pr > lim) { w.x *= lim / pr; w.y *= lim / pr; }
 }
 
-function updateStars(dt) {
+// Every star is a body in one shared gravitational field: its home galaxy's
+// central mass plus every well's field (within reach). A gentle "galaxy lock"
+// reins free stars toward their circular flow so the arms persist, and a
+// capture assist (swirl + drag) warps infall into a sweep instead of a slingshot.
+function updateStars(dt, live) {
   for (const s of stars) {
-    // find the strongest well whose reach holds this star
+    // --- home galaxy gravity ---
+    const dxg = s.gx - s.x, dyg = s.gy - s.y;
+    const rg = Math.hypot(dxg, dyg) + 1e-4;
+    const ag = s.GM / (rg * rg + 900);
+    let ax = (dxg / rg) * ag, ay = (dyg / rg) * ag;
+
+    // --- plus every well's real field within its reach ---
     let best = null, bestPull = 0, bd = 0, bdx = 0, bdy = 0, brr = 0;
-    for (const w of wells) {
-      const dx = w.x - s.x, dy = w.y - s.y, d2 = dx*dx + dy*dy;
-      const rr = w.reachR();
-      if (d2 < rr*rr) {
-        const d = Math.sqrt(d2) + 1e-4, f = 1 - d/rr, pull = f*f*w.mass();
-        if (pull > bestPull) { bestPull = pull; best = w; bd = d; bdx = dx; bdy = dy; brr = rr; }
+    if (live) {
+      for (const w of wells) {
+        const dx = w.x - s.x, dy = w.y - s.y;
+        const rr = w.reachR();
+        if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
+        const d2 = dx*dx + dy*dy;
+        if (d2 > rr*rr) continue;
+        const d = Math.sqrt(d2) + 1e-4;
+        const soft = w.coreR() * 0.7;
+        const aw = TUNE.grav * w.mass() / (d2 + soft*soft);
+        ax += (dx / d) * aw; ay += (dy / d) * aw;
+        if (aw > bestPull) { bestPull = aw; best = w; bd = d; bdx = dx; bdy = dy; brr = rr; }
       }
     }
+
     if (best) {
-      if (!s.captured) { s.captured = true; s.vx = -Math.sin(s.ha)*s.hr*s.om; s.vy = Math.cos(s.ha)*s.hr*s.om; }
-      // spiral infall: radial pull toward the well + a tangential swirl so
-      // the star curves in and streams into the disk instead of dropping
+      s.captured = true;
+      // capture assist — the artificial warp that sweeps the star into a disk
       const ux = bdx/bd, uy = bdy/bd;
       const tx = -uy * best.spin, ty = ux * best.spin;
       const f = 1 - bd/brr;
-      const a = PULL * dt * (0.4 + 0.6 * f);
-      const sw = SWIRL * dt * f;
-      s.vx += ux * a + tx * sw; s.vy += uy * a + ty * sw;
-      s.vx *= 0.99; s.vy *= 0.99;
-      const v = Math.hypot(s.vx, s.vy);
-      if (v > 1600) { s.vx *= 1600/v; s.vy *= 1600/v; }
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      // hand off into a real orbit carrying its momentum — no snap to a ring
-      if (bd < brr * CAPTURE_BAND) {
-        best.captureStar(s);
-        if (best.isPlayer) best.collected++;
-        respawnStar(s);
-      }
+      ax += (ux * PULL * (0.4 + 0.6*f) + tx * SWIRL * f) * TUNE.assist;
+      const drag = 1 - 0.01 * TUNE.assist;
+      s.vx *= drag; s.vy *= drag;
+    } else {
+      if (s.captured) s.captured = false;
+      // galaxy lock: ease toward the local circular flow so arms stay coherent
+      const ox = -dxg/rg, oy = -dyg/rg;                 // outward unit
+      const vC = Math.sqrt(s.GM / (rg + 30));
+      const cvx = -oy * vC * s.gspin, cvy = ox * vC * s.gspin;
+      const k = Math.min(1, dt * 0.5 * (0.5 + TUNE.lock));
+      s.vx += (cvx - s.vx) * k; s.vy += (cvy - s.vy) * k;
+    }
+
+    s.vx += ax * dt; s.vy += ay * dt;
+    const cap = s.captured ? 1600 : 320;
+    const v = Math.hypot(s.vx, s.vy);
+    if (v > cap) { s.vx *= cap/v; s.vy *= cap/v; }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+
+    // capture: hand off into a real orbit carrying its momentum
+    if (best && bd < brr * CAPTURE_BAND) {
+      best.captureStar(s);
+      if (best.isPlayer) best.collected++;
+      respawnStar(s);
       continue;
     }
-    if (s.captured) s.captured = false;
-    s.ha += s.om * dt;
-    s.x = s.gx + Math.cos(s.ha) * s.hr;
-    s.y = s.gy + Math.sin(s.ha) * s.hr;
+
+    // stay inside the world disk
+    const rw2 = s.x*s.x + s.y*s.y;
+    if (rw2 > WORLD_R * WORLD_R) {
+      const rw = Math.sqrt(rw2);
+      s.x *= WORLD_R/rw; s.y *= WORLD_R/rw;
+      const out = (s.x*s.vx + s.y*s.vy) / WORLD_R;
+      if (out > 0) { s.vx -= (s.x/WORLD_R)*out; s.vy -= (s.y/WORLD_R)*out; }
+    }
   }
 }
-function updateOrbiters(dt) {
+// Orbiters live in one shared field too: their owner's 1/r^2 gravity plus the
+// (tunable) perturbation from every rival well. The "orbit lock" is the
+// artificial warp — it reins each body toward the local circular orbit and
+// soft-walls the reach edge, so disks stay disks even in a contested field.
+function updateOrbiters(simDt) {
+  if (simDt <= 0) return;
+  const n = clamp(Math.ceil(simDt / 0.02), 1, 4), h = simDt / n;  // substeps keep fast orbits stable
   for (const w of wells) {
     const M = w.mass();
     const soft = w.coreR() * 0.7, soft2 = soft * soft;
-    const mergeR = w.coreR() * 0.55, mergeR2 = mergeR * mergeR;
-    const vCap = Math.sqrt(GRAV * M / soft) * 1.7;   // keep the integrator stable
+    const mergeR2 = Math.pow(w.coreR() * 0.55, 2);
+    const RR = w.reachR();
+    const vCap = Math.sqrt(TUNE.grav * M / soft) * 1.7;
     for (let i = w.orbiters.length - 1; i >= 0; i--) {
       const o = w.orbiters[i];
       o.px = o.x; o.py = o.y;
-      const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
-      // real 1/r^2 gravity toward the core (softened), semi-implicit Euler
-      const a = GRAV * M / (r2 + soft2);
-      o.rvx -= (o.rx / r) * a * dt;
-      o.rvy -= (o.ry / r) * a * dt;
-      const v = Math.hypot(o.rvx, o.rvy);
-      if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
-      o.rx += o.rvx * dt; o.ry += o.rvy * dt;
+      let merged = false;
+      for (let k = 0; k < n; k++) {
+        const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
+        // owner gravity (softened 1/r^2), semi-implicit Euler
+        const a = TUNE.grav * M / (r2 + soft2);
+        o.rvx -= (o.rx / r) * a * h;
+        o.rvy -= (o.ry / r) * a * h;
+        // rival fields warp the disk — fly near a giant and feel your swarm lean
+        if (TUNE.perturb > 0) {
+          const wx = w.x + o.rx, wy = w.y + o.ry;
+          for (const ow of wells) {
+            if (ow === w) continue;
+            const dx = ow.x - wx, dy = ow.y - wy;
+            const lim = ow.reachR() * 1.3;
+            if (dx > lim || dx < -lim || dy > lim || dy < -lim) continue;
+            const d2 = dx*dx + dy*dy;
+            if (d2 > lim*lim) continue;
+            const d = Math.sqrt(d2) + 1e-4;
+            const os = ow.coreR() * 0.7;
+            const ap = TUNE.perturb * TUNE.grav * ow.mass() / (d2 + os*os);
+            o.rvx += (dx / d) * ap * h;
+            o.rvy += (dy / d) * ap * h;
+          }
+        }
+        // orbit lock: rein toward the local circular orbit + soft wall at reach
+        const r_ = Math.sqrt(o.rx*o.rx + o.ry*o.ry) + 1e-4;
+        const vC = Math.sqrt(TUNE.grav * M / (r_ + soft));
+        const tx = -o.ry/r_ * w.spin, ty = o.rx/r_ * w.spin;
+        const kl = Math.min(1, TUNE.lock * h * 3);
+        o.rvx += (tx * vC - o.rvx) * kl;
+        o.rvy += (ty * vC - o.rvy) * kl;
+        const out = (o.rx*o.rvx + o.ry*o.rvy) / r_;
+        if (r_ > RR * 0.92 && out > 0) {
+          const kw = Math.min(1, h * 8);
+          o.rvx -= (o.rx/r_) * out * kw;
+          o.rvy -= (o.ry/r_) * out * kw;
+        }
+        const v = Math.hypot(o.rvx, o.rvy);
+        if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
+        o.rx += o.rvx * h; o.ry += o.rvy * h;
+        if (o.rx*o.rx + o.ry*o.ry < mergeR2) { merged = true; break; }
+      }
       o.x = w.x + o.rx; o.y = w.y + o.ry;
-      // accretion: an orbiter that falls into the core merges into it
-      if (o.rx*o.rx + o.ry*o.ry < mergeR2) {
+      // accretion: a body that falls to the core merges into it
+      if (merged) {
         w.coreMass += o.mass; w.orbMass -= o.mass;
         w.orbiters.splice(i, 1);
         w.flash = Math.max(w.flash, 0.25);
       }
     }
-    if (w.flash > 0) w.flash = Math.max(0, w.flash - dt * 2);
   }
 }
 function wellClashes(dt) {
@@ -747,7 +938,7 @@ function wellClashes(dt) {
       // gap (David bites Goliath) and falls as the raider itself grows large.
       if (d < big.reachR() * 0.95 && big.orbiters.length && small.mass() < big.mass() * 0.9) {
         const gap = clamp(big.mass() / Math.max(1, small.mass()), 1, 8);
-        const rate = STEAL_BASE * Math.sqrt(gap) / (1 + small.mass() / BIG_SOFT);
+        const rate = TUNE.steal * Math.sqrt(gap) / (1 + small.mass() / BIG_SOFT);
         small._steal += rate * dt;
         let took = 0;
         while (small._steal >= 1 && big.orbiters.length) {
@@ -772,26 +963,38 @@ buildWorld();
 spawnWells();
 cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
-let perfNow = 0, last = performance.now();
+let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
 function frame(now) {
   const dt = Math.min(0.045, (now - last) / 1000);
   last = now; perfNow = now / 1000;
   const live = (mode === 'play');
+  const simDt = TUNE.paused ? 0 : dt * TUNE.time;
 
-  if (live) {
-    const [tx, ty] = toWorld(mouse.sx, mouse.sy);
-    player.target = [tx, ty];
-    for (const w of wells) { if (!w.isPlayer) botThink(w, dt); moveWell(w, dt); }
-    updateStars(dt);
-    beams = []; siphonState.raiding = false; siphonState.raided = false;
-    wellClashes(dt);
-    // announce siphon state on the rising edge only
-    if (siphonState.raiding && !siphonState.wasRaiding) showToast('siphoning ↯');
-    else if (siphonState.raided && !siphonState.wasRaided) showToast('being siphoned!');
-    siphonState.wasRaiding = siphonState.raiding;
-    siphonState.wasRaided = siphonState.raided;
+  if (!live) beams = [];
+  if (simDt > 0) {
+    if (live) {
+      const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+      player.target = [tx, ty];
+      for (const w of wells) { if (!w.isPlayer) botThink(w, simDt); moveWell(w, simDt); }
+    }
+    updateStars(simDt, live);
+    if (live) {
+      beams = []; siphonState.raiding = false; siphonState.raided = false;
+      wellClashes(simDt);
+      // announce siphon state on the rising edge only
+      if (siphonState.raiding && !siphonState.wasRaiding) showToast('siphoning ↯');
+      else if (siphonState.raided && !siphonState.wasRaided) showToast('being siphoned!');
+      siphonState.wasRaiding = siphonState.raiding;
+      siphonState.wasRaided = siphonState.raided;
+    }
+    updateOrbiters(simDt);
   }
-  updateOrbiters(dt);
+  for (const w of wells) if (w.flash > 0) w.flash = Math.max(0, w.flash - dt * 2);
+
+  // fps meter for the dev panel
+  fpsE += (1 / Math.max(dt, 1e-3) - fpsE) * 0.06;
+  fpsT -= dt;
+  if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
 
   // camera
   if (anim) {
