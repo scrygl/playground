@@ -8,7 +8,7 @@
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; background: #070311; }
-  #stage { display: block; width: 100vw; height: 100vh; cursor: none; }
+  #stage { display: block; width: 100vw; height: 100vh; cursor: default; }
 
   .panel {
     position: fixed; z-index: 3;
@@ -91,7 +91,7 @@
   <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
 </div>
 <div id="toast"></div>
-<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back out</div>
+<div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back · R to reset</div>
 
 <script>
 /* ==================================================================
@@ -174,7 +174,7 @@ function makeStar(gal, gradeBias) {
   const size = lerp(1.3, 17, Math.pow(g, 1.4));
   return {
     gx: gal.x, gy: gal.y, om: gal.omega,
-    size, mass: size * size * 0.3,
+    size, mass: size * size * 0.06,
     warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
     phase: rand(0, TAU), tw: rand(0.7, 2.6),
     captured: false, vx: 0, vy: 0, x: 0, y: 0,
@@ -226,9 +226,15 @@ function respawnStar(s) {
 }
 
 /* ---------------------- wells (player + bots) -------------------- */
-const GR_K = 22, CORE_K = 3.0, PULL = 1300, ORB_W = 1.5, ORB_CAP = 66;
-const STEAL_RATE = 9;                         // orbiters/sec peeled per overlap
-const CONSUME_RATIO = 1.2;
+const GR_K = 16, CORE_K = 2.6, SIZE_EXP = 0.42, ORB_CAP = 66;
+const PULL = 900;         // radial infall accel
+const SWIRL = 1150;       // tangential accel -> stars spiral in rather than drop
+const ORB_W = 1.3;        // base orbit angular speed
+const CAPTURE_BAND = 0.6; // convert to orbiter once within this fraction of reach
+const MIGRATE = 0.6;      // how fast an orbiter glides to its settle ring
+const STEAL_BASE = 6;     // orbiters/sec a raider peels, before scaling
+const BIG_SOFT = 320;     // attacker mass at which raiding effectiveness halves
+const CONSUME_RATIO = 1.35;
 
 class Well {
   constructor(o) {
@@ -244,22 +250,29 @@ class Well {
     this.flash = 0; this._steal = 0;
   }
   mass()   { return this.coreMass + this.orbMass; }
-  reachR() { return GR_K * Math.sqrt(this.mass()); }
-  coreR()  { return CORE_K * Math.sqrt(this.mass()); }
-  maxSpeed() { return clamp(320 * Math.pow(60 / this.reachR(), 0.42), 55, 470); }
+  // reach grows sub-linearly (mass^0.42) so large wells stop ballooning —
+  // the snowball flattens and small wells stay competitive
+  reachR() { return GR_K * Math.pow(this.mass(), SIZE_EXP); }
+  coreR()  { return CORE_K * Math.pow(this.mass(), SIZE_EXP); }
+  // smaller wells are nimble; speed falls off as reach grows
+  maxSpeed() { return clamp(250 * Math.pow(46 / this.reachR(), 0.5), 40, 380); }
 
-  addOrbiter(star) {
-    const rf = rand(0.32, 0.86);
+  // seamless capture: the star becomes an orbiter right where it arrives (rf
+  // from its current radius), then glides to a settle ring while orbiting
+  captureStar(star, d, ang) {
+    const rf = clamp(d / this.reachR(), 0.12, 0.95);
+    const settleRf = rand(0.28, 0.82);
     this.orbiters.push({
-      rf, ang: rand(0, TAU), om: this.spin * ORB_W * (1.2 - rf),
+      rf, settleRf, ang, om: this.spin * ORB_W * (1.25 - settleRf),
       size: star.size, warm: star.warm, mass: star.mass,
       phase: rand(0, TAU), tw: rand(0.7, 2.6), x: 0, y: 0,
     });
     this.orbMass += star.mass;
     this._cap();
   }
-  receiveOrbiter(o) {                          // stolen star joins the outer edge
-    o.rf = rand(0.72, 0.9); o.om = this.spin * ORB_W * (1.2 - o.rf);
+  receiveOrbiter(o) {                          // siphoned star joins the outer edge
+    o.rf = rand(0.72, 0.92); o.settleRf = rand(0.5, 0.82);
+    o.om = this.spin * ORB_W * (1.25 - o.settleRf);
     this.orbiters.push(o); this.orbMass += o.mass; this._cap();
   }
   _cap() {                                     // fold the smallest into the dense core
@@ -298,7 +311,7 @@ function spawnWells() {
     const w = new Well({
       x: gal.x + rand(-gal.r, gal.r) * 0.5,
       y: gal.y + rand(-gal.r, gal.r) * 0.5,
-      mass: rand(6, 48), hue: HUES[i], name: 'rival ' + (i + 1),
+      mass: rand(6, 16), hue: HUES[i], name: 'rival ' + (i + 1),
     });
     wells.push(w);
   }
@@ -355,7 +368,17 @@ const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.z
 const mouse = { sx: W/2, sy: H/2 };
 window.addEventListener('pointermove', e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
 document.getElementById('dive').addEventListener('click', enterPlay);
-window.addEventListener('keydown', e => { if (e.key === 'Escape') backToOverview(); });
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') backToOverview();
+  else if (e.key === 'r' || e.key === 'R') resetGame();   // dev reset
+});
+function resetGame() {
+  buildWorld(); spawnWells();
+  anim = null; mode = 'overview';
+  cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+  intro.classList.remove('gone');
+  showToast('world reset');
+}
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
@@ -541,13 +564,25 @@ function updateStars(dt) {
     }
     if (best) {
       if (!s.captured) { s.captured = true; s.vx = -Math.sin(s.ha)*s.hr*s.om; s.vy = Math.cos(s.ha)*s.hr*s.om; }
-      const f = 1 - bd/brr, a = f*f * PULL * dt;
-      s.vx += (bdx/bd) * a; s.vy += (bdy/bd) * a;
-      s.vx *= 0.986; s.vy *= 0.986;
+      // spiral infall: radial pull toward the well + a tangential swirl so
+      // the star curves in and streams into the disk instead of dropping
+      const ux = bdx/bd, uy = bdy/bd;
+      const tx = -uy * best.spin, ty = ux * best.spin;
+      const f = 1 - bd/brr;
+      const a = PULL * dt * (0.4 + 0.6 * f);
+      const sw = SWIRL * dt * f;
+      s.vx += ux * a + tx * sw; s.vy += uy * a + ty * sw;
+      s.vx *= 0.99; s.vy *= 0.99;
       const v = Math.hypot(s.vx, s.vy);
-      if (v > 1400) { s.vx *= 1400/v; s.vy *= 1400/v; }
+      if (v > 1600) { s.vx *= 1600/v; s.vy *= 1600/v; }
       s.x += s.vx * dt; s.y += s.vy * dt;
-      if (bd < best.coreR() + s.size * 0.4) { best.addOrbiter(s); if (best.isPlayer) best.collected++; respawnStar(s); }
+      // hand off into orbit at the radius it reaches — no snap to center
+      if (bd < brr * CAPTURE_BAND) {
+        const ang = Math.atan2(s.y - best.y, s.x - best.x);
+        best.captureStar(s, bd, ang);
+        if (best.isPlayer) best.collected++;
+        respawnStar(s);
+      }
       continue;
     }
     if (s.captured) s.captured = false;
@@ -561,6 +596,7 @@ function updateOrbiters(dt) {
     const R = w.reachR();
     for (const o of w.orbiters) {
       o.ang += o.om * dt;
+      if (o.rf !== o.settleRf) o.rf += (o.settleRf - o.rf) * Math.min(1, dt * MIGRATE);
       o.x = w.x + Math.cos(o.ang) * o.rf * R;
       o.y = w.y + Math.sin(o.ang) * o.rf * R;
     }
@@ -571,21 +607,29 @@ function wellClashes(dt) {
   for (let i = 0; i < wells.length; i++) {
     for (let j = i + 1; j < wells.length; j++) {
       const a = wells[i], b = wells[j];
-      const strong = a.mass() >= b.mass() ? a : b;
-      const weak = strong === a ? b : a;
-      const d = Math.hypot(strong.x - weak.x, strong.y - weak.y);
-      // engulf the core -> swallow whole
-      if (d < strong.coreR() * 0.7 && strong.mass() > weak.mass() * CONSUME_RATIO) {
-        consume(strong, weak); continue;
+      const big = a.mass() >= b.mass() ? a : b;
+      const small = big === a ? b : a;
+      const d = Math.hypot(big.x - small.x, big.y - small.y);
+
+      // BIG can only win by engulfing the small core — and small is fast,
+      // so catching it is hard. This is the only way a large well grows by combat.
+      if (d < big.coreR() * 0.7 && big.mass() > small.mass() * CONSUME_RATIO) {
+        consume(big, small); continue;
       }
-      // reach laps over the weaker -> peel outer orbiters off
-      if (d < strong.reachR() + weak.coreR() && strong.mass() > weak.mass() * 1.05 && weak.orbiters.length) {
-        strong._steal += STEAL_RATE * dt;
-        while (strong._steal >= 1 && weak.orbiters.length) {
-          const o = weak.popOuter();
-          if (o) strong.receiveOrbiter(o);
-          strong._steal -= 1;
-          strong.flash = Math.max(strong.flash, 0.5);
+
+      // SIPHON favours the underdog: the smaller well, diving into the bigger
+      // one's field, peels stars off its outer swarm. Rate rises with the size
+      // gap (David bites Goliath) and falls as the raider itself grows large.
+      if (d < big.reachR() * 0.95 && big.orbiters.length && small.mass() < big.mass() * 0.9) {
+        const gap = clamp(big.mass() / Math.max(1, small.mass()), 1, 8);
+        const rate = STEAL_BASE * Math.sqrt(gap) / (1 + small.mass() / BIG_SOFT);
+        small._steal += rate * dt;
+        while (small._steal >= 1 && big.orbiters.length) {
+          const o = big.popOuter();
+          if (o) small.receiveOrbiter(o);
+          small._steal -= 1;
+          small.flash = Math.max(small.flash, 0.5);
+          big.flash = Math.max(big.flash, 0.3);
         }
       }
     }
@@ -635,6 +679,8 @@ function frame(now) {
   if (mode !== 'overview') for (const w of wells) drawWell(w);
   drawBoundary();
   ctx.globalCompositeOperation = 'source-over';
+  const wantCursor = mode === 'play' ? 'none' : 'default';
+  if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
   if (mode === 'play') drawCursor();
 
   // toast fade
