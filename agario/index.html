@@ -18,9 +18,20 @@
   }
   #stats { left: 16px; top: 14px; color: #d9b6ff; }
   #stats .big { font-size: 20px; color: #ffe6ad; font-weight: 600; letter-spacing: .02em; }
-  #stats .row { opacity: .8; }
+  #stats .row { opacity: .82; }
   #stats b { color: #ffd98a; font-weight: 600; }
-  #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; transition: opacity .6s ease; }
+  #stats .rank b { color: #ffe6ad; }
+  #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
+
+  #toast {
+    position: fixed; left: 50%; top: 32%; transform: translate(-50%,-50%);
+    z-index: 4; pointer-events: none; user-select: none;
+    font: 600 22px/1.2 ui-monospace, Menlo, monospace;
+    letter-spacing: .18em; text-indent: .18em; text-align: center;
+    color: #ffdca0; text-shadow: 0 0 24px rgba(255,150,80,.7);
+    opacity: 0; transition: opacity .35s ease;
+  }
+  #toast.show { opacity: 1; }
 
   /* intro overlay */
   #intro {
@@ -43,7 +54,7 @@
     text-shadow: 0 0 34px rgba(255,190,110,.5), 0 0 70px rgba(190,60,160,.35);
   }
   #intro .tag {
-    max-width: 30ch;
+    max-width: 34ch;
     font: 13px/1.7 ui-monospace, Menlo, monospace;
     color: #c9a8e6; opacity: .7;
   }
@@ -69,7 +80,7 @@
 <div id="intro">
   <div class="sub">gravity well</div>
   <h1>A&nbsp;GALAXY&nbsp;OF&nbsp;GALAXIES</h1>
-  <div class="tag">you are a speck of gravity. pull in stars, grow your mass, and swallow the fractal whole.</div>
+  <div class="tag">you are a speck of gravity. pull stars into orbit, grow your swarm, and steal from rival wells.</div>
   <button id="dive" type="button">dive in ↯</button>
 </div>
 
@@ -77,19 +88,23 @@
   <div class="big">mass <b id="mass">0</b></div>
   <div class="row">stars&nbsp; <b id="stars">0</b></div>
   <div class="row">reach&nbsp; <b id="reach">0</b></div>
+  <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
 </div>
+<div id="toast"></div>
 <div id="hint" class="panel">steer with the mouse · scroll to peek · esc to pull back out</div>
 
 <script>
 /* ==================================================================
  *  GRAVITY WELL — a fractal-galaxy agar toy
  *
- *  The whole map is one galaxy of galaxies: mini-spiral galaxies laid
- *  out along a great spiral, each its own arms of star-squares with
- *  clumped sub-clusters. You are a gravity well — stars inside your
- *  reach spiral in and are absorbed, each one growing your mass, which
- *  widens your reach so you pull from farther. Little cool stars are
- *  common; big gold stars are rare and worth a lot.
+ *  The map is one galaxy of galaxies. You are a gravity well: free
+ *  stars inside your reach spiral in and lock into ORBIT around you —
+ *  your accretion swarm. That swarm is your mass and your body; the
+ *  more you hold the wider your reach.
+ *
+ *  Rival wells (bots) feed too. When a bigger well's reach laps over a
+ *  smaller one it peels the outer stars off their swarm; catch their
+ *  core and you swallow them whole. Everyone respawns.
  *
  *  Star squares keep the twinkle "diamond" mark from the visual:
  *              .
@@ -102,10 +117,11 @@
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const intro = document.getElementById('intro');
-const hint = document.getElementById('hint');
 const massEl = document.getElementById('mass');
 const starsEl = document.getElementById('stars');
 const reachEl = document.getElementById('reach');
+const rankEl = document.getElementById('rank');
+const toastEl = document.getElementById('toast');
 
 let W = 0, H = 0, DPR = 1, MINSIDE = 1;
 function resize() {
@@ -121,12 +137,12 @@ resize();
 
 /* ---------- palette: MATLAB-ish sunset ramp by "grade" ---------- */
 const STOPS = [
-  [0.00, [120, 46, 150]],   // cool purple  (small stars)
-  [0.22, [176, 44, 132]],   // magenta
-  [0.44, [226, 84,  96]],   // rose
-  [0.64, [248, 148, 58]],   // orange
-  [0.82, [255, 216, 120]],  // gold
-  [1.00, [255, 252, 232]],  // white-gold   (giant stars)
+  [0.00, [120, 46, 150]],
+  [0.22, [176, 44, 132]],
+  [0.44, [226, 84,  96]],
+  [0.64, [248, 148, 58]],
+  [0.82, [255, 216, 120]],
+  [1.00, [255, 252, 232]],
 ];
 function ramp(t) {
   t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -150,33 +166,28 @@ const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 
 /* ------------------------- the world ---------------------------- */
 const WORLD_R = 4600;
-const galaxies = [];   // { x, y, r, omega }
-let stars = [];        // star squares
+const galaxies = [];
+let stars = [];
 
 function makeStar(gal, gradeBias) {
-  // grade 0 = small/cool/common, 1 = giant/gold/rare
   const g = clamp01(Math.pow(Math.random(), 2.2) * (gradeBias ?? 1) + gauss()*0.04);
   const size = lerp(1.3, 17, Math.pow(g, 1.4));
-  const s = {
+  return {
     gx: gal.x, gy: gal.y, om: gal.omega,
-    size,
-    mass: size * size * 0.55,
+    size, mass: size * size * 0.3,
     warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
-    big: g > 0.72,
     phase: rand(0, TAU), tw: rand(0.7, 2.6),
     captured: false, vx: 0, vy: 0, x: 0, y: 0,
+    hr: 0, ha: 0,
   };
-  s.mass = size * size * 0.3;   // pace growth
-  return s;
 }
-// place a star on its galaxy's spiral (arms + sub-clusters)
-function seatStar(s, gal, arms, wind) {
+function seatStar(s, gal) {
+  const arms = gal.arms, wind = gal.wind;
   const rr = Math.pow(Math.random(), 0.6);
   const arm = (Math.floor(Math.random() * arms) / arms) * TAU;
-  // sub-cluster clumping: snap some stars toward a few arm knots (fractal feel)
   let ang = arm + rr * wind * TAU + gauss() * (0.18 + 0.4 * rr);
   let hr = rr * gal.r;
-  if (Math.random() < 0.5) {                 // clump into a sub-cluster knot
+  if (Math.random() < 0.5) {                 // clump into a sub-cluster knot (fractal feel)
     const knot = Math.floor(rr * 5) / 5 + 0.1;
     hr = knot * gal.r + gauss() * gal.r * 0.06;
     ang = arm + knot * wind * TAU + gauss() * 0.14;
@@ -187,11 +198,8 @@ function seatStar(s, gal, arms, wind) {
   s.y = gal.y + Math.sin(ang) * hr;
   s.captured = false; s.vx = 0; s.vy = 0;
 }
-
 function buildWorld() {
-  galaxies.length = 0;
-  stars = [];
-  // galaxies laid along a great spiral -> the map is itself a galaxy
+  galaxies.length = 0; stars = [];
   const N = 8;
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
@@ -199,47 +207,132 @@ function buildWorld() {
     const rad = t * WORLD_R * 0.82;
     const r = lerp(1050, 360, t) * rand(0.85, 1.12);
     galaxies.push({
-      x: Math.cos(ang) * rad,
-      y: Math.sin(ang) * rad,
-      r,
+      x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r,
       omega: rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1),
-      arms: 2 + (Math.floor(Math.random()*3)),
-      wind: rand(1.8, 3.0),
+      arms: 2 + (Math.floor(Math.random()*3)), wind: rand(1.8, 3.0),
     });
   }
-  // distribute a star budget across galaxies, weighted by size
-  const TOTAL = clamp(Math.round((W*H)/1400) * 2, 1600, 3200);
+  const TOTAL = clamp(Math.round((W*H)/1500) * 2, 1500, 2800);
   const wsum = galaxies.reduce((a, g) => a + g.r, 0);
   for (const gal of galaxies) {
     const n = Math.round(TOTAL * (gal.r / wsum));
-    for (let k = 0; k < n; k++) {
-      const s = makeStar(gal);
-      seatStar(s, gal, gal.arms, gal.wind);
-      stars.push(s);
-    }
+    for (let k = 0; k < n; k++) { const s = makeStar(gal); seatStar(s, gal); stars.push(s); }
   }
 }
 function respawnStar(s) {
   const gal = galaxies[(Math.random() * galaxies.length) | 0];
-  const fresh = makeStar(gal, 0.85);        // respawns skew small
-  Object.assign(s, fresh);
-  seatStar(s, gal, gal.arms ?? 3, gal.wind ?? 2.4);
+  Object.assign(s, makeStar(gal, 0.85));
+  seatStar(s, gal);
 }
 
-/* --------------------------- player ----------------------------- */
-const player = { x: 0, y: 0, vx: 0, vy: 0, mass: 8, collected: 0 };
-const GR_K = 22, CORE_K = 3.0, PULL = 1300;
-const reachR  = () => GR_K * Math.sqrt(player.mass);
-const coreR   = () => CORE_K * Math.sqrt(player.mass);
-const maxSpeed = () => clamp(320 * Math.pow(60 / reachR(), 0.42), 55, 460);
+/* ---------------------- wells (player + bots) -------------------- */
+const GR_K = 22, CORE_K = 3.0, PULL = 1300, ORB_W = 1.5, ORB_CAP = 66;
+const STEAL_RATE = 9;                         // orbiters/sec peeled per overlap
+const CONSUME_RATIO = 1.2;
+
+class Well {
+  constructor(o) {
+    this.x = o.x; this.y = o.y; this.vx = 0; this.vy = 0;
+    this.coreMass = o.mass; this.orbMass = 0;
+    this.orbiters = [];
+    this.spin = Math.random() < 0.5 ? -1 : 1;
+    this.isPlayer = !!o.isPlayer;
+    this.hue = o.hue;
+    this.name = o.name || 'well';
+    this.collected = 0;
+    this.think = rand(0, 0.4); this.target = null; this.state = 'feed';
+    this.flash = 0; this._steal = 0;
+  }
+  mass()   { return this.coreMass + this.orbMass; }
+  reachR() { return GR_K * Math.sqrt(this.mass()); }
+  coreR()  { return CORE_K * Math.sqrt(this.mass()); }
+  maxSpeed() { return clamp(320 * Math.pow(60 / this.reachR(), 0.42), 55, 470); }
+
+  addOrbiter(star) {
+    const rf = rand(0.32, 0.86);
+    this.orbiters.push({
+      rf, ang: rand(0, TAU), om: this.spin * ORB_W * (1.2 - rf),
+      size: star.size, warm: star.warm, mass: star.mass,
+      phase: rand(0, TAU), tw: rand(0.7, 2.6), x: 0, y: 0,
+    });
+    this.orbMass += star.mass;
+    this._cap();
+  }
+  receiveOrbiter(o) {                          // stolen star joins the outer edge
+    o.rf = rand(0.72, 0.9); o.om = this.spin * ORB_W * (1.2 - o.rf);
+    this.orbiters.push(o); this.orbMass += o.mass; this._cap();
+  }
+  _cap() {                                     // fold the smallest into the dense core
+    while (this.orbiters.length > ORB_CAP) {
+      let mi = 0;
+      for (let i = 1; i < this.orbiters.length; i++)
+        if (this.orbiters[i].mass < this.orbiters[mi].mass) mi = i;
+      this.coreMass += this.orbiters[mi].mass;
+      this.orbMass  -= this.orbiters[mi].mass;
+      this.orbiters.splice(mi, 1);
+    }
+  }
+  popOuter() {                                 // peel the outermost orbiter off
+    if (!this.orbiters.length) return null;
+    let mi = 0;
+    for (let i = 1; i < this.orbiters.length; i++)
+      if (this.orbiters[i].rf > this.orbiters[mi].rf) mi = i;
+    const o = this.orbiters.splice(mi, 1)[0];
+    this.orbMass -= o.mass;
+    return o;
+  }
+}
+
+const HUES = [
+  [92,222,212],[240,96,116],[186,122,255],[255,186,88],[150,232,132],[120,166,255],
+];
+let wells = [], player = null;
+function spawnWells() {
+  wells = [];
+  player = new Well({ x: 0, y: 0, mass: 8, isPlayer: true, hue: [255,242,205], name: 'you' });
+  const gal0 = galaxies[0];
+  player.x = gal0.x + gal0.r * 0.4; player.y = gal0.y;
+  wells.push(player);
+  for (let i = 0; i < 6; i++) {
+    const gal = galaxies[(i + 1) % galaxies.length];
+    const w = new Well({
+      x: gal.x + rand(-gal.r, gal.r) * 0.5,
+      y: gal.y + rand(-gal.r, gal.r) * 0.5,
+      mass: rand(6, 48), hue: HUES[i], name: 'rival ' + (i + 1),
+    });
+    wells.push(w);
+  }
+}
+function respawnWell(w, mass) {
+  const gal = galaxies[(Math.random() * galaxies.length) | 0];
+  w.x = gal.x + rand(-gal.r, gal.r) * 0.4;
+  w.y = gal.y + rand(-gal.r, gal.r) * 0.4;
+  w.coreMass = mass; w.orbMass = 0; w.orbiters = [];
+  w.vx = w.vy = 0; w.target = null; w.think = rand(0, 0.4);
+}
+function consume(strong, weak) {
+  strong.coreMass += weak.coreMass;
+  for (const o of weak.orbiters) {
+    if (strong.orbiters.length < ORB_CAP) strong.receiveOrbiter(o);
+    else { strong.coreMass += o.mass; strong.orbMass += 0; }
+  }
+  strong.orbiters.length && strong._cap();
+  weak.orbiters = []; weak.orbMass = 0;
+  strong.flash = 1;
+  if (weak.isPlayer) { respawnWell(weak, 8); showToast('consumed — regrown'); }
+  else if (strong.isPlayer) { respawnWell(weak, rand(6, 14)); showToast('swallowed a rival'); }
+  else respawnWell(weak, rand(6, 14));
+}
+
+let toastT = 0;
+function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 1.8; }
 
 /* --------------------------- camera ----------------------------- */
 const cam = { x: 0, y: 0, zoom: 0.1 };
 const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
-const playZoom = () => clamp(0.34 * MINSIDE / reachR(), 0.05, 3.4);
+const playZoom = () => clamp(0.34 * MINSIDE / player.reachR(), 0.05, 3.4);
 
-let mode = 'overview';    // overview | diving | play | rising
-let anim = null;
+let mode = 'overview', anim = null;
 function flyTo(target, to, dur) {
   anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
 }
@@ -255,8 +348,6 @@ function backToOverview() {
   flyTo('overview', overviewCam(), 2.2);
   intro.classList.remove('gone');
 }
-
-/* screen <-> world */
 const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
 const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.zoom + cam.y ];
 
@@ -265,7 +356,7 @@ const mouse = { sx: W/2, sy: H/2 };
 window.addEventListener('pointermove', e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
 document.getElementById('dive').addEventListener('click', enterPlay);
 window.addEventListener('keydown', e => { if (e.key === 'Escape') backToOverview(); });
-canvas.addEventListener('wheel', e => {   // let players peek out/in a touch
+canvas.addEventListener('wheel', e => {
   e.preventDefault();
   cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
 }, { passive: false });
@@ -273,7 +364,7 @@ canvas.addEventListener('wheel', e => {   // let players peek out/in a touch
 /* --------------------------- drawing ---------------------------- */
 function starMark(sx, sy, u, warm, tw, spin) {
   const cCore = ramp(warm);
-  if (u < 3.2) {                       // cheap glowing mote
+  if (u < 3.2) {
     const s = u * (0.75 + 0.45 * tw);
     ctx.fillStyle = rgba(cCore, Math.min(1, 0.4 + 0.55 * tw));
     ctx.fillRect(sx - s/2, sy - s/2, s, s);
@@ -281,8 +372,7 @@ function starMark(sx, sy, u, warm, tw, spin) {
   }
   const gap = u * 1.7;
   ctx.save();
-  ctx.translate(sx, sy);
-  ctx.rotate(spin);
+  ctx.translate(sx, sy); ctx.rotate(spin);
   const cSat = ramp(Math.min(1, warm + 0.1));
   const cDot = ramp(Math.max(0, warm - 0.28));
   const du = u * 0.32;
@@ -303,8 +393,7 @@ function starMark(sx, sy, u, warm, tw, spin) {
 }
 
 function drawBackground() {
-  ctx.fillStyle = '#070311';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#070311'; ctx.fillRect(0, 0, W, H);
   const [pcx, pcy] = toScreen(player.x, player.y);
   const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
   g.addColorStop(0, 'rgba(60,18,84,0.35)');
@@ -312,23 +401,71 @@ function drawBackground() {
   g.addColorStop(1, 'rgba(8,3,18,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
-
 function drawGalaxyGlows() {
   ctx.globalCompositeOperation = 'lighter';
   for (const gal of galaxies) {
     const [sx, sy] = toScreen(gal.x, gal.y);
-    const R = gal.r * 0.5 * cam.zoom;
+    const R = Math.max(6, gal.r * 0.5 * cam.zoom);
     if (sx < -R || sx > W + R || sy < -R || sy > H + R) continue;
-    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, Math.max(6, R));
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
     g.addColorStop(0, 'rgba(255,244,214,0.5)');
     g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
     g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
     g.addColorStop(1, 'rgba(120,40,120,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(sx, sy, Math.max(6, R), 0, TAU); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.fill();
   }
 }
+function drawStars() {
+  ctx.globalCompositeOperation = 'lighter';
+  const m = 40;
+  for (const s of stars) {
+    const [sx, sy] = toScreen(s.x, s.y);
+    if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
+    const u = s.size * cam.zoom;
+    if (u < 0.35) continue;
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
+    starMark(sx, sy, u, s.warm, tw, s.captured ? perfNow*3 : s.ha*0.5);
+  }
+}
+function drawWell(w) {
+  const [sx, sy] = toScreen(w.x, w.y);
+  const rr = w.reachR() * cam.zoom, cc = w.coreR() * cam.zoom;
+  if (sx < -rr-60 || sx > W+rr+60 || sy < -rr-60 || sy > H+rr+60) return;
 
+  ctx.globalCompositeOperation = 'lighter';
+
+  // reach field + ring
+  const field = ctx.createRadialGradient(sx, sy, cc*0.5, sx, sy, rr);
+  field.addColorStop(0, rgba(w.hue, 0.09));
+  field.addColorStop(0.7, rgba(w.hue, 0.04));
+  field.addColorStop(1, rgba(w.hue, 0));
+  ctx.fillStyle = field;
+  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = rgba(w.hue, w.isPlayer ? 0.28 : 0.16);
+  if (w.isPlayer) ctx.setLineDash([4, 7]); else ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // orbiting swarm (your absorbed stars)
+  for (const o of w.orbiters) {
+    const [ox, oy] = toScreen(o.x, o.y);
+    const u = o.size * cam.zoom;
+    if (u < 0.4) continue;
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * o.tw + o.phase);
+    starMark(ox, oy, u, o.warm, tw, o.ang * 1.5);
+  }
+
+  // core bloom, tinted by the well's hue, brighter on a flash
+  const bloomR = Math.max(cc * 2.0, 9) * (1 + 0.5 * w.flash);
+  const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
+  bloom.addColorStop(0, 'rgba(255,252,240,0.95)');
+  bloom.addColorStop(0.28, rgba(w.hue, 0.6));
+  bloom.addColorStop(1, rgba(w.hue, 0));
+  ctx.fillStyle = bloom;
+  ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
+  starMark(sx, sy, clamp(cc * 1.1, 6, 20), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
+}
 function drawBoundary() {
   const [sx, sy] = toScreen(0, 0);
   const R = WORLD_R * cam.zoom;
@@ -343,148 +480,137 @@ function drawBoundary() {
   ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
   ctx.restore();
 }
-
-function drawPlayer() {
-  const [sx, sy] = toScreen(player.x, player.y);
-  const rr = reachR() * cam.zoom;
-  const cc = coreR() * cam.zoom;
-
-  // reach field
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createRadialGradient(sx, sy, cc * 0.5, sx, sy, rr);
-  g.addColorStop(0, 'rgba(255,226,150,0.10)');
-  g.addColorStop(0.7, 'rgba(220,120,180,0.05)');
-  g.addColorStop(1, 'rgba(150,60,160,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,210,140,0.22)';
-  ctx.setLineDash([4, 7]);
-  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
-  ctx.restore();
-
-  // bright core
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const bloomR = Math.max(cc * 2.0, 10);
-  const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
-  bloom.addColorStop(0, 'rgba(255,252,236,0.95)');
-  bloom.addColorStop(0.3, 'rgba(255,220,140,0.6)');
-  bloom.addColorStop(1, 'rgba(240,120,90,0)');
-  ctx.fillStyle = bloom;
-  ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
-  // compact bright core — capped so it never balloons into flat slabs
-  starMark(sx, sy, clamp(cc * 1.1, 7, 22), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
-  ctx.restore();
-}
-
-// cursor reticle
 function drawCursor() {
+  const x = mouse.sx, y = mouse.sy;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,225,160,0.5)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,225,160,0.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke();
   ctx.beginPath();
-  ctx.arc(mouse.sx, mouse.sy, 7, 0, TAU); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(mouse.sx-11, mouse.sy); ctx.lineTo(mouse.sx-3, mouse.sy);
-  ctx.moveTo(mouse.sx+3, mouse.sy); ctx.lineTo(mouse.sx+11, mouse.sy);
-  ctx.moveTo(mouse.sx, mouse.sy-11); ctx.lineTo(mouse.sx, mouse.sy-3);
-  ctx.moveTo(mouse.sx, mouse.sy+3); ctx.lineTo(mouse.sx, mouse.sy+11);
+  ctx.moveTo(x-11, y); ctx.lineTo(x-3, y); ctx.moveTo(x+3, y); ctx.lineTo(x+11, y);
+  ctx.moveTo(x, y-11); ctx.lineTo(x, y-3); ctx.moveTo(x, y+3); ctx.lineTo(x, y+11);
   ctx.stroke();
   ctx.restore();
 }
 
 /* ------------------------- simulation --------------------------- */
-function updatePlayer(dt) {
-  const [tx, ty] = toWorld(mouse.sx, mouse.sy);
-  const dx = tx - player.x, dy = ty - player.y;
+function botThink(w, dt) {
+  w.think -= dt;
+  if (w.think > 0) return;
+  w.think = 0.35;
+  const myMass = w.mass();
+  let threat = null, tD = 1e9, prey = null, pD = 1e9;
+  for (const o of wells) {
+    if (o === w) continue;
+    const d = Math.hypot(o.x - w.x, o.y - w.y);
+    if (o.mass() > myMass * 1.15 && d < 1600 && d < tD) { threat = o; tD = d; }
+    if (o.mass() * 1.15 < myMass && o.orbiters.length > 3 && d < 1400 && d < pD) { prey = o; pD = d; }
+  }
+  if (threat) { w.target = [w.x + (w.x - threat.x), w.y + (w.y - threat.y)]; w.state = 'flee'; return; }
+  if (prey)   { w.target = [prey.x, prey.y]; w.state = 'hunt'; return; }
+  let bx = w.x, by = w.y, bd = 1e9;              // sample the field for nearby food
+  for (let k = 0; k < 48; k++) {
+    const s = stars[(Math.random() * stars.length) | 0];
+    const d = Math.hypot(s.x - w.x, s.y - w.y);
+    if (d < bd) { bd = d; bx = s.x; by = s.y; }
+  }
+  w.target = [bx, by]; w.state = 'feed';
+}
+function moveWell(w, dt) {
+  if (!w.target) return;
+  const dx = w.target[0] - w.x, dy = w.target[1] - w.y;
   const d = Math.hypot(dx, dy) + 1e-4;
-  const spd = Math.min(maxSpeed(), d * 3.2);
-  player.vx = (dx / d) * spd;
-  player.vy = (dy / d) * spd;
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
-  // keep inside the world disk
-  const pr = Math.hypot(player.x, player.y);
-  const lim = WORLD_R - coreR();
-  if (pr > lim) { player.x *= lim/pr; player.y *= lim/pr; }
+  const spd = Math.min(w.maxSpeed(), d * 3.2);
+  w.vx = dx / d * spd; w.vy = dy / d * spd;
+  w.x += w.vx * dt; w.y += w.vy * dt;
+  const pr = Math.hypot(w.x, w.y), lim = WORLD_R - w.coreR();
+  if (pr > lim) { w.x *= lim / pr; w.y *= lim / pr; }
 }
 
-function updateStars(dt, live) {
-  const rr = reachR(), rr2 = rr * rr;
-  const cAbsorb = coreR();
-  let collectedThis = 0, massGain = 0;
+function updateStars(dt) {
   for (const s of stars) {
-    if (live) {
-      const dx = player.x - s.x, dy = player.y - s.y;
-      const d2 = dx*dx + dy*dy;
-      if (d2 < rr2) {
-        if (!s.captured) {                 // enters the reach: seed orbital velocity
-          s.captured = true;
-          s.vx = -Math.sin(s.ha) * s.hr * s.om;
-          s.vy =  Math.cos(s.ha) * s.hr * s.om;
-        }
-        const d = Math.sqrt(d2) + 1e-4;
-        const f = 1 - d / rr;              // 0 at edge, 1 at center
-        const a = f * f * PULL * dt;
-        s.vx += (dx / d) * a;
-        s.vy += (dy / d) * a;
-        s.vx *= 0.986; s.vy *= 0.986;      // gentle drag -> spirals in
-        const v = Math.hypot(s.vx, s.vy);
-        if (v > 1400) { s.vx *= 1400/v; s.vy *= 1400/v; }
-        s.x += s.vx * dt; s.y += s.vy * dt;
-        if (d < cAbsorb + s.size * 0.4) {  // swallowed
-          massGain += s.mass; collectedThis++;
-          respawnStar(s);
-        }
-        continue;
+    // find the strongest well whose reach holds this star
+    let best = null, bestPull = 0, bd = 0, bdx = 0, bdy = 0, brr = 0;
+    for (const w of wells) {
+      const dx = w.x - s.x, dy = w.y - s.y, d2 = dx*dx + dy*dy;
+      const rr = w.reachR();
+      if (d2 < rr*rr) {
+        const d = Math.sqrt(d2) + 1e-4, f = 1 - d/rr, pull = f*f*w.mass();
+        if (pull > bestPull) { bestPull = pull; best = w; bd = d; bdx = dx; bdy = dy; brr = rr; }
       }
-      if (s.captured) s.captured = false;
     }
-    // free: rigid rotation around its galaxy center (structure preserved)
+    if (best) {
+      if (!s.captured) { s.captured = true; s.vx = -Math.sin(s.ha)*s.hr*s.om; s.vy = Math.cos(s.ha)*s.hr*s.om; }
+      const f = 1 - bd/brr, a = f*f * PULL * dt;
+      s.vx += (bdx/bd) * a; s.vy += (bdy/bd) * a;
+      s.vx *= 0.986; s.vy *= 0.986;
+      const v = Math.hypot(s.vx, s.vy);
+      if (v > 1400) { s.vx *= 1400/v; s.vy *= 1400/v; }
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (bd < best.coreR() + s.size * 0.4) { best.addOrbiter(s); if (best.isPlayer) best.collected++; respawnStar(s); }
+      continue;
+    }
+    if (s.captured) s.captured = false;
     s.ha += s.om * dt;
     s.x = s.gx + Math.cos(s.ha) * s.hr;
     s.y = s.gy + Math.sin(s.ha) * s.hr;
   }
-  if (massGain) {
-    player.mass += massGain;
-    player.collected += collectedThis;
+}
+function updateOrbiters(dt) {
+  for (const w of wells) {
+    const R = w.reachR();
+    for (const o of w.orbiters) {
+      o.ang += o.om * dt;
+      o.x = w.x + Math.cos(o.ang) * o.rf * R;
+      o.y = w.y + Math.sin(o.ang) * o.rf * R;
+    }
+    if (w.flash > 0) w.flash = Math.max(0, w.flash - dt * 2);
   }
 }
-
-function drawStars() {
-  ctx.globalCompositeOperation = 'lighter';
-  const m = 40;
-  for (const s of stars) {
-    const [sx, sy] = toScreen(s.x, s.y);
-    if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
-    const u = s.size * cam.zoom;
-    if (u < 0.35) continue;
-    const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
-    starMark(sx, sy, u, s.warm, tw, s.captured ? perfNow*3 : s.ha*0.5);
+function wellClashes(dt) {
+  for (let i = 0; i < wells.length; i++) {
+    for (let j = i + 1; j < wells.length; j++) {
+      const a = wells[i], b = wells[j];
+      const strong = a.mass() >= b.mass() ? a : b;
+      const weak = strong === a ? b : a;
+      const d = Math.hypot(strong.x - weak.x, strong.y - weak.y);
+      // engulf the core -> swallow whole
+      if (d < strong.coreR() * 0.7 && strong.mass() > weak.mass() * CONSUME_RATIO) {
+        consume(strong, weak); continue;
+      }
+      // reach laps over the weaker -> peel outer orbiters off
+      if (d < strong.reachR() + weak.coreR() && strong.mass() > weak.mass() * 1.05 && weak.orbiters.length) {
+        strong._steal += STEAL_RATE * dt;
+        while (strong._steal >= 1 && weak.orbiters.length) {
+          const o = weak.popOuter();
+          if (o) strong.receiveOrbiter(o);
+          strong._steal -= 1;
+          strong.flash = Math.max(strong.flash, 0.5);
+        }
+      }
+    }
   }
 }
 
 /* ----------------------------- loop ----------------------------- */
 buildWorld();
-// seat the player in the dense central galaxy (galaxies[0] sits at the origin)
-(() => {
-  const gal = galaxies[0];
-  player.x = gal.x + gal.r * 0.4;
-  player.y = gal.y;
-  cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
-})();
+spawnWells();
+cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
 let perfNow = 0, last = performance.now();
 function frame(now) {
   const dt = Math.min(0.045, (now - last) / 1000);
   last = now; perfNow = now / 1000;
-
   const live = (mode === 'play');
 
-  if (live) updatePlayer(dt);
-  updateStars(dt, live);
+  if (live) {
+    const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+    player.target = [tx, ty];
+    for (const w of wells) { if (!w.isPlayer) botThink(w, dt); moveWell(w, dt); }
+    updateStars(dt);
+    wellClashes(dt);
+  }
+  updateOrbiters(dt);
 
   // camera
   if (anim) {
@@ -495,7 +621,6 @@ function frame(now) {
     cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
     if (k >= 1) { mode = anim.target; anim = null; }
   } else if (mode === 'play') {
-    // follow player; ease zoom toward size-appropriate level
     cam.x += (player.x - cam.x) * Math.min(1, dt * 6);
     cam.y += (player.y - cam.y) * Math.min(1, dt * 6);
     cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 2.2);
@@ -507,15 +632,21 @@ function frame(now) {
   drawBackground();
   drawGalaxyGlows();
   drawStars();
+  if (mode !== 'overview') for (const w of wells) drawWell(w);
   drawBoundary();
-  if (mode !== 'overview') drawPlayer();
   ctx.globalCompositeOperation = 'source-over';
   if (mode === 'play') drawCursor();
 
+  // toast fade
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('show'); }
+
   // hud
-  massEl.textContent = Math.round(player.mass).toLocaleString();
+  massEl.textContent = Math.round(player.mass()).toLocaleString();
   starsEl.textContent = player.collected.toLocaleString();
-  reachEl.textContent = Math.round(reachR()).toLocaleString();
+  reachEl.textContent = Math.round(player.reachR()).toLocaleString();
+  let rank = 1; const pm = player.mass();
+  for (const w of wells) if (!w.isPlayer && w.mass() > pm) rank++;
+  rankEl.textContent = '#' + rank + ' / ' + wells.length;
 
   requestAnimationFrame(frame);
 }
