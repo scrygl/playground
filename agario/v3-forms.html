@@ -66,7 +66,7 @@
   .overlay h1 .k { color: #ffe6a8; text-shadow: 0 0 30px rgba(255,190,90,.7); }
   .overlay h1 .b { color: #ffb9e2; }
   .overlay .tag {
-    max-width: 46ch;
+    max-width: 44ch;
     font: 13px/1.85 ui-monospace, Menlo, monospace;
     color: #c9a8e6; opacity: .78;
   }
@@ -124,12 +124,11 @@
 <div id="intro" class="overlay">
   <div class="sub">a shape has two natures</div>
   <h1><span class="k">KIKI</span>&nbsp;//&nbsp;<span class="b">BOUBA</span></h1>
-  <div class="tag">your body is a living membrane. <b>round</b>, it flows like water —
-    drift over something smaller and your skin simply closes around it.
-    <b>click</b>, and it crystallizes: a slow spiked star that grinds whatever it
-    touches — including whoever is trapped inside you.
-    swallowed? push the soft wall until you slip through. or crystallize
-    in their belly and cut your way out.</div>
+  <div class="tag"><b>round</b>, you are bouba: soft, quick, hungry — smaller blobs sink into your belly, alive.
+    <b>click</b>, and you crystallize into kiki: sharp, slow, cruel — stab rivals,
+    and everyone in your belly is locked in a spiked cell.
+    if a bigger blob swallows YOU: dodge the spikes, wait for the walls to soften,
+    and push your way out.</div>
   <button id="dive" type="button">enter the soup ↯</button>
 </div>
 
@@ -138,7 +137,7 @@
   <div id="stambox"><div id="stam"></div></div>
   <div class="row">mass&nbsp;&nbsp;&nbsp; <b id="mass">0</b></div>
   <div class="row">belly&nbsp;&nbsp; <b id="belly">0</b></div>
-  <div class="row">bursts&nbsp; <b id="eaten">0</b></div>
+  <div class="row">digested <b id="eaten">0</b></div>
 </div>
 <div id="toast"></div>
 <div id="state" class="panel"></div>
@@ -157,23 +156,20 @@
 
 <script>
 /* ==================================================================
- *  KIKI // BOUBA — soft-body soup
+ *  KIKI // BOUBA — an agar-like about having two natures
  *
- *  Every creature is a real membrane: a nucleus plus a ring of nodes
- *  bound by radial + edge springs. There are NO discrete actions —
- *  everything emerges from forces:
+ *  BOUBA (round, soft): quick and absorbent. Smaller boubas that touch
+ *  you sink into your belly and float there, alive. You can't stab and
+ *  can't be stabbed apart, but bigger boubas can swallow you.
  *
- *  · membrane nodes are repelled (magnet-like, finite) by foreign
- *    nuclei, and bouba skin adheres lightly to smaller bodies — so a
- *    big blob drifting over a small one simply FLOWS AROUND it and
- *    seals behind. Swallowing is just what soft matter does.
- *  · the repulsion is finite, so a hard sustained push squeezes
- *    THROUGH a soft membrane: escape is emergent too.
- *  · kiki = the same membrane crystallized: stiff springs, a rotating
- *    star rest-shape, a tighter rest volume. Its nodes grind mass off
- *    whatever they touch — one force that is both stabbing (from
- *    outside) and digestion (squeezing a captive from all sides).
- *  · a captive can crystallize INSIDE you and cut its way out.
+ *  KIKI (spiky, hard): slow, runs on stamina, stabs on contact and
+ *  cannot be swallowed. The cruel part: while you're kiki, your belly
+ *  chamber crystallizes into a spiked cell barely big enough for your
+ *  captives — the spikes slowly sweep, and they must dodge or pop.
+ *
+ *  Get swallowed and you live it from inside: dodge the spikes during
+ *  kiki phases, and when the host relaxes to bouba, shove against the
+ *  membrane until you squeeze out.
  * ================================================================== */
 
 const canvas = document.getElementById('stage');
@@ -212,34 +208,32 @@ const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 /* ------------------ dev tuning (press ` in game) ------------------ */
 const TUNE_DEF = {
   time: 1,        // sim speed
-  speed: 1,       // bouba drive multiplier
-  kikiSpd: 0.55,  // kiki drive as a fraction of bouba
-  drain: 20,      // kiki stamina drain /s
-  regen: 16,      // bouba stamina regen /s
-  softK: 26,      // bouba membrane stiffness
-  hardK: 150,     // kiki membrane stiffness
-  rep: 420,       // membrane <-> foreign-nucleus repulsion (finite!)
-  adhere: 26,     // bouba skin adhesion to smaller bodies (drives engulfment)
-  grind: 26,      // mass/s a kiki node grinds off what it touches
-  squeeze: 0.74,  // kiki rest-volume factor (crushes captives inward)
-  spikes: 7,      // star points
-  spin: 1.1,      // star rotation (rad/s)
-  bots: 8,        // rivals (on R reset)
-  food: 140,      // pellets (on R reset)
-  wobble: 1,      // idle jiggle
-  glow: 1,
-  bgStars: 0.5,
+  speed: 1,       // bouba speed multiplier
+  kikiSpd: 0.6,   // kiki speed as a fraction of bouba
+  drain: 22,      // kiki stamina drain /s
+  regen: 15,      // bouba stamina regen /s
+  absorb: 1.3,    // radius ratio needed to swallow
+  chunk: 0.13,    // mass fraction chipped per stab
+  spikes: 7,      // spikes in the belly cell
+  spin: 0.55,     // belly spike sweep speed (rad/s)
+  tight: 1.55,    // kiki cell radius as a multiple of the captive
+  escT: 2.6,      // seconds of wall-pushing to escape a soft belly
+  bots: 9,        // rivals (on R reset)
+  food: 150,      // pellets (on R reset)
+  wobble: 1,      // bouba wobble amount
+  glow: 1,        // creature glow
+  bgStars: 0.5,   // backdrop
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
-try { Object.assign(TUNE, JSON.parse(localStorage.getItem('kb2_tune') || '{}'), { paused: false }); } catch (e) {}
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('kb_tune') || '{}'), { paused: false }); } catch (e) {}
 function saveTune() {
-  try { const { paused, ...t } = TUNE; localStorage.setItem('kb2_tune', JSON.stringify(t)); } catch (e) {}
+  try { const { paused, ...t } = TUNE; localStorage.setItem('kb_tune', JSON.stringify(t)); } catch (e) {}
 }
 
 /* --------------------------- world ------------------------------- */
-const WORLD_R = 2400;
-const NPTS = 24;                       // membrane nodes per creature
+const WORLD_R = 2600;
 
+// soft pastel natures; kiki shifts each toward hot white
 const HUES = [
   [255, 205, 150],  // player — warm cream
   [150, 226, 214], [244, 148, 170], [186, 152, 255], [166, 226, 148],
@@ -249,92 +243,106 @@ const HUES = [
 const KIKI_TINT = [255, 244, 224];
 
 let creatures = [], pellets = [];
-const restR = c => 14 + Math.sqrt(c.mass) * 2.0;
-const nucR = c => restR(c) * 0.42;
+const radiusOf = c => 14 + Math.sqrt(c.mass) * 2.2;
 
 function makeCreature(o) {
-  const c = Object.assign({
+  return Object.assign({
     x: 0, y: 0, vx: 0, vy: 0,
     mass: 60, hue: HUES[1], isPlayer: false,
-    k: 0, morph: 0, stam: 100,
-    spikePhase: rand(0, TAU), wobPh: rand(0, TAU),
-    nodes: null, host: null, inv: 0,
-    think: rand(0, 0.3), tx: 0, ty: 0,
-    bursts: 0, grindT: 0,
+    k: 0, morph: 0,             // form target + eased morph (0 bouba, 1 kiki)
+    stam: 100,
+    wob: rand(0, TAU), wobSp: rand(0.8, 1.4),
+    spikeAng: rand(0, TAU),
+    prisoners: [], host: null,
+    lx: 0, ly: 0, lvx: 0, lvy: 0,   // local coords when imprisoned
+    hp: 3, escape: 0, inv: 0, hitInv: 0,
+    think: rand(0, 0.3), tx: 0, ty: 0, wantK: false,
+    digested: 0,
   }, o);
-  return c;
-}
-function seedNodes(c) {
-  const R = restR(c);
-  c.nodes = [];
-  for (let i = 0; i < NPTS; i++) {
-    const a = i / NPTS * TAU;
-    c.nodes.push({ x: c.x + Math.cos(a) * R, y: c.y + Math.sin(a) * R, vx: 0, vy: 0 });
-  }
 }
 function spawnAt(c) {
-  const a = rand(0, TAU), d = rand(WORLD_R * 0.25, WORLD_R * 0.88);
+  const a = rand(0, TAU), d = rand(WORLD_R * 0.25, WORLD_R * 0.9);
   c.x = Math.cos(a) * d; c.y = Math.sin(a) * d;
   c.vx = c.vy = 0;
-  seedNodes(c);
 }
 function makePellet() {
   const a = rand(0, TAU), d = Math.sqrt(Math.random()) * WORLD_R * 0.96;
   return {
-    x: Math.cos(a) * d, y: Math.sin(a) * d, vx: 0, vy: 0,
-    mass: rand(3, 6.5),
+    x: Math.cos(a) * d, y: Math.sin(a) * d,
+    mass: rand(3.5, 7),
     hue: HUES[(Math.random() * HUES.length) | 0],
-    sharp: Math.random() < 0.4,
+    sharp: Math.random() < 0.4,           // cosmetic: tiny kiki or tiny bouba
     wob: rand(0, TAU),
   };
 }
 let player = null;
 function buildWorld() {
   creatures = []; pellets = [];
-  player = makeCreature({ mass: 75, hue: HUES[0], isPlayer: true });
+  player = makeCreature({ mass: 70, hue: HUES[0], isPlayer: true });
   spawnAt(player);
   creatures.push(player);
-  for (let i = 0; i < Math.round(TUNE.bots); i++) {
-    const c = makeCreature({ mass: rand(40, 160), hue: HUES[1 + i % (HUES.length - 1)] });
+  const nB = Math.round(TUNE.bots);
+  for (let i = 0; i < nB; i++) {
+    const c = makeCreature({ mass: rand(35, 150), hue: HUES[1 + i % (HUES.length - 1)] });
     spawnAt(c);
     creatures.push(c);
   }
-  for (let i = 0; i < Math.round(TUNE.food); i++) pellets.push(makePellet());
+  const nF = Math.round(TUNE.food);
+  for (let i = 0; i < nF; i++) pellets.push(makePellet());
+}
+
+/* --------------------- belly geometry helpers -------------------- */
+function maxPrisonerR(c) {
+  let m = 0;
+  for (const p of c.prisoners) m = Math.max(m, radiusOf(p));
+  return m;
+}
+// the chamber: roomy when soft, barely-you-sized when crystallized
+function cavityR(c) {
+  const pr = maxPrisonerR(c);
+  if (pr <= 0) return 0;
+  const crowd = 1 + (c.prisoners.length - 1) * 0.22;
+  return lerp(2.05, TUNE.tight, c.morph) * pr * crowd;
+}
+function displayR(c) {
+  const R = radiusOf(c);
+  const cav = cavityR(c);
+  return Math.max(R, cav * 1.28);
+}
+// spike tips leave a free circle just barely bigger than the captive
+function spikeTipR(c) {
+  const cav = cavityR(c);
+  const pr = maxPrisonerR(c);
+  return lerp(cav, pr * 1.18, c.morph * c.morph);
 }
 
 /* -------------------------- effects ------------------------------ */
 let toastT = 0;
 function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 2.0; }
-const ringFx = [];
+const bursts = [];
 const floaters = [];
 let shake = 0;
 function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
-function spill(x, y, hue, n, m) {
+function spill(x, y, hue, n, m) {          // chipped mass becomes pellets
   for (let i = 0; i < n; i++) {
     const p = makePellet();
-    p.x = x + gauss() * 16; p.y = y + gauss() * 16;
+    p.x = x + gauss() * 14; p.y = y + gauss() * 14;
     p.hue = hue; p.mass = m / n;
-    p.vx = gauss() * 180; p.vy = gauss() * 180;
+    p.vx = gauss() * 160; p.vy = gauss() * 160;
     pellets.push(p);
   }
-  while (pellets.length > TUNE.food + 180) pellets.splice((Math.random() * TUNE.food) | 0, 1);
-}
-function burst(c, by) {
-  spill(c.x, c.y, c.hue, 8, Math.max(20, c.mass) * 0.6);
-  ringFx.push({ x: c.x, y: c.y, r0: restR(c), t: 1, hue: c.hue });
-  if (c.isPlayer) { showToast('burst! reborn small.'); shake = 1; }
-  else if (by && by.isPlayer) { showToast('burst a rival'); by.bursts++; }
-  c.mass = c.isPlayer ? 55 : rand(40, 90);
-  c.k = 0; c.morph = 0; c.stam = 100; c.inv = 2.5;
-  spawnAt(c);
+  while (pellets.length > TUNE.food + 160) pellets.splice((Math.random() * TUNE.food) | 0, 1);
 }
 
 /* --------------------------- camera ------------------------------ */
 const cam = { x: 0, y: 0, zoom: 0.12 };
 const overviewCam = () => ({ x: 0, y: 0, zoom: 0.42 * MINSIDE / WORLD_R });
 function playZoom() {
-  const focus = player.host ? restR(player.host) * 2.6 : restR(player) * 6.2;
-  return clamp(0.34 * MINSIDE / focus, 0.18, 1.8);
+  if (player.host) {
+    const cav = Math.max(cavityR(player.host), radiusOf(player) * 2.2);
+    return clamp(0.26 * MINSIDE / cav, 0.2, 4);
+  }
+  return clamp(0.34 * MINSIDE / (radiusOf(player) * 6.5), 0.16, 1.6);
 }
 let mode = 'overview', anim = null;
 function flyTo(target, to, dur) {
@@ -384,26 +392,24 @@ canvas.addEventListener('wheel', e => {
 /* --------------------------- dev panel --------------------------- */
 const PARAMS = [
   ['#', 'soup'],
-  ['time',    'sim speed',     0,    3,    0.05],
-  ['speed',   'bouba drive',   0.4,  2,    0.05],
-  ['kikiSpd', 'kiki drive ×',  0.2,  1,    0.05],
-  ['drain',   'kiki drain',    5,    60,   1   ],
-  ['regen',   'stam regen',    4,    40,   1   ],
-  ['#', 'membrane'],
-  ['softK',   'soft skin',     8,    80,   1   ],
-  ['hardK',   'hard skin',     60,   300,  5   ],
-  ['rep',     'repulsion',     100,  900,  10  ],
-  ['adhere',  'adhesion',      0,    80,   1   ],
-  ['grind',   'grind dps',     3,    40,   0.5 ],
-  ['squeeze', 'kiki squeeze',  0.5,  0.95, 0.01],
-  ['spikes',  'star points',   4,    12,   1   ],
-  ['spin',    'star spin',     0,    3,    0.05],
+  ['time',   'sim speed',    0,    3,    0.05],
+  ['speed',  'bouba speed',  0.4,  2,    0.05],
+  ['kikiSpd','kiki speed ×', 0.2,  1,    0.05],
+  ['drain',  'kiki drain',   5,    60,   1   ],
+  ['regen',  'stam regen',   4,    40,   1   ],
+  ['absorb', 'swallow ratio',1.05, 2,    0.05],
+  ['chunk',  'stab chunk',   0.04, 0.3,  0.01],
+  ['#', 'the cell'],
+  ['spikes', 'cell spikes',  3,    12,   1   ],
+  ['spin',   'spike sweep',  0,    2,    0.05],
+  ['tight',  'cell tightness',1.3, 2,    0.05],
+  ['escT',   'escape secs',  1,    6,    0.1 ],
   ['#', 'world'],
-  ['bots',    'rivals ®',      2,    14,   1   ],
-  ['food',    'pellets ®',     40,   300,  10  ],
-  ['wobble',  'wobble',        0,    2,    0.05],
-  ['glow',    'glow',          0,    2,    0.05],
-  ['bgStars', 'bg stars',      0,    1,    0.05],
+  ['bots',   'rivals ®',     2,    16,   1   ],
+  ['food',   'pellets ®',    40,   300,  10  ],
+  ['wobble', 'wobble',       0,    2,    0.05],
+  ['glow',   'glow',         0,    2,    0.05],
+  ['bgStars','bg stars',     0,    1,    0.05],
 ];
 const devPanel = document.getElementById('dev');
 const devRows = document.getElementById('devrows');
@@ -450,225 +456,8 @@ function togglePause() {
 }
 pauseBtn.addEventListener('click', togglePause);
 
-/* ------------------------- soft-body sim -------------------------- */
-const speedOf = c => {
-  const base = 300 * TUNE.speed * Math.pow(46 / restR(c), 0.35);
-  return c.morph > 0.5 ? base * TUNE.kikiSpd : base;
-};
-function updateForm(c, dt) {
-  if (c.k === 1) {
-    c.stam -= TUNE.drain * dt;
-    if (c.stam <= 0) { c.stam = 0; c.k = 0; if (c.isPlayer) showToast('exhausted — soft again'); }
-  } else {
-    c.stam = Math.min(100, c.stam + TUNE.regen * dt);
-  }
-  c.morph += clamp(c.k - c.morph, -dt / 0.4, dt / 0.4);
-  c.spikePhase += TUNE.spin * dt * (0.25 + 0.75 * c.morph);
-  if (c.inv > 0) c.inv -= dt;
-}
-// membrane internal forces: radial spring to a rest shape (round or star),
-// edge springs, smoothing, damping. Rest volume shrinks when crystallized.
-function membraneStep(c, h) {
-  const m = c.morph;
-  const R = restR(c) * lerp(1, TUNE.squeeze, m);
-  const NS = Math.round(TUNE.spikes);
-  const kR = lerp(TUNE.softK, TUNE.hardK, m);
-  // star perimeters are long: edge springs must loosen + lengthen as the
-  // skin crystallizes, or they crush the spikes into a buckled knot
-  const kE = lerp(24, 34, m);
-  const restE = R * TAU / NPTS * lerp(1, 1.32, m);
-  const damp = Math.exp(-3.2 * h);
-  const wobA = 0.05 * TUNE.wobble * (1 - m);
-  for (let i = 0; i < NPTS; i++) {
-    const n = c.nodes[i];
-    let dx = n.x - c.x, dy = n.y - c.y;
-    let d = Math.hypot(dx, dy) + 1e-4;
-    const ang = Math.atan2(dy, dx);
-    // rest radius: wobbly circle -> rotating star
-    const sp = Math.pow(Math.max(0, Math.cos(ang * NS + c.spikePhase)), 3);
-    const rest = R * lerp(
-      1 + wobA * Math.sin(ang * 3 + perfNow * 1.6 + c.wobPh),
-      0.72 + 0.74 * sp,
-      m
-    );
-    const fr = kR * (rest - d);
-    n.vx += (dx / d) * fr * h;
-    n.vy += (dy / d) * fr * h;
-    c.vx -= (dx / d) * fr * h * 0.06;      // reaction tugs the nucleus
-    c.vy -= (dy / d) * fr * h * 0.06;
-    // edge springs + smoothing
-    const nn = c.nodes[(i + 1) % NPTS], pp = c.nodes[(i - 1 + NPTS) % NPTS];
-    let ex = nn.x - n.x, ey = nn.y - n.y;
-    let ed = Math.hypot(ex, ey) + 1e-4;
-    const fe = kE * (ed - restE);
-    n.vx += (ex / ed) * fe * h; n.vy += (ey / ed) * fe * h;
-    nn.vx -= (ex / ed) * fe * h; nn.vy -= (ey / ed) * fe * h;
-    const kS = 6 - 4 * m;                  // smoothing also fights spikes
-    n.vx += ((pp.x + nn.x) / 2 - n.x) * kS * h;
-    n.vy += ((pp.y + nn.y) / 2 - n.y) * kS * h;
-    n.vx *= damp; n.vy *= damp;
-    const v = Math.hypot(n.vx, n.vy);
-    if (v > 900) { n.vx *= 900/v; n.vy *= 900/v; }
-    n.x += n.vx * h; n.y += n.vy * h;
-  }
-}
-// the whole contact model: foreign nuclei repel membrane nodes (finite,
-// magnet-like), bouba skin adheres to smaller bodies, kiki nodes grind.
-function interact(A, B, h) {
-  const dx = B.x - A.x, dy = B.y - A.y;
-  const gate = restR(A) * 1.7 + restR(B) * 1.7;
-  if (dx > gate || dx < -gate || dy > gate || dy < -gate) return;
-
-  const pairs = [[A, B], [B, A]];
-  for (const [me, other] of pairs) {
-    const rN = nucR(other);
-    const contactR = rN + 6;
-    const canGrind = me.morph > 0.5 && other.inv <= 0;
-    const canStick = me.morph < 0.4 && restR(me) > restR(other) * 1.12 && other.morph < 0.5;
-    // the engulfment asymmetry: a much bigger body's skin YIELDS and parts
-    // around small outside bodies (weak reaction), but once they're deep
-    // inside, the same skin pushes back at full strength — containment.
-    // similar sizes always collide at full strength.
-    const dCenter = Math.hypot(other.x - me.x, other.y - me.y);
-    const sizeDom = clamp01((restR(me) / restR(other) - 1.05) / 0.6);
-    const insideT = clamp01(1.6 - dCenter / (restR(me) * 0.75));
-    // momentum fairness: a small membrane barely moves a big body
-    const ratio = restR(me) / restR(other);
-    const massK = clamp(ratio * ratio * ratio, 0.04, 1);
-    const reactK = massK * lerp(0.85, lerp(0.1, 0.85, insideT), sizeDom);
-    let grinding = false;
-    for (const n of me.nodes) {
-      const ndx = n.x - other.x, ndy = n.y - other.y;
-      if (ndx > contactR + 30 || ndx < -contactR - 30 || ndy > contactR + 30 || ndy < -contactR - 30) continue;
-      const nd = Math.hypot(ndx, ndy) + 1e-4;
-      if (nd < contactR) {
-        // finite repulsion: soft membranes can be pushed through;
-        // crystallized skin repels much harder — a sealed cell
-        const f = TUNE.rep * (1 + me.morph * 1.4) * (1 - nd / contactR);
-        n.vx += (ndx / nd) * f * h;
-        n.vy += (ndy / nd) * f * h;
-        other.vx -= (ndx / nd) * f * h * reactK;
-        other.vy -= (ndy / nd) * f * h * reactK;
-        if (canGrind) grinding = true;
-      } else if (canStick && nd < contactR + 26) {
-        // adhesion: skin creeps along the smaller body -> engulfment
-        const f = TUNE.adhere * (1 - (nd - contactR) / 26);
-        n.vx -= (ndx / nd) * f * h;
-        n.vy -= (ndy / nd) * f * h;
-      }
-    }
-    // cytoplasm: a body deep inside rides the host's interior fluid
-    if (sizeDom > 0.5 && insideT > 0.2) {
-      const kd = Math.min(1, 6 * insideT * h);
-      other.vx += (me.vx - other.vx) * kd;
-      other.vy += (me.vy - other.vy) * kd;
-    }
-    if (grinding) {
-      const dm = TUNE.grind * h;
-      other.mass = Math.max(10, other.mass - dm);
-      me.mass += dm * 0.7;
-      me.grindT = 0.15;
-      if (Math.random() < h * 14) {
-        ringFx.push({ x: other.x + gauss() * 8, y: other.y + gauss() * 8, r0: 8, t: 0.6, hue: [255, 150, 150] });
-      }
-      if ((other.isPlayer || me.isPlayer) && Math.random() < h * 5) shake = Math.max(shake, 0.35);
-      if (other.mass <= 12) burst(other, me);
-    }
-  }
-  // nuclei never coincide — the lighter one yields
-  const d = Math.hypot(dx, dy) + 1e-4;
-  const rr = (nucR(A) + nucR(B)) * 1.05;
-  if (d < rr) {
-    const f = 260 * (1 - d / rr);
-    const mSum = A.mass + B.mass;
-    A.vx -= (dx / d) * f * h * 2 * B.mass / mSum;
-    A.vy -= (dy / d) * f * h * 2 * B.mass / mSum;
-    B.vx += (dx / d) * f * h * 2 * A.mass / mSum;
-    B.vy += (dy / d) * f * h * 2 * A.mass / mSum;
-  }
-}
-function driveNucleus(c, dt) {
-  const dxT = c.tx - c.x, dyT = c.ty - c.y;
-  const d = Math.hypot(dxT, dyT) + 1e-4;
-  const sMax = speedOf(c);
-  const want = Math.min(sMax, d * 3.2);
-  const k = Math.min(1, dt * 4.5);
-  c.vx += ((dxT / d) * want - c.vx) * k;
-  c.vy += ((dyT / d) * want - c.vy) * k;
-  c.x += c.vx * dt; c.y += c.vy * dt;
-  const rr = Math.hypot(c.x, c.y), lim = WORLD_R - nucR(c);
-  if (rr > lim) { c.x *= lim / rr; c.y *= lim / rr; }
-}
-function eatPellets(c, dt) {
-  const r = restR(c) * 0.82;
-  for (let i = pellets.length - 1; i >= 0; i--) {
-    const p = pellets[i];
-    const dx = p.x - c.x, dy = p.y - c.y;
-    if (dx > r || dx < -r || dy > r || dy < -r) continue;
-    if (dx*dx + dy*dy < r*r) {
-      c.mass += p.mass * (c.morph > 0.5 ? 0.4 : 1);
-      if (pellets.length <= TUNE.food) Object.assign(p, makePellet());
-      else pellets.splice(i, 1);
-    }
-  }
-}
-// who is inside whom (for HUD/AI only — physics doesn't care)
-function updateContainment() {
-  for (const c of creatures) c.host = null;
-  for (const c of creatures) {
-    for (const o of creatures) {
-      if (o === c) continue;
-      const d = Math.hypot(o.x - c.x, o.y - c.y);
-      if (restR(o) > restR(c) * 1.15 && d < restR(o) * 0.8) { c.host = o; break; }
-    }
-  }
-}
-function botThink(c, dt) {
-  c.think -= dt;
-  if (c.think > 0) return;
-  c.think = rand(0.25, 0.4);
-  const myR = restR(c);
-  // trapped inside someone
-  if (c.host) {
-    const h = c.host;
-    if (h.morph > 0.5 && c.stam > 45) c.k = 1;            // fight the squeeze with spikes
-    else if (h.morph < 0.3 && c.k === 1 && c.stam < 70) c.k = 0;
-    // push out along the shortest exit
-    c.tx = c.x + (c.x - h.x) * 6; c.ty = c.y + (c.y - h.y) * 6;
-    return;
-  }
-  // captives inside me? squeeze
-  let captive = null;
-  for (const o of creatures) if (o.host === c) { captive = o; break; }
-  if (captive && c.stam > 35 && c.k === 0) c.k = 1;
-  if (!captive && c.k === 1 && c.stam < 55) c.k = 0;
-  // threats & prey
-  let danger = null, dd = 1e9, prey = null, pd = 1e9;
-  for (const o of creatures) {
-    if (o === c) continue;
-    const d = Math.hypot(o.x - c.x, o.y - c.y);
-    const oR = restR(o);
-    const threat = (o.morph > 0.5 && oR > myR * 0.55) || (o.morph <= 0.5 && oR > myR * 1.2);
-    if (threat && d < 640 && d < dd) { danger = o; dd = d; }
-    if (o.morph <= 0.5 && myR > oR * 1.25 && d < 760 && d < pd) { prey = o; pd = d; }
-  }
-  if (danger && dd < 430) {
-    c.tx = c.x + (c.x - danger.x) * 3; c.ty = c.y + (c.y - danger.y) * 3;
-    if (dd < 210 && c.stam > 45 && danger.morph <= 0.5 && !captive) c.k = 1;  // brace: spikes resist swallowing
-    return;
-  }
-  if (prey && pd < 680) { c.tx = prey.x; c.ty = prey.y; return; }
-  let bx = c.x, by = c.y, bd = 1e9;
-  for (let k = 0; k < 24; k++) {
-    const p = pellets[(Math.random() * pellets.length) | 0];
-    if (!p) break;
-    const d = Math.hypot(p.x - c.x, p.y - c.y);
-    if (d < bd) { bd = d; bx = p.x; by = p.y; }
-  }
-  c.tx = bx; c.ty = by;
-}
-
 /* --------------------------- drawing ----------------------------- */
+/* backdrop: fixed world-space squares (kept from the galaxy days) */
 const BG_TILE = 520;
 const bgTileStars = Array.from({ length: 12 }, () => ({
   ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
@@ -718,7 +507,7 @@ function drawPellets() {
     const [sx, sy] = toScreen(p.x, p.y);
     if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
     const s = clamp((5 + p.mass * 0.5) * cam.zoom, 1.5, 12);
-    if (p.sharp) {
+    if (p.sharp) {                          // a tiny kiki
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(p.wob + perfNow * 0.4);
@@ -731,61 +520,101 @@ function drawPellets() {
       }
       ctx.closePath(); ctx.fill();
       ctx.restore();
-    } else {
+    } else {                                // a tiny bouba
       const wob = 1 + 0.15 * Math.sin(perfNow * 2 + p.wob);
       ctx.fillStyle = rgba(p.hue, 0.8);
       ctx.beginPath(); ctx.arc(sx, sy, s * 0.62 * wob, 0, TAU); ctx.fill();
     }
   }
 }
+// the creature body: bouba = wobbly rounded blob, kiki = hard star polygon
+function tracePath(cx, cy, R, m, wob, spikeAng, pts) {
+  const amp = 0.075 * TUNE.wobble * (1 - m);
+  const rr = [];
+  for (let i = 0; i < pts; i++) {
+    const a = i / pts * TAU;
+    const soft = 1 + amp * Math.sin(a * 3 + wob) + amp * 0.7 * Math.sin(a * 5 - wob * 1.4);
+    const hard = (i % 2 === 0) ? 1.26 : 0.62;
+    rr.push(R * lerp(soft, hard, m));
+  }
+  const sharp = m > 0.4;
+  ctx.beginPath();
+  for (let i = 0; i <= pts; i++) {
+    const i0 = i % pts;
+    const a = i0 / pts * TAU + spikeAng * m;
+    const x = cx + Math.cos(a) * rr[i0], y = cy + Math.sin(a) * rr[i0];
+    if (i === 0) ctx.moveTo(x, y);
+    else if (sharp) ctx.lineTo(x, y);
+    else {
+      const ip = (i - 1) % pts;
+      const ap = ip / pts * TAU + spikeAng * m;
+      const px = cx + Math.cos(ap) * rr[ip], py = cy + Math.sin(ap) * rr[ip];
+      ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+    }
+  }
+  ctx.closePath();
+}
 function drawCreature(c) {
-  const R = restR(c) * cam.zoom;
-  const [cx, cy] = toScreen(c.x, c.y);
-  if (cx < -R*3 || cx > W + R*3 || cy < -R*3 || cy > H + R*3) return;
+  const [sx, sy] = toScreen(c.x, c.y);
+  const R = displayR(c) * cam.zoom;
+  if (sx < -R*2 || sx > W + R*2 || sy < -R*2 || sy > H + R*2) return;
   const m = c.morph;
   const col = lerpC(c.hue, KIKI_TINT, m * 0.55);
   const blink = c.inv > 0 && Math.sin(perfNow * 16) > 0;
 
   ctx.globalCompositeOperation = 'lighter';
   if (TUNE.glow > 0.01) {
-    const g = ctx.createRadialGradient(cx, cy, R * 0.4, cx, cy, R * (1.9 + m * 0.5));
-    g.addColorStop(0, rgba(col, (0.1 + 0.1 * m + (c.grindT > 0 ? 0.12 : 0)) * TUNE.glow));
+    const g = ctx.createRadialGradient(sx, sy, R * 0.4, sx, sy, R * (1.8 + m * 0.5));
+    g.addColorStop(0, rgba(col, (0.12 + 0.1 * m) * TUNE.glow));
     g.addColorStop(1, rgba(col, 0));
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx, cy, R * (1.9 + m * 0.5), 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, R * (1.8 + m * 0.5), 0, TAU); ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
 
-  // membrane path through the actual simulated nodes
-  const pts = c.nodes.map(n => toScreen(n.x, n.y));
-  const sharp = m > 0.45;
-  ctx.beginPath();
-  for (let i = 0; i <= NPTS; i++) {
-    const p = pts[i % NPTS];
-    if (i === 0) ctx.moveTo((pts[NPTS-1][0] + p[0]) / 2, (pts[NPTS-1][1] + p[1]) / 2);
-    else {
-      const prev = pts[(i - 1) % NPTS];
-      if (sharp) { ctx.lineTo(prev[0], prev[1]); ctx.lineTo((prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2); }
-      else ctx.quadraticCurveTo(prev[0], prev[1], (prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2);
-    }
-  }
-  ctx.closePath();
-  ctx.fillStyle = rgba(lerpC(col, [10, 6, 22], 0.6), blink ? 0.3 : 0.6);
+  // body
+  tracePath(sx, sy, R, m, c.wob + perfNow * c.wobSp, c.spikeAng, 26);
+  ctx.fillStyle = rgba(lerpC(col, [10, 6, 22], 0.55), blink ? 0.35 : 0.82);
   ctx.fill();
-  ctx.lineWidth = Math.max(1.5, R * 0.055);
+  ctx.lineWidth = Math.max(1.5, R * 0.05);
   ctx.strokeStyle = rgba(col, blink ? 0.4 : 0.95);
   ctx.stroke();
 
-  // nucleus
-  const nr = Math.max(nucR(c) * cam.zoom * 0.55, 3);
-  ctx.globalCompositeOperation = 'lighter';
-  const ng = ctx.createRadialGradient(cx, cy, 0, cx, cy, nr * 2.6);
-  ng.addColorStop(0, rgba([255, 252, 244], blink ? 0.4 : 0.95));
-  ng.addColorStop(0.4, rgba(col, 0.5));
-  ng.addColorStop(1, rgba(col, 0));
-  ctx.fillStyle = ng;
-  ctx.beginPath(); ctx.arc(cx, cy, nr * 2.6, 0, TAU); ctx.fill();
-  if (c.grindT > 0) c.grindT -= 0.016;
+  // the belly: chamber + captives + crystallized spikes
+  if (c.prisoners.length) {
+    const cav = cavityR(c) * cam.zoom;
+    // chamber
+    ctx.fillStyle = `rgba(8,4,18,${0.5 + 0.25 * m})`;
+    ctx.beginPath(); ctx.arc(sx, sy, cav, 0, TAU); ctx.fill();
+    ctx.lineWidth = Math.max(1, cav * 0.05);
+    ctx.strokeStyle = m > 0.4 ? rgba(lerpC(col, [255,255,255], 0.3), 0.8) : rgba(col, 0.4);
+    ctx.stroke();
+    // spikes crystallize inward as the host hardens
+    if (m > 0.03) {
+      const NS = Math.round(TUNE.spikes);
+      const tip = spikeTipR(c) * cam.zoom;
+      const baseHalf = Math.min(0.4, TAU / NS * 0.22);
+      ctx.fillStyle = rgba(lerpC(col, [255, 250, 240], 0.5), 0.95 * m);
+      for (let k = 0; k < NS; k++) {
+        const a = c.spikeAng + k * TAU / NS;
+        const ax = sx + Math.cos(a - baseHalf) * cav, ay = sy + Math.sin(a - baseHalf) * cav;
+        const bx = sx + Math.cos(a + baseHalf) * cav, by = sy + Math.sin(a + baseHalf) * cav;
+        const tx = sx + Math.cos(a) * tip, ty = sy + Math.sin(a) * tip;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(tx, ty); ctx.lineTo(bx, by); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // captives
+    for (const pr of c.prisoners) drawCreature(pr);
+    // escape meter for the player captive
+    if (player.host === c && player.escape > 0.02 && m < 0.4) {
+      const [px, py] = toScreen(player.x, player.y);
+      const rr = radiusOf(player) * cam.zoom * 1.5;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(180,240,200,0.9)';
+      ctx.beginPath(); ctx.arc(px, py, rr, -Math.PI/2, -Math.PI/2 + clamp01(player.escape) * TAU); ctx.stroke();
+    }
+  }
 }
 function drawBoundary() {
   const [sx, sy] = toScreen(0, 0);
@@ -803,10 +632,10 @@ function drawBoundary() {
 }
 function drawEffects(dt) {
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = ringFx.length - 1; i >= 0; i--) {
-    const b = ringFx[i];
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i];
     b.t -= dt * 1.4;
-    if (b.t <= 0) { ringFx.splice(i, 1); continue; }
+    if (b.t <= 0) { bursts.splice(i, 1); continue; }
     const [x, y] = toScreen(b.x, b.y);
     const R = (b.r0 + (1 - b.t) * b.r0 * 5) * cam.zoom;
     ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
@@ -841,7 +670,8 @@ function drawMinimap() {
   ctx.save();
   ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
   for (const c of creatures) {
-    const r = clamp(restR(c) * scale * 1.6, 1.6, 6);
+    if (c.host) continue;
+    const r = clamp(radiusOf(c) * scale * 1.6, 1.6, 6);
     ctx.beginPath(); ctx.arc(cxm + c.x * scale, cym + c.y * scale, r, 0, TAU);
     ctx.fillStyle = rgba(c.morph > 0.5 ? lerpC(c.hue, KIKI_TINT, 0.6) : c.hue, 0.9);
     ctx.fill();
@@ -868,26 +698,288 @@ function updateStateLine() {
   let txt = '', col = '#b795d8';
   if (player.host) {
     const h = player.host;
-    if (h.morph > 0.5) { txt = '⚠ being ground down — crystallize or push out!'; col = '#ff8a8a'; }
-    else { txt = 'inside — shove through the soft wall'; col = '#9cf0b0'; }
+    if (h.morph > 0.4) { txt = '⚠ SPIKES — stay in the gaps'; col = '#ff8a8a'; }
+    else { txt = 'walls are soft — push outward to escape (' + Math.round(clamp01(player.escape) * 100) + '%)'; col = '#9cf0b0'; }
   } else if (player.k === 1) {
-    txt = 'kiki: everything you touch, you grind'; col = '#ffe6a8';
+    txt = 'kiki: stab them. captives are on the spikes.'; col = '#ffe6a8';
     if (player.stam < 25) { txt = 'stamina fading — you will soften soon'; col = '#ffb07e'; }
   } else {
+    // nearest meaningful thing
     let danger = null, dd = 1e9, prey = null, pd = 1e9;
-    const pr = restR(player);
+    const pr = radiusOf(player);
     for (const c of creatures) {
-      if (c === player) continue;
+      if (c === player || c.host) continue;
       const d = Math.hypot(c.x - player.x, c.y - player.y);
-      const cr = restR(c);
-      if ((cr > pr * 1.2 && c.morph < 0.5 || c.morph > 0.5) && d < 800 && d < dd) { danger = c; dd = d; }
-      if (pr > cr * 1.25 && c.morph < 0.5 && d < 800 && d < pd) { prey = c; pd = d; }
+      const cr = radiusOf(c);
+      if ((cr > pr * TUNE.absorb && c.morph < 0.5 || c.morph > 0.5) && d < dd && d < 900) { danger = c; dd = d; }
+      if (pr > cr * TUNE.absorb && c.morph < 0.5 && d < pd && d < 900) { prey = c; pd = d; }
     }
-    if (danger && dd < 480) { txt = danger.morph > 0.5 ? '⚠ kiki nearby — keep clear or crystallize' : '⚠ bigger blob near — it will flow around you'; col = '#ff9a8a'; }
-    else if (prey && pd < 600) { txt = 'smaller blob nearby — drift over it and your skin will take it'; col = '#9cf0b0'; }
+    if (danger && dd < 500) { txt = danger.morph > 0.5 ? '⚠ kiki nearby — keep distance or go kiki' : '⚠ a bigger bouba is near — it can swallow you'; col = '#ff9a8a'; }
+    else if (prey && pd < 600) { txt = 'smaller bouba nearby — touch it to swallow'; col = '#9cf0b0'; }
   }
   stateEl.textContent = txt;
   stateEl.style.color = col;
+}
+
+/* ------------------------- simulation ---------------------------- */
+function speedOf(c) {
+  const base = 300 * TUNE.speed * Math.pow(46 / radiusOf(c), 0.35);
+  return c.morph > 0.5 ? base * TUNE.kikiSpd : base;
+}
+function moveToward(c, tx, ty, dt) {
+  const dx = tx - c.x, dy = ty - c.y;
+  const d = Math.hypot(dx, dy) + 1e-4;
+  const sMax = speedOf(c);
+  const spd = Math.min(sMax, d * 3.4);
+  const k = Math.min(1, dt * 5);
+  c.vx += ((dx / d) * spd - c.vx) * k;
+  c.vy += ((dy / d) * spd - c.vy) * k;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  const rr = Math.hypot(c.x, c.y), lim = WORLD_R - radiusOf(c) * 0.6;
+  if (rr > lim) { c.x *= lim / rr; c.y *= lim / rr; }
+}
+function updateForm(c, dt) {
+  // stamina gates kiki
+  if (c.k === 1) {
+    c.stam -= TUNE.drain * dt;
+    if (c.stam <= 0) { c.stam = 0; c.k = 0; if (c.isPlayer) showToast('exhausted — soft again'); }
+  } else {
+    c.stam = Math.min(100, c.stam + TUNE.regen * dt);
+  }
+  const target = c.k;
+  c.morph += clamp(target - c.morph, -dt / 0.35, dt / 0.35);
+  c.spikeAng += TUNE.spin * dt * (0.3 + 0.7 * c.morph);
+  if (c.inv > 0) c.inv -= dt;
+  if (c.hitInv > 0) c.hitInv -= dt;
+}
+function absorb(host, prey) {
+  prey.host = host;
+  host.prisoners.push(prey);
+  prey.hp = 3; prey.escape = 0;
+  const cav = cavityR(host);
+  const a = rand(0, TAU), d = rand(0, Math.max(1, cav - radiusOf(prey) * 1.1));
+  prey.lx = Math.cos(a) * d; prey.ly = Math.sin(a) * d;
+  prey.lvx = prey.lvy = 0;
+  prey.k = 0; prey.morph = 0;      // you soften inside — no stabbing your way out
+  if (prey.isPlayer) { showToast('swallowed — survive the belly'); shake = 0.7; }
+  else if (host.isPlayer) { showToast('swallowed one — go kiki to digest'); }
+  bursts.push({ x: host.x, y: host.y, r0: radiusOf(host) * 0.6, t: 1, hue: host.hue });
+}
+function release(host, pr, burst) {
+  const i = host.prisoners.indexOf(pr);
+  if (i >= 0) host.prisoners.splice(i, 1);
+  pr.host = null;
+  const a = Math.atan2(pr.lx, -pr.ly) + rand(-0.4, 0.4);   // out roughly where you pushed
+  const rr = displayR(host) + radiusOf(pr) + 6;
+  pr.x = host.x + Math.cos(a) * rr; pr.y = host.y + Math.sin(a) * rr;
+  pr.vx = Math.cos(a) * 380 + host.vx; pr.vy = Math.sin(a) * 380 + host.vy;
+  pr.inv = 1.6; pr.escape = 0;
+  if (burst) bursts.push({ x: pr.x, y: pr.y, r0: radiusOf(pr), t: 1, hue: pr.hue });
+}
+function digest(host, pr) {
+  const i = host.prisoners.indexOf(pr);
+  if (i >= 0) host.prisoners.splice(i, 1);
+  host.mass += pr.mass * 0.8;
+  host.digested++;
+  bursts.push({ x: host.x, y: host.y, r0: radiusOf(host) * 0.5, t: 1, hue: lerpC(host.hue, [255,255,255], 0.4) });
+  if (host.isPlayer) { addFloater(host.x, host.y - radiusOf(host), '+' + Math.round(pr.mass * 0.8), [255, 216, 130]); }
+  if (pr.isPlayer) { showToast('digested. reborn small.'); shake = 1; }
+  // reborn
+  pr.host = null; pr.mass = pr.isPlayer ? 55 : rand(35, 80);
+  pr.k = 0; pr.morph = 0; pr.stam = 100; pr.hp = 3; pr.inv = 2;
+  spawnAt(pr);
+}
+function pop(c, by) {                       // stabbed apart in the open
+  spill(c.x, c.y, c.hue, 7, c.mass * 0.55);
+  for (const pr of [...c.prisoners]) release(c, pr, true);
+  bursts.push({ x: c.x, y: c.y, r0: radiusOf(c), t: 1, hue: c.hue });
+  if (c.isPlayer) { showToast('popped! reborn small.'); shake = 1; }
+  else if (by && by.isPlayer) showToast('popped a rival');
+  c.mass = c.isPlayer ? 55 : rand(35, 80);
+  c.k = 0; c.morph = 0; c.stam = 100; c.inv = 2;
+  spawnAt(c);
+}
+
+function updatePrisoner(pr, dt) {
+  const host = pr.host;
+  const cav = cavityR(host);
+  const myR = radiusOf(pr);
+  // steer: player uses the mouse (relative to the chamber), bots dodge/push
+  let ax = 0, ay = 0;
+  if (pr.isPlayer && mode === 'play') {
+    const [mx, my] = toWorld(mouse.sx, mouse.sy);
+    const dx = mx - (host.x + pr.lx), dy = my - (host.y + pr.ly);
+    const d = Math.hypot(dx, dy) + 1e-4;
+    ax = dx / d * 620; ay = dy / d * 620;
+  } else if (!pr.isPlayer) {
+    if (host.morph > 0.3) {
+      // dodge: aim for the bisector between the nearest spikes, mid-radius
+      const NS = Math.round(TUNE.spikes);
+      const myA = Math.atan2(pr.ly, pr.lx);
+      const rel = ((myA - host.spikeAng) % (TAU/NS) + TAU/NS) % (TAU/NS);
+      const gapA = host.spikeAng + Math.floor((myA - host.spikeAng) / (TAU/NS)) * (TAU/NS) + (TAU/NS) / 2;
+      const wantR = Math.max(0, cav * 0.45 - myR * 0.4);
+      const wx = Math.cos(gapA) * wantR, wy = Math.sin(gapA) * wantR;
+      ax = (wx - pr.lx) * 8; ay = (wy - pr.ly) * 8;
+    } else {
+      // push outward to escape
+      const d = Math.hypot(pr.lx, pr.ly) + 1e-4;
+      ax = pr.lx / d * 520; ay = pr.ly / d * 520;
+    }
+  }
+  pr.lvx += ax * dt; pr.lvy += ay * dt;
+  pr.lvx *= Math.pow(0.02, dt); pr.lvy *= Math.pow(0.02, dt);   // syrupy inside
+  pr.lx += pr.lvx * dt; pr.ly += pr.lvy * dt;
+  // wall
+  const d = Math.hypot(pr.lx, pr.ly) + 1e-4;
+  const wall = Math.max(1, cav - myR * 0.95);
+  let pushing = false;
+  if (d > wall) {
+    pushing = true;
+    pr.lx *= wall / d; pr.ly *= wall / d;
+    const out = (pr.lx * pr.lvx + pr.ly * pr.lvy) / wall;
+    if (out > 0) { pr.lvx -= pr.lx / wall * out; pr.lvy -= pr.ly / wall * out; }
+  }
+  // soft walls: pushing builds escape; hard walls: never
+  if (host.morph < 0.35 && pushing) pr.escape += dt / TUNE.escT;
+  else pr.escape = Math.max(0, pr.escape - dt * 0.35);
+  if (pr.escape >= 1) {
+    release(host, pr, true);
+    if (pr.isPlayer) { showToast('squeezed out!'); }
+    else if (host.isPlayer) showToast('one squeezed out of you');
+    return;
+  }
+  // spikes
+  if (host.morph > 0.35 && pr.inv <= 0) {
+    const NS = Math.round(TUNE.spikes);
+    const tip = spikeTipR(host);
+    if (d + myR * 0.85 > tip) {
+      const myA = Math.atan2(pr.ly, pr.lx);
+      let rel = (myA - host.spikeAng) % (TAU / NS);
+      if (rel < 0) rel += TAU / NS;
+      const near = Math.min(rel, TAU / NS - rel);
+      if (near < 0.22) {
+        pr.hp--; pr.inv = 0.8;
+        // knock toward center
+        pr.lvx -= pr.lx / d * 300; pr.lvy -= pr.ly / d * 300;
+        bursts.push({ x: host.x + pr.lx, y: host.y + pr.ly, r0: myR * 0.8, t: 1, hue: [255, 120, 120] });
+        if (pr.isPlayer) { shake = 0.6; showToast(pr.hp > 0 ? 'spiked! ' + pr.hp + ' left' : 'spiked!'); }
+        if (pr.hp <= 0) { digest(host, pr); return; }
+      }
+    }
+  }
+  // world position mirrors the chamber
+  pr.x = host.x + pr.lx; pr.y = host.y + pr.ly;
+  pr.vx = host.vx; pr.vy = host.vy;
+}
+
+function botThink(c, dt) {
+  c.think -= dt;
+  if (c.think > 0) return;
+  c.think = rand(0.25, 0.4);
+  const myR = radiusOf(c);
+  // digest captives when possible
+  if (c.prisoners.length && c.stam > 35 && c.k === 0) c.k = 1;
+  if (!c.prisoners.length && c.k === 1 && c.stam < 60) c.k = 0;
+  // scan
+  let danger = null, dd = 1e9, prey = null, pd = 1e9;
+  for (const o of creatures) {
+    if (o === c || o.host) continue;
+    const d = Math.hypot(o.x - c.x, o.y - c.y);
+    const or_ = radiusOf(o);
+    const threat = (o.morph > 0.5 && or_ > myR * 0.6) || (o.morph <= 0.5 && or_ > myR * TUNE.absorb);
+    if (threat && d < 700 && d < dd) { danger = o; dd = d; }
+    if (o.morph <= 0.5 && myR > or_ * TUNE.absorb && d < 800 && d < pd) { prey = o; pd = d; }
+  }
+  if (danger && dd < 460) {
+    c.tx = c.x + (c.x - danger.x) * 3; c.ty = c.y + (c.y - danger.y) * 3;
+    // cornered and rested? crystallize so you can't be swallowed
+    if (dd < 220 && c.stam > 40 && danger.morph <= 0.5 && !c.prisoners.length) c.k = 1;
+    return;
+  }
+  if (prey && pd < 700) { c.tx = prey.x; c.ty = prey.y; return; }
+  // graze
+  let bx = c.x, by = c.y, bd = 1e9;
+  for (let k = 0; k < 24; k++) {
+    const p = pellets[(Math.random() * pellets.length) | 0];
+    if (!p) break;
+    const d = Math.hypot(p.x - c.x, p.y - c.y);
+    if (d < bd) { bd = d; bx = p.x; by = p.y; }
+  }
+  c.tx = bx; c.ty = by;
+}
+
+function collide(dt) {
+  for (let i = 0; i < creatures.length; i++) {
+    const A = creatures[i];
+    if (A.host) continue;
+    for (let j = i + 1; j < creatures.length; j++) {
+      const B = creatures[j];
+      if (B.host) continue;
+      const rA = radiusOf(A), rB = radiusOf(B);
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const d = Math.hypot(dx, dy) + 1e-4;
+      if (d > (rA + rB) * 0.98) continue;
+      const kA = A.morph > 0.5, kB = B.morph > 0.5;
+      if (kA || kB) {
+        // stabbing contact
+        const stab = (att, vic) => {
+          if (vic.hitInv > 0 || vic.inv > 0) return;
+          vic.hitInv = 0.85;
+          const chunk = vic.mass * TUNE.chunk;
+          vic.mass = Math.max(14, vic.mass - chunk);
+          spill((att.x + vic.x)/2, (att.y + vic.y)/2, vic.hue, 4, chunk * 0.8);
+          const ux = (vic.x - att.x) / d, uy = (vic.y - att.y) / d;
+          vic.vx += ux * 420; vic.vy += uy * 420;
+          att.vx -= ux * 140; att.vy -= uy * 140;
+          if (vic.isPlayer || att.isPlayer) shake = Math.max(shake, 0.5);
+          if (vic.isPlayer) showToast('stabbed! −' + Math.round(chunk));
+          bursts.push({ x: (att.x+vic.x)/2, y: (att.y+vic.y)/2, r0: 14, t: 1, hue: [255, 140, 140] });
+          if (vic.mass <= 16 && vic.morph <= 0.5) pop(vic, att);
+        };
+        if (kA && !kB) stab(A, B);
+        else if (kB && !kA) stab(B, A);
+        else { // kiki clash: both chip, hard bounce
+          if (A.hitInv <= 0 && B.hitInv <= 0) {
+            A.hitInv = B.hitInv = 0.7;
+            const ux = dx / d, uy = dy / d;
+            A.vx -= ux * 380; A.vy -= uy * 380;
+            B.vx += ux * 380; B.vy += uy * 380;
+            bursts.push({ x: (A.x+B.x)/2, y: (A.y+B.y)/2, r0: 16, t: 1, hue: [255, 240, 200] });
+          }
+        }
+      } else {
+        // soft on soft: swallow or squish apart
+        if (rA > rB * TUNE.absorb && B.inv <= 0 && A.prisoners.length < 3 && cavOK(A, B)) absorb(A, B);
+        else if (rB > rA * TUNE.absorb && A.inv <= 0 && B.prisoners.length < 3 && cavOK(B, A)) absorb(B, A);
+        else {
+          const overlap = (rA + rB) * 0.98 - d;
+          const ux = dx / d, uy = dy / d;
+          A.x -= ux * overlap * 0.4; A.y -= uy * overlap * 0.4;
+          B.x += ux * overlap * 0.4; B.y += uy * overlap * 0.4;
+        }
+      }
+    }
+  }
+}
+// can the host actually hold this captive? (the crystallized cell must fit
+// inside the host's bulged body)
+function cavOK(host, prey) {
+  return radiusOf(prey) * TUNE.tight < radiusOf(host) * 1.22;
+}
+
+function eatPellets(c) {
+  const r = radiusOf(c);
+  for (let i = pellets.length - 1; i >= 0; i--) {
+    const p = pellets[i];
+    const dx = p.x - c.x, dy = p.y - c.y;
+    if (dx > r || dx < -r || dy > r || dy < -r) continue;
+    if (dx*dx + dy*dy < r*r) {
+      c.mass += p.mass * (c.morph > 0.5 ? 0.4 : 1);   // kiki is a bad eater
+      if (pellets.length <= TUNE.food) Object.assign(p, makePellet());
+      else pellets.splice(i, 1);
+    }
+  }
 }
 
 /* ----------------------------- loop ------------------------------ */
@@ -896,32 +988,32 @@ cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
 let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
 function frame(now) {
-  const dt0 = Math.min(0.04, (now - last) / 1000);
+  const dt0 = Math.min(0.045, (now - last) / 1000);
   last = now; perfNow = now / 1000;
   const live = (mode === 'play');
   const dt = TUNE.paused ? 0 : dt0 * TUNE.time;
 
   if (dt > 0) {
+    // pellets drift
     for (const p of pellets) {
-      if (p.vx || p.vy) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; }
+      if (p.vx) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; }
     }
     for (const c of creatures) {
       updateForm(c, dt);
+      if (c.host) continue;
       if (c.isPlayer) {
-        if (live) { const [tx, ty] = toWorld(mouse.sx, mouse.sy); c.tx = tx; c.ty = ty; }
-      } else botThink(c, dt);
-      driveNucleus(c, dt);
-      eatPellets(c, dt);
+        if (live) {
+          const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+          moveToward(c, tx, ty, dt);
+        }
+      } else {
+        botThink(c, dt);
+        moveToward(c, c.tx, c.ty, dt);
+      }
+      eatPellets(c);
     }
-    // membrane physics substeps
-    const n = clamp(Math.ceil(dt / 0.008), 1, 4), h = dt / n;
-    for (let s = 0; s < n; s++) {
-      for (const c of creatures) membraneStep(c, h);
-      for (let i = 0; i < creatures.length; i++)
-        for (let j = i + 1; j < creatures.length; j++)
-          interact(creatures[i], creatures[j], h);
-    }
-    updateContainment();
+    collide(dt);
+    for (const c of creatures) if (c.host) updatePrisoner(c, dt);
   }
 
   // camera
@@ -933,8 +1025,10 @@ function frame(now) {
     cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
     if (k >= 1) { mode = anim.target; anim = null; }
   } else if (mode === 'play') {
-    cam.x += (player.x + player.vx * 0.2 - cam.x) * Math.min(1, dt0 * 5);
-    cam.y += (player.y + player.vy * 0.2 - cam.y) * Math.min(1, dt0 * 5);
+    const fx = player.host ? player.host.x + player.lx * 0.5 : player.x + player.vx * 0.25;
+    const fy = player.host ? player.host.y + player.ly * 0.5 : player.y + player.vy * 0.25;
+    cam.x += (fx - cam.x) * Math.min(1, dt0 * 5);
+    cam.y += (fy - cam.y) * Math.min(1, dt0 * 5);
     cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt0 * 2.5);
   } else if (mode === 'overview') {
     cam.x += (0 - cam.x) * Math.min(1, dt0 * 2);
@@ -955,9 +1049,7 @@ function frame(now) {
 
   drawBackdrop();
   drawPellets();
-  // big blobs first so anything engulfed renders on top, visible inside
-  const order = [...creatures].sort((a, b) => restR(b) - restR(a));
-  for (const c of order) drawCreature(c);
+  for (const c of creatures) if (!c.host) drawCreature(c);   // captives drawn by hosts
   drawEffects(dt0);
   drawFloaters(dt0);
   drawBoundary();
@@ -971,13 +1063,14 @@ function frame(now) {
 
   if (toastT > 0) { toastT -= dt0; if (toastT <= 0) toastEl.classList.remove('show'); }
 
+  // hud
   const kiki = player.morph > 0.5;
   formEl.textContent = kiki ? 'KIKI ^' : 'BOUBA ~';
   formEl.className = kiki ? 'kiki' : '';
   stamEl.style.width = clamp(player.stam, 0, 100) + '%';
   massEl.textContent = Math.round(player.mass);
-  bellyEl.textContent = creatures.filter(c => c.host === player).length;
-  eatenEl.textContent = player.bursts;
+  bellyEl.textContent = player.prisoners.length;
+  eatenEl.textContent = player.digested;
   updateStateLine();
 
   requestAnimationFrame(frame);
