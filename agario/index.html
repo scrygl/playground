@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gravity Well — a fractal-galaxy agar toy</title>
+<title>Gravity Well — fly, slingshot, ignite</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,7 +20,6 @@
   #stats .big { font-size: 20px; color: #ffe6ad; font-weight: 600; letter-spacing: .02em; }
   #stats .row { opacity: .82; }
   #stats b { color: #ffd98a; font-weight: 600; }
-  #stats .rank b { color: #ffe6ad; }
   #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
   #state {
     left: 50%; bottom: 52px; transform: translateX(-50%);
@@ -38,30 +37,30 @@
   }
   #toast.show { opacity: 1; }
 
-  /* intro overlay */
-  #intro {
+  /* intro + win overlays */
+  .overlay {
     position: fixed; inset: 0; z-index: 5;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 24px; text-align: center;
     pointer-events: none; transition: opacity .9s ease;
   }
-  #intro.gone { opacity: 0; }
-  #intro .sub {
+  .overlay.gone { opacity: 0; }
+  .overlay .sub {
     font: 12px/1.6 ui-monospace, Menlo, monospace;
     letter-spacing: .4em; text-indent: .4em;
     color: #e6b7ff; opacity: .72; text-transform: uppercase;
   }
-  #intro h1 {
+  .overlay h1 {
     margin: 0;
-    font: 300 clamp(32px, 7.5vw, 82px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    font: 300 clamp(30px, 7vw, 78px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
     letter-spacing: .16em; text-indent: .16em; color: #fff;
     text-shadow: 0 0 34px rgba(255,190,110,.5), 0 0 70px rgba(190,60,160,.35);
   }
-  #intro .tag {
-    max-width: 34ch;
-    font: 13px/1.7 ui-monospace, Menlo, monospace;
-    color: #c9a8e6; opacity: .7;
+  .overlay .tag {
+    max-width: 40ch;
+    font: 13px/1.8 ui-monospace, Menlo, monospace;
+    color: #c9a8e6; opacity: .75;
   }
   #dive {
     pointer-events: auto; cursor: pointer; margin-top: 4px;
@@ -76,7 +75,9 @@
     background: rgba(255,214,120,.16); border-color: rgba(255,224,150,.9);
     box-shadow: 0 0 34px rgba(255,180,90,.35); transform: translateY(-1px);
   }
-  #dive:active { transform: translateY(0); }
+  #win { display: none; }
+  #win.show { display: flex; }
+  #win h1 { color: #ffe9b0; }
 
   /* dev panel */
   #devchip {
@@ -114,23 +115,31 @@
 <body>
 <canvas id="stage"></canvas>
 
-<div id="intro">
+<div id="intro" class="overlay">
   <div class="sub">gravity well</div>
-  <h1>A&nbsp;GALAXY&nbsp;OF&nbsp;GALAXIES</h1>
-  <div class="tag">you are a speck of gravity. pull stars into orbit and grow. dart through a <b style="color:#ff8a8a">bigger</b> well to siphon its swarm; pin a <b style="color:#9cf0a8">smaller</b> core to devour it. burn your own stars to boost away.</div>
+  <h1>SWALLOW&nbsp;THE&nbsp;FRACTAL</h1>
+  <div class="tag">you are a young gravity well with a working engine.
+    fly. slingshot the burning cores — never touch them.
+    sweep up stars to grow your swarm, ignite all eight galaxies,
+    and don't let the hunters catch you.</div>
   <button id="dive" type="button">dive in ↯</button>
 </div>
 
+<div id="win" class="overlay">
+  <div class="sub">every core burns your color</div>
+  <h1>THE&nbsp;FRACTAL,&nbsp;SWALLOWED</h1>
+  <div class="tag" id="wintag"></div>
+</div>
+
 <div id="stats" class="panel">
-  <div class="big">mass <b id="mass">0</b></div>
-  <div class="row">swarm&nbsp; <b id="swarm">0</b> <span style="opacity:.55">(boost fuel)</span></div>
-  <div class="row">stars&nbsp; <b id="stars">0</b></div>
-  <div class="row">reach&nbsp; <b id="reach">0</b></div>
-  <div class="row rank">rank&nbsp;&nbsp; <b id="rank">—</b></div>
+  <div class="big">lit <b id="lit">0/8</b></div>
+  <div class="row">swarm&nbsp; <b id="swarm">0</b></div>
+  <div class="row">mass&nbsp;&nbsp; <b id="mass">0</b></div>
+  <div class="row">time&nbsp;&nbsp; <b id="time">0:00</b></div>
 </div>
 <div id="toast"></div>
 <div id="state" class="panel"></div>
-<div id="hint" class="panel">hold click / space to boost · scroll peek · esc back · R reset · ` dev</div>
+<div id="hint" class="panel">hold click / space to thrust · release to coast · esc back · R reset · ` dev</div>
 
 <div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
 <div id="dev">
@@ -145,18 +154,15 @@
 
 <script>
 /* ==================================================================
- *  GRAVITY WELL — a fractal-galaxy agar toy
+ *  GRAVITY WELL v2 — fly, slingshot, ignite
  *
- *  The map is one galaxy of galaxies. You are a gravity well: free
- *  stars inside your reach spiral in and lock into ORBIT around you —
- *  your accretion swarm. That swarm is your mass and your body; the
- *  more you hold the wider your reach.
+ *  You are a body in the field: momentum, thrust, and the pull of
+ *  eight burning galaxy cores. Sweep through star clusters to grow
+ *  your orbiting swarm; collect enough of a galaxy's stars and its
+ *  core IGNITES in your color. Ignite all eight to win. Cores shred
+ *  your swarm on contact; hunters chase — out-fly them.
  *
- *  Rival wells (bots) feed too. When a bigger well's reach laps over a
- *  smaller one it peels the outer stars off their swarm; catch their
- *  core and you swallow them whole. Everyone respawns.
- *
- *  Star squares keep the twinkle "diamond" mark from the visual:
+ *  Star squares keep the twinkle "diamond" mark:
  *              .
  *              o
  *          . o [] o .
@@ -167,11 +173,12 @@
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const intro = document.getElementById('intro');
-const massEl = document.getElementById('mass');
+const winEl = document.getElementById('win');
+const winTag = document.getElementById('wintag');
+const litEl = document.getElementById('lit');
 const swarmEl = document.getElementById('swarm');
-const starsEl = document.getElementById('stars');
-const reachEl = document.getElementById('reach');
-const rankEl = document.getElementById('rank');
+const massEl = document.getElementById('mass');
+const timeEl = document.getElementById('time');
 const toastEl = document.getElementById('toast');
 const stateEl = document.getElementById('state');
 
@@ -187,7 +194,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---------- palette: MATLAB-ish sunset ramp by "grade" ---------- */
+/* ---------- palette: MATLAB-ish sunset ramp ---------- */
 const STOPS = [
   [0.00, [120, 46, 150]],
   [0.22, [176, 44, 132]],
@@ -218,281 +225,237 @@ const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 
 /* ------------------ dev tuning (press ` in game) ------------------ */
 const TUNE_DEF = {
-  time: 1,      // simulation speed multiplier
-  grav: 2100,   // gravitational constant (wells + galaxy cores)
-  lock: 0.55,   // 0 = pure Newton, 1 = orbits reined hard toward circles
-  perturb: 1,   // how much rival wells' fields warp a swarm
-  assist: 1,    // capture assist (swirl + drag) on infalling stars
-  reachK: 16,   // reach radius scale
-  speed: 1,     // well thrust multiplier
-  steal: 6,     // siphon rate baseline
-  growth: 1,    // star mass yield (newly spawned stars)
-  bots: 6,      // rival count (applies on R reset)
-  boost: 1.85,  // boost thrust multiplier (burns orbiters as fuel)
-  devour: 1.4,  // seconds a devour channel takes to finish
+  time: 1,       // simulation speed
+  thrust: 380,   // engine acceleration
+  drag: 0.12,    // coasting drag (per second)
+  gpull: 160000, // core pull strength (flat rotation-curve field, ~1/d)
+  pickup: 1,     // pickup radius multiplier
+  swarmG: 2100,  // gravity binding your orbiting swarm
+  lock: 0.55,    // 0 = pure Newton swarm, 1 = hard-reined disk
+  huntSpd: 590,  // hunter top speed
+  hunters: 3,    // hunter count (on R reset)
+  need: 22,      // % of a galaxy's stars to ignite it (on R reset)
   // --- square appearance ---
-  billboard: 0, // 1 = squares never rotate (video-game billboards)
-  starScale: 1, // global size multiplier for star squares
-  markAt: 3.2,  // px size at which a mote blooms into the full diamond mark
-  gap: 1.7,     // diamond pattern spacing (in units of the core square)
-  sats: 4,      // satellite squares 'o' in the ring (0 / 4 / 8)
-  satSize: 0.6, // satellite size as a fraction of the core square
-  dots: 4,      // outer dot squares '.' (0 / 4 / 8)
-  dotSize: 0.32,// outer dot size as a fraction of the core square
-  twinkle: 1,   // twinkle depth (0 = steady, 1.5 = deep flicker)
-  bgStars: 0.55,// background starfield brightness (travel/parallax cue)
+  billboard: 0, starScale: 1, markAt: 3.2, gap: 1.7,
+  sats: 4, satSize: 0.6, dots: 4, dotSize: 0.32, twinkle: 1,
+  bgStars: 0.55,
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
-try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw_tune') || '{}'), { paused: false }); } catch (e) {}
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw2_tune') || '{}'), { paused: false }); } catch (e) {}
 function saveTune() {
-  try { const { paused, ...t } = TUNE; localStorage.setItem('gw_tune', JSON.stringify(t)); } catch (e) {}
+  try { const { paused, ...t } = TUNE; localStorage.setItem('gw2_tune', JSON.stringify(t)); } catch (e) {}
 }
 
 /* ------------------------- the world ---------------------------- */
 const WORLD_R = 4600;
-const galaxies = [];
-let stars = [];
+let galaxies = [], stars = [], litCount = 0;
 
-function makeStar(gal, gradeBias) {
-  const g = clamp01(Math.pow(Math.random(), 2.2) * (gradeBias ?? 1) + gauss()*0.04);
-  const size = lerp(1.3, 17, Math.pow(g, 1.4));
+function makeStar(gal, gi) {
+  const g = clamp01(Math.pow(Math.random(), 2.2) + gauss()*0.04);
+  const size = lerp(1.6, 15, Math.pow(g, 1.4));
   return {
-    gx: gal.x, gy: gal.y,
-    size, mass: size * size * 0.06 * TUNE.growth,
+    gi, gx: gal.x, gy: gal.y, GM: gal.GM, gspin: gal.omega < 0 ? -1 : 1,
+    size, mass: size * size * 0.06,
     warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
     phase: rand(0, TAU), tw: rand(0.7, 2.6),
-    captured: false, vx: 0, vy: 0, x: 0, y: 0,
-    hr: 0, ha: 0,
+    x: 0, y: 0, vx: 0, vy: 0, held: false,
   };
 }
 function seatStar(s, gal) {
-  const arms = gal.arms, wind = gal.wind;
   const rr = Math.pow(Math.random(), 0.6);
-  const arm = (Math.floor(Math.random() * arms) / arms) * TAU;
-  let ang = arm + rr * wind * TAU + gauss() * (0.18 + 0.4 * rr);
+  const arm = (Math.floor(Math.random() * gal.arms) / gal.arms) * TAU;
+  let ang = arm + rr * gal.wind * TAU + gauss() * (0.18 + 0.4 * rr);
   let hr = rr * gal.r;
-  if (Math.random() < 0.5) {                 // clump into a sub-cluster knot (fractal feel)
+  if (Math.random() < 0.5) {                 // clump into sub-cluster knots
     const knot = Math.floor(rr * 5) / 5 + 0.1;
     hr = knot * gal.r + gauss() * gal.r * 0.06;
-    ang = arm + knot * wind * TAU + gauss() * 0.14;
+    ang = arm + knot * gal.wind * TAU + gauss() * 0.14;
   }
-  s.hr = hr; s.ha = ang;
-  s.gx = gal.x; s.gy = gal.y;
-  s.GM = gal.GM; s.gspin = gal.omega < 0 ? -1 : 1;
+  hr = Math.max(hr, gal.killR * 1.6);        // don't seed food inside the furnace
   s.x = gal.x + Math.cos(ang) * hr;
   s.y = gal.y + Math.sin(ang) * hr;
-  // seed a circular orbit around the home galaxy — physics owns it from here
   const v = Math.sqrt(gal.GM / (hr + 30));
   s.vx = -Math.sin(ang) * v * s.gspin;
   s.vy =  Math.cos(ang) * v * s.gspin;
-  s.captured = false;
+  s.held = false;
 }
 function buildWorld() {
-  galaxies.length = 0; stars = [];
+  galaxies = []; stars = []; litCount = 0;
   const N = 8;
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
     const ang = t * TAU * 1.35 + 0.6;
     const rad = t * WORLD_R * 0.82;
-    const r = lerp(1050, 360, t) * rand(0.85, 1.12);
+    const r = lerp(1050, 380, t) * rand(0.85, 1.12);
     const omega = rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1);
     galaxies.push({
       x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r, omega,
-      // central mass sized so stars orbit near the old rigid speed mid-disk
       GM: Math.pow(omega * r * 0.5, 2) * (r * 0.5 + 30),
       arms: 2 + (Math.floor(Math.random()*3)), wind: rand(1.8, 3.0),
+      killR: 26 + r * 0.02,                  // the burning core
+      got: 0, need: 1, lit: false, igniteT: 0,
     });
   }
   const TOTAL = clamp(Math.round((W*H)/1500) * 2, 1500, 2800);
   const wsum = galaxies.reduce((a, g) => a + g.r, 0);
-  for (const gal of galaxies) {
+  galaxies.forEach((gal, gi) => {
     const n = Math.round(TOTAL * (gal.r / wsum));
-    for (let k = 0; k < n; k++) { const s = makeStar(gal); seatStar(s, gal); stars.push(s); }
-  }
+    gal.need = clamp(Math.round(n * TUNE.need / 100), 15, 120);
+    for (let k = 0; k < n; k++) { const s = makeStar(gal, gi); seatStar(s, gal); stars.push(s); }
+  });
   baseStarCount = stars.length;
 }
 function respawnStar(s) {
-  const gal = galaxies[(Math.random() * galaxies.length) | 0];
-  Object.assign(s, makeStar(gal, 0.85));
-  seatStar(s, gal);
+  const gi = (Math.random() * galaxies.length) | 0;
+  Object.assign(s, makeStar(galaxies[gi], gi));
+  seatStar(s, galaxies[gi]);
 }
 
-/* ---------------------- wells (player + bots) -------------------- */
-const CORE_K = 2.6, SIZE_EXP = 0.42, ORB_CAP = 72;
-const PULL = 900;         // base radial capture-assist accel on free stars
-const SWIRL = 1150;       // base tangential assist -> stars arrive with angular momentum
-const CAPTURE_BAND = 0.62;// convert a free star to an orbiter within this fraction of reach
-const BIG_SOFT = 320;     // attacker mass at which raiding effectiveness halves
-const CONSUME_RATIO = 1.35;
+/* --------------------------- player ------------------------------ */
+const P = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  coreMass: 0, orbMass: 0, orbiters: [],
+  spin: 1, collected: 0, inv: 0, thrusting: false,
+};
+const pmass = () => 10 + P.coreMass + P.orbMass;
+const pickupR = () => (26 + 2.6 * Math.sqrt(pmass())) * TUNE.pickup;
+const orbitR = () => 34 + 3.2 * Math.sqrt(pmass());
+const coreVis = () => clamp(4 + Math.sqrt(pmass()) * 0.9, 6, 30);
 
-class Well {
-  constructor(o) {
-    this.x = o.x; this.y = o.y; this.vx = 0; this.vy = 0;
-    this.coreMass = o.mass; this.orbMass = 0;
-    this.orbiters = [];
-    this.spin = Math.random() < 0.5 ? -1 : 1;
-    this.isPlayer = !!o.isPlayer;
-    this.hue = o.hue;
-    this.name = o.name || 'well';
-    this.collected = 0;
-    this.think = rand(0, 0.4); this.target = null; this.state = 'feed';
-    this.flash = 0; this._steal = 0;
-    this.doom = null;           // active devour channel: { by: Well, t: 0..1 }
-    this.boosting = false; this.boostT = 0;
+function admitStar(st) {
+  const r = orbitR() * rand(0.45, 0.95), a = rand(0, TAU);
+  const vC = Math.sqrt(TUNE.swarmG * pmass() / (r + 12));
+  P.orbiters.push({
+    rx: Math.cos(a) * r, ry: Math.sin(a) * r,
+    rvx: -Math.sin(a) * vC * P.spin, rvy: Math.cos(a) * vC * P.spin,
+    x: 0, y: 0, px: 0, py: 0,
+    size: st.size, warm: st.warm, mass: st.mass,
+    phase: rand(0, TAU), tw: rand(0.7, 2.6),
+  });
+  P.orbMass += st.mass;
+  while (P.orbiters.length > 80) {           // fold smallest into the core
+    let mi = 0;
+    for (let i = 1; i < P.orbiters.length; i++)
+      if (P.orbiters[i].mass < P.orbiters[mi].mass) mi = i;
+    P.coreMass += P.orbiters[mi].mass;
+    P.orbMass  -= P.orbiters[mi].mass;
+    P.orbiters.splice(mi, 1);
   }
-  mass()   { return this.coreMass + this.orbMass; }
-  // reach grows sub-linearly (mass^0.42) so large wells stop ballooning —
-  // the snowball flattens and small wells stay competitive
-  reachR() { return TUNE.reachK * Math.pow(this.mass(), SIZE_EXP); }
-  coreR()  { return CORE_K * Math.pow(this.mass(), SIZE_EXP); }
-  // smaller wells are nimble; speed falls off as reach grows
-  maxSpeed() { return clamp(250 * Math.pow(46 / this.reachR(), 0.5), 40, 380); }
+}
+// shatter: fling part of the swarm back into the world as free stars
+function scatterSwarm(frac) {
+  const k = Math.ceil(P.orbiters.length * frac);
+  for (let i = 0; i < k && P.orbiters.length; i++) {
+    const o = P.orbiters.splice((Math.random() * P.orbiters.length) | 0, 1)[0];
+    P.orbMass -= o.mass;
+    const gi = nearestGalaxy(P.x, P.y);
+    const s = makeStar(galaxies[gi], gi);
+    s.size = o.size; s.warm = o.warm; s.mass = o.mass;
+    s.x = P.x + o.rx; s.y = P.y + o.ry;
+    const a = rand(0, TAU), sp = rand(160, 420);
+    s.vx = Math.cos(a) * sp + P.vx * 0.3;
+    s.vy = Math.sin(a) * sp + P.vy * 0.3;
+    s.held = true; s.heldT = rand(0.8, 1.6);   // brief immunity so they visibly fly
+    stars.push(s);
+    lossAcc++;
+  }
+  while (stars.length > baseStarCount + 500) stars.splice(0, 1);
+}
+function nearestGalaxy(x, y) {
+  let bi = 0, bd = 1e18;
+  for (let i = 0; i < galaxies.length; i++) {
+    const g = galaxies[i], d = (g.x-x)*(g.x-x) + (g.y-y)*(g.y-y);
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return bi;
+}
 
-  // add a real orbiting body. Position & velocity are stored RELATIVE to the
-  // well's core; gravity does the rest, so the orbit is whatever its momentum
-  // makes it. We nudge the tangential component up to a near-circular floor so
-  // captures settle into a disk instead of all plunging to the core.
-  // seat a body into a coherent near-circular orbit at its arrival radius, with
-  // a little eccentricity for life. Real 1/r^2 gravity then evolves it — orbits
-  // precess, vary in speed, and the whole disk stays bound within the reach.
-  _admit(rx, ry, star, inward = 0) {
-    const r = Math.hypot(rx, ry) + 1e-3;
-    const soft = this.coreR() * 0.7;
-    const vC = Math.sqrt(TUNE.grav * this.mass() / (r + soft));   // circular speed here
-    const tx = -ry / r * this.spin, ty = rx / r * this.spin; // tangential (spin dir)
-    const rhx = rx / r, rhy = ry / r;                        // radial unit
-    const speed = vC * rand(0.84, 1.06);                     // spread -> disk thickness
-    const vr = vC * (rand(-0.12, 0.12) - inward);            // inward > 0 -> flows in visibly
-    this.orbiters.push({
-      rx, ry, rvx: tx * speed + rhx * vr, rvy: ty * speed + rhy * vr,
-      x: 0, y: 0, px: 0, py: 0,
-      size: star.size, warm: star.warm, mass: star.mass,
-      phase: rand(0, TAU), tw: rand(0.7, 2.6),
+/* --------------------------- hunters ----------------------------- */
+let hunters = [];
+function spawnHunters() {
+  hunters = [];
+  const n = Math.round(TUNE.hunters);
+  for (let i = 0; i < n; i++) {
+    const gal = galaxies[(i * 3 + 4) % galaxies.length];
+    hunters.push({
+      x: gal.x + rand(-gal.r, gal.r) * 0.6,
+      y: gal.y + rand(-gal.r, gal.r) * 0.6,
+      vx: 0, vy: 0, tx: 0, ty: 0, repick: 0, chasing: false,
+      ph: rand(0, TAU),
     });
-    this.orbMass += star.mass;
-    this._cap();
   }
-  captureStar(star) {                          // hand a free star into orbit at its arrival point
-    this._admit(star.x - this.x, star.y - this.y, star);
-  }
-  // a stolen star arrives WHERE IT WAS TAKEN — it visibly streams across the
-  // gap and spirals into the new owner's disk instead of teleporting
-  receiveOrbiter(o) {
-    let rx, ry;
-    if (o.wx !== undefined) {
-      rx = o.wx - this.x; ry = o.wy - this.y;
-      const r = Math.hypot(rx, ry) + 1e-3, maxR = this.reachR() * 1.1;
-      if (r > maxR) { rx *= maxR / r; ry *= maxR / r; }
+}
+function updateHunters(dt) {
+  for (const h of hunters) {
+    const dP = Math.hypot(P.x - h.x, P.y - h.y);
+    h.chasing = dP < 950 && P.inv <= 0 && mode === 'play';
+    if (h.chasing) {
+      const lead = clamp(dP / 600, 0.15, 0.8);           // aim where you're going
+      h.tx = P.x + P.vx * lead; h.ty = P.y + P.vy * lead;
     } else {
-      const rr = this.reachR() * rand(0.55, 0.82), a = rand(0, TAU);
-      rx = Math.cos(a) * rr; ry = Math.sin(a) * rr;
+      h.repick -= dt;
+      if (h.repick <= 0) {
+        const gal = galaxies[(Math.random() * galaxies.length) | 0];
+        h.tx = gal.x + rand(-gal.r, gal.r) * 0.6;
+        h.ty = gal.y + rand(-gal.r, gal.r) * 0.6;
+        h.repick = rand(4, 9);
+      }
     }
-    this._admit(rx, ry, o, 0.4);
-  }
-  _cap() {                                     // fold the smallest into the dense core
-    while (this.orbiters.length > ORB_CAP) {
-      let mi = 0;
-      for (let i = 1; i < this.orbiters.length; i++)
-        if (this.orbiters[i].mass < this.orbiters[mi].mass) mi = i;
-      this.coreMass += this.orbiters[mi].mass;
-      this.orbMass  -= this.orbiters[mi].mass;
-      this.orbiters.splice(mi, 1);
+    const dx = h.tx - h.x, dy = h.ty - h.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    const acc = h.chasing ? 300 : 140;
+    h.vx += (dx / d) * acc * dt;
+    h.vy += (dy / d) * acc * dt;
+    const vmax = h.chasing ? TUNE.huntSpd : TUNE.huntSpd * 0.45;
+    const v = Math.hypot(h.vx, h.vy);
+    if (v > vmax) { h.vx *= vmax / v; h.vy *= vmax / v; }
+    h.x += h.vx * dt; h.y += h.vy * dt;
+    const pr = Math.hypot(h.x, h.y);
+    if (pr > WORLD_R) { h.x *= WORLD_R / pr; h.y *= WORLD_R / pr; }
+    // strike: shred half the swarm and bounce the player away
+    if (dP < 26 + coreVis() && P.inv <= 0 && mode === 'play') {
+      scatterSwarm(0.5);
+      P.inv = 2.5; shake = 1;
+      const ax = (P.x - h.x) / (dP + 1e-3), ay = (P.y - h.y) / (dP + 1e-3);
+      P.vx += ax * 620; P.vy += ay * 620;
+      showToast('caught — half your swarm scattered');
+      bursts.push({ x: P.x, y: P.y, r0: 40, t: 1, hue: [255, 90, 90] });
     }
-  }
-  popOuter() {                                 // peel the outermost orbiter off
-    if (!this.orbiters.length) return null;
-    let mi = 0, mr = -1;
-    for (let i = 0; i < this.orbiters.length; i++) {
-      const o = this.orbiters[i], r = o.rx*o.rx + o.ry*o.ry;
-      if (r > mr) { mr = r; mi = i; }
-    }
-    const o = this.orbiters.splice(mi, 1)[0];
-    this.orbMass -= o.mass;
-    // plain star payload, carrying its world position so transfers can travel
-    return { size: o.size, warm: o.warm, mass: o.mass, wx: o.x, wy: o.y };
   }
 }
 
-const HUES = [
-  [92,222,212],[240,96,116],[186,122,255],[255,186,88],[150,232,132],[120,166,255],
-];
-let wells = [], player = null;
-function spawnWells() {
-  wells = [];
-  player = new Well({ x: 0, y: 0, mass: 8, isPlayer: true, hue: [255,242,205], name: 'you' });
-  const gal0 = galaxies[0];
-  player.x = gal0.x + gal0.r * 0.4; player.y = gal0.y;
-  wells.push(player);
-  const nBots = Math.round(TUNE.bots);
-  for (let i = 0; i < nBots; i++) {
-    const gal = galaxies[(i + 1) % galaxies.length];
-    const w = new Well({
-      x: gal.x + rand(-gal.r, gal.r) * 0.5,
-      y: gal.y + rand(-gal.r, gal.r) * 0.5,
-      mass: rand(6, 16), hue: HUES[i % HUES.length], name: 'rival ' + (i + 1),
-    });
-    wells.push(w);
-  }
-}
-function respawnWell(w, mass) {
-  const gal = galaxies[(Math.random() * galaxies.length) | 0];
-  w.x = gal.x + rand(-gal.r, gal.r) * 0.4;
-  w.y = gal.y + rand(-gal.r, gal.r) * 0.4;
-  w.coreMass = mass; w.orbMass = 0; w.orbiters = [];
-  w.vx = w.vy = 0; w.target = null; w.think = rand(0, 0.4);
-  w.doom = null; w.boosting = false; w._steal = 0;
-}
-function consume(strong, weak) {
-  bursts.push({ x: weak.x, y: weak.y, r0: weak.coreR() * 1.5, t: 1, hue: strong.hue });
-  if (strong.isPlayer || weak.isPlayer) shake = 1;
-  strong.coreMass += weak.coreMass;
-  for (const o of weak.orbiters) {
-    if (strong.orbiters.length < ORB_CAP)
-      strong.receiveOrbiter({ size: o.size, warm: o.warm, mass: o.mass, wx: o.x, wy: o.y });
-    else strong.coreMass += o.mass;
-  }
-  weak.orbiters = []; weak.orbMass = 0; weak.doom = null;
-  strong.flash = 1;
-  if (weak.isPlayer) { respawnWell(weak, 8); showToast('devoured — regrown far away'); }
-  else if (strong.isPlayer) { respawnWell(weak, rand(6, 14)); showToast('rival devoured'); }
-  else respawnWell(weak, rand(6, 14));
-}
-
+/* --------------------------- effects ----------------------------- */
 let toastT = 0;
-function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 1.8; }
-
-// transient combat effects
-let beams = [];     // active siphon links this frame (rebuilt each tick)
-const bursts = [];  // expanding shock rings from consumes
-const siphonState = { raiding: false, raided: false, wasRaiding: false, wasRaided: false };
-let shake = 0;                                  // screen shake on devours
-let prevPDoom = false, prevDevour = false;      // rising-edge toast tracking
-let baseStarCount = 0;                          // world star pool size (ejected stars are extra)
-
-// floating mass receipts: '+3★' when stars flow in, '−2★' when they're taken
+function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 2.0; }
+const bursts = [];
+const exhaust = [];
 const floaters = [];
 let gainAcc = 0, lossAcc = 0, floatT = 0;
+let shake = 0;
+let baseStarCount = 0;
 function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
 
 /* --------------------------- camera ----------------------------- */
 const cam = { x: 0, y: 0, zoom: 0.1 };
 const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
-const playZoom = () => clamp(0.34 * MINSIDE / player.reachR(), 0.05, 3.4);
-
-let mode = 'overview', anim = null;
+function playZoom() {
+  const spd = Math.hypot(P.vx, P.vy);
+  return clamp(0.30 * MINSIDE / (140 + 26 * Math.sqrt(pmass()) + 0.22 * spd), 0.12, 2.2);
+}
+let mode = 'overview', anim = null, won = false, playT = 0;
 function flyTo(target, to, dur) {
   anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
 }
 function enterPlay() {
   if (mode === 'play' || mode === 'diving') return;
   mode = 'diving';
-  flyTo('play', { x: player.x, y: player.y, zoom: playZoom() }, 2.7);
+  flyTo('play', { x: P.x, y: P.y, zoom: playZoom() }, 2.6);
   intro.classList.add('gone');
 }
 function backToOverview() {
   if (mode === 'overview' || mode === 'rising') return;
   mode = 'rising';
-  flyTo('overview', overviewCam(), 2.2);
+  flyTo('overview', overviewCam(), 2.0);
   intro.classList.remove('gone');
 }
 const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
@@ -501,28 +464,36 @@ const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.z
 /* --------------------------- input ------------------------------ */
 const mouse = { sx: W/2, sy: H/2 };
 window.addEventListener('pointermove', e => {
-  if (e.target !== canvas) return;             // don't steer while on the dev panel
+  if (e.target !== canvas) return;
   mouse.sx = e.clientX; mouse.sy = e.clientY;
 });
+let thrustHeld = false;
+canvas.addEventListener('pointerdown', () => { if (mode === 'play') thrustHeld = true; });
+window.addEventListener('pointerup', () => thrustHeld = false);
+window.addEventListener('blur', () => thrustHeld = false);
 document.getElementById('dive').addEventListener('click', enterPlay);
-let boostHeld = false;
-canvas.addEventListener('pointerdown', () => { if (mode === 'play') boostHeld = true; });
-window.addEventListener('pointerup', () => boostHeld = false);
-window.addEventListener('blur', () => boostHeld = false);
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') backToOverview();
-  else if (e.key === ' ') { boostHeld = true; e.preventDefault(); }
-  else if (e.key === 'r' || e.key === 'R') resetGame();          // dev reset
+  else if (e.key === ' ') { thrustHeld = true; e.preventDefault(); }
+  else if (e.key === 'r' || e.key === 'R') resetGame();
   else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
   else if (e.key === 'p' || e.key === 'P') togglePause();
 });
-window.addEventListener('keyup', e => { if (e.key === ' ') boostHeld = false; });
+window.addEventListener('keyup', e => { if (e.key === ' ') thrustHeld = false; });
 function resetGame() {
-  buildWorld(); spawnWells();
+  buildWorld(); spawnHunters(); resetPlayer();
+  won = false; playT = 0; winEl.classList.remove('show');
   anim = null; mode = 'overview';
   cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
   intro.classList.remove('gone');
   showToast('world reset');
+}
+function resetPlayer() {
+  const gal = galaxies[0];
+  P.x = gal.x + gal.r * 0.55; P.y = gal.y;
+  P.vx = 0; P.vy = -Math.sqrt(gal.GM / (gal.r * 0.55 + 30)) * (gal.omega < 0 ? -1 : 1);
+  P.coreMass = 0; P.orbMass = 0; P.orbiters = [];
+  P.collected = 0; P.inv = 0;
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
@@ -531,19 +502,17 @@ canvas.addEventListener('wheel', e => {
 
 /* --------------------------- dev panel --------------------------- */
 const PARAMS = [
-  ['#', 'sim'],
-  ['time',    'sim speed',      0,   3,    0.05],
-  ['grav',    'gravity G',      300, 6000, 50  ],
-  ['lock',    'orbit lock',     0,   1,    0.05],
-  ['perturb', 'rival warp',     0,   2,    0.05],
-  ['assist',  'capture assist', 0,   2,    0.05],
-  ['reachK',  'reach scale',    8,   30,   0.5 ],
-  ['speed',   'well thrust',    0.3, 2.5,  0.05],
-  ['steal',   'siphon rate',    0,   20,   0.5 ],
-  ['boost',   'boost power',    1,   3,    0.05],
-  ['devour',  'devour time',    0.4, 3,    0.1 ],
-  ['growth',  'star yield ®',   0.2, 3,    0.05],
-  ['bots',    'bot count ®',    0,   12,   1   ],
+  ['#', 'flight'],
+  ['time',    'sim speed',      0,     3,      0.05],
+  ['thrust',  'thrust',         150,   700,    10  ],
+  ['drag',    'drag',           0.02,  0.4,    0.01],
+  ['gpull',   'core pull',      20000, 320000, 5000],
+  ['pickup',  'pickup radius',  0.5,   2,      0.05],
+  ['swarmG',  'swarm gravity',  500,   6000,   50  ],
+  ['lock',    'orbit lock',     0,     1,      0.05],
+  ['huntSpd', 'hunter speed',   200,   900,    10  ],
+  ['hunters', 'hunters ®',      0,     6,      1   ],
+  ['need',    'ignite % ®',     5,     40,     1   ],
   ['#', 'squares'],
   ['billboard','billboard',     0,   1,    1   ],
   ['starScale','star scale',    0.4, 2.5,  0.05],
@@ -562,7 +531,7 @@ const fpsEl = document.getElementById('fps');
 let devOpen = false;
 const devInputs = {};
 for (const [key, label, min, max, step] of PARAMS) {
-  if (key === '#') {                             // section header
+  if (key === '#') {
     const h = document.createElement('div');
     h.className = 'devsec'; h.textContent = label;
     devRows.appendChild(h);
@@ -602,12 +571,11 @@ function togglePause() {
 pauseBtn.addEventListener('click', togglePause);
 
 /* --------------------------- drawing ---------------------------- */
-// the star square — every aspect is dev-tunable (squares section of the panel)
 function starMark(sx, sy, u, warm, tw, spin) {
   u *= TUNE.starScale;
-  tw = clamp01(1 - (1 - tw) * TUNE.twinkle);     // twinkle depth
+  tw = clamp01(1 - (1 - tw) * TUNE.twinkle);
   const cCore = ramp(warm);
-  if (u < TUNE.markAt) {                          // small: a plain glowing mote
+  if (u < TUNE.markAt) {
     const s = u * (0.75 + 0.45 * tw);
     ctx.fillStyle = rgba(cCore, Math.min(1, 0.4 + 0.55 * tw));
     ctx.fillRect(sx - s/2, sy - s/2, s, s);
@@ -616,30 +584,23 @@ function starMark(sx, sy, u, warm, tw, spin) {
   const gap = u * TUNE.gap;
   ctx.save();
   ctx.translate(sx, sy);
-  if (TUNE.billboard < 0.5) ctx.rotate(spin);     // billboard = axis-aligned always
-  // outer dots '.' ring
+  if (TUNE.billboard < 0.5) ctx.rotate(spin);
   const nd = Math.round(TUNE.dots), du = u * TUNE.dotSize;
   if (nd > 0 && du > 0.05) {
-    const cDot = ramp(Math.max(0, warm - 0.28));
-    ctx.fillStyle = rgba(cDot, 0.5 * tw);
+    ctx.fillStyle = rgba(ramp(Math.max(0, warm - 0.28)), 0.5 * tw);
     for (let k = 0; k < nd; k++) {
       const a = -Math.PI/2 + k * TAU / nd;
-      const ox = Math.cos(a) * gap * 2, oy = Math.sin(a) * gap * 2;
-      ctx.fillRect(ox - du/2, oy - du/2, du, du);
+      ctx.fillRect(Math.cos(a)*gap*2 - du/2, Math.sin(a)*gap*2 - du/2, du, du);
     }
   }
-  // satellite 'o' ring
   const ns = Math.round(TUNE.sats), su = u * TUNE.satSize;
   if (ns > 0 && su > 0.05) {
-    const cSat = ramp(Math.min(1, warm + 0.1));
-    ctx.fillStyle = rgba(cSat, 0.72 * tw);
+    ctx.fillStyle = rgba(ramp(Math.min(1, warm + 0.1)), 0.72 * tw);
     for (let k = 0; k < ns; k++) {
       const a = -Math.PI/2 + k * TAU / ns;
-      const ox = Math.cos(a) * gap, oy = Math.sin(a) * gap;
-      ctx.fillRect(ox - su/2, oy - su/2, su, su);
+      ctx.fillRect(Math.cos(a)*gap - su/2, Math.sin(a)*gap - su/2, su, su);
     }
   }
-  // central square + hot pip
   ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
   ctx.fillRect(-u/2, -u/2, u, u);
   ctx.fillStyle = rgba(ramp(1), Math.min(1, tw));
@@ -647,29 +608,18 @@ function starMark(sx, sy, u, warm, tw, spin) {
   ctx.restore();
 }
 
-/* distant starfield backdrop: three parallax depth layers of tiny star-
- * squares. Each layer pans at d× camera speed and scales with a softened
- * zoom exponent (far layers respond less), so panning streams past you
- * and zooming reads as actually diving through depth. Positions wrap in
- * screen space so coverage holds at every zoom. */
-/* backdrop stars: FIXED in world space on a repeating world tile and drawn
- * with the same camera transform as everything else — they move exactly
- * like the world. No parallax factors, no wrap-jumps, no surprise motion.
- * Screen size is clamped chunky (>=3px), each star has a zoom rank so the
- * field thins out as you pull back, and the whole layer fades at distance. */
+/* backdrop stars: fixed in world space, same camera as everything else */
 const BG_TILE = 620;
 const bgTileStars = Array.from({ length: 14 }, () => ({
   ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
-  ws: rand(2.2, 4.6),                  // world-units size
-  warm: rand(0.15, 0.7),
-  rank: Math.random(),                 // culling order when zoomed out
-  ph: rand(0, TAU), tws: rand(0.4, 1.4),
+  ws: rand(2.2, 4.6), warm: rand(0.15, 0.7),
+  rank: Math.random(), ph: rand(0, TAU), tws: rand(0.4, 1.4),
 }));
 function drawBgStars() {
   const fade = clamp01((cam.zoom - 0.18) / 0.4);
   const A = TUNE.bgStars * fade;
   if (A <= 0.005) return;
-  const keep = clamp01(cam.zoom * 0.55);           // fewer stars as you pull back
+  const keep = clamp01(cam.zoom * 0.55);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const [wx0, wy0] = toWorld(-20, -20);
@@ -679,7 +629,6 @@ function drawBgStars() {
   if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) <= 400) {
     for (let iy = iy0; iy <= iy1; iy++) {
       for (let ix = ix0; ix <= ix1; ix++) {
-        // de-phase each tile so the repetition doesn't read as a grid
         const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
         for (const st of bgTileStars) {
           if (st.rank > keep) continue;
@@ -697,9 +646,10 @@ function drawBgStars() {
   }
   ctx.restore();
 }
+
 function drawBackground() {
   ctx.fillStyle = '#070311'; ctx.fillRect(0, 0, W, H);
-  const [pcx, pcy] = toScreen(player.x, player.y);
+  const [pcx, pcy] = toScreen(P.x, P.y);
   const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
   g.addColorStop(0, 'rgba(60,18,84,0.35)');
   g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
@@ -707,21 +657,52 @@ function drawBackground() {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   drawBgStars();
 }
-function drawGalaxyGlows() {
+function drawGalaxies() {
   ctx.globalCompositeOperation = 'lighter';
   for (const gal of galaxies) {
     const [sx, sy] = toScreen(gal.x, gal.y);
     const R = Math.max(6, gal.r * 0.5 * cam.zoom);
-    if (sx < -R || sx > W + R || sy < -R || sy > H + R) continue;
+    if (sx < -R*2 || sx > W + R*2 || sy < -R*2 || sy > H + R*2) continue;
+    // haze
     const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
-    g.addColorStop(0, 'rgba(255,244,214,0.5)');
-    g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
-    g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
-    g.addColorStop(1, 'rgba(120,40,120,0)');
+    if (gal.lit) {
+      g.addColorStop(0, 'rgba(255,240,200,0.6)');
+      g.addColorStop(0.3, 'rgba(255,214,120,0.30)');
+      g.addColorStop(1, 'rgba(255,170,90,0)');
+    } else {
+      g.addColorStop(0, 'rgba(255,244,214,0.5)');
+      g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
+      g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
+      g.addColorStop(1, 'rgba(120,40,120,0)');
+    }
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.fill();
+
+    // the burning core: bright heart + DANGER ring at the true kill radius
+    const kr = Math.max(gal.killR * cam.zoom, 5);
+    const heart = ctx.createRadialGradient(sx, sy, 0, sx, sy, kr * 2.2);
+    const hcol = gal.lit ? [255, 246, 220] : [255, 190, 110];
+    heart.addColorStop(0, rgba(hcol, 0.95));
+    heart.addColorStop(0.35, rgba(gal.lit ? [255, 220, 140] : [255, 120, 70], 0.55));
+    heart.addColorStop(1, rgba([200, 60, 80], 0));
+    ctx.fillStyle = heart;
+    ctx.beginPath(); ctx.arc(sx, sy, kr * 2.2, 0, TAU); ctx.fill();
+    const pulse = 0.5 + 0.5 * Math.sin(perfNow * 3 + gal.x);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = gal.lit ? rgba([255, 228, 160], 0.7) : rgba([255, 70, 70], 0.35 + 0.3 * pulse);
+    ctx.beginPath(); ctx.arc(sx, sy, kr, 0, TAU); ctx.stroke();
+
+    // ignition progress arc (only while unlit and started)
+    if (!gal.lit && gal.got > 0) {
+      const t = clamp01(gal.got / gal.need);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(255,214,120,0.25)';
+      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,224,150,0.9)';
+      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
+    }
+    if (gal.igniteT > 0) gal.igniteT -= 0.016;
   }
 }
-// faint additive streak between two world points (motion trail)
 function streak(wx0, wy0, wx1, wy1, color, alpha, width) {
   const [x0, y0] = toScreen(wx0, wy0), [x1, y1] = toScreen(wx1, wy1);
   ctx.strokeStyle = rgba(color, alpha); ctx.lineWidth = width;
@@ -736,67 +717,24 @@ function drawStars() {
     const u = s.size * cam.zoom;
     if (u < 0.35) continue;
     const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
-    if (s.captured) {                      // streak along its infall velocity
-      streak(s.x - s.vx*0.035, s.y - s.vy*0.035, s.x, s.y, ramp(s.warm), 0.28, Math.max(1, u*0.5));
-    }
-    starMark(sx, sy, u, s.warm, tw, s.captured ? Math.atan2(s.vy, s.vx) : s.phase);
+    starMark(sx, sy, u, s.warm, tw, s.phase);
   }
 }
-function drawWell(w) {
-  const [sx, sy] = toScreen(w.x, w.y);
-  const rr = w.reachR() * cam.zoom, cc = w.coreR() * cam.zoom;
-  if (sx < -rr-60 || sx > W+rr+60 || sy < -rr-60 || sy > H+rr+60) return;
-
+function drawPlayer() {
+  const [sx, sy] = toScreen(P.x, P.y);
+  const blink = P.inv > 0 && Math.sin(perfNow * 18) > 0;
   ctx.globalCompositeOperation = 'lighter';
 
-  // reach field + ring
-  const field = ctx.createRadialGradient(sx, sy, cc*0.5, sx, sy, rr);
-  field.addColorStop(0, rgba(w.hue, 0.09));
-  field.addColorStop(0.7, rgba(w.hue, 0.04));
-  field.addColorStop(1, rgba(w.hue, 0));
-  ctx.fillStyle = field;
-  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.fill();
+  // pickup ring — the honest 'my reach' circle
+  const pr = pickupR() * cam.zoom;
   ctx.lineWidth = 1;
-  ctx.strokeStyle = rgba(w.hue, w.isPlayer ? 0.28 : 0.16);
-  if (w.isPlayer) ctx.setLineDash([4, 7]); else ctx.setLineDash([]);
-  ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,220,150,${blink ? 0.1 : 0.25})`;
+  ctx.setLineDash([4, 7]);
+  ctx.beginPath(); ctx.arc(sx, sy, pr, 0, TAU); ctx.stroke();
   ctx.setLineDash([]);
 
-  // zone painting: the color marks the ZONE, not the well, so danger and
-  // opportunity stop sharing one ambiguous ring.
-  //   giant  -> amber field ring  = dive in and siphon its swarm
-  //             red core disc     = the mouth: crossing it starts YOUR devour
-  //   prey   -> green pin ring    = get your core inside it to devour them
-  if (!w.isPlayer) {
-    const pm = player.mass(), wm = w.mass();
-    const dP = Math.hypot(player.x - w.x, player.y - w.y);
-    if (wm > pm * CONSUME_RATIO) {
-      const inField = dP < w.reachR();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = rgba([255, 190, 90], inField ? 0.5 : 0.18);
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath(); ctx.arc(sx, sy, rr * 0.985, 0, TAU); ctx.stroke();
-      ctx.setLineDash([]);
-      const mouthR = Math.max((w.coreR() + player.coreR() * 0.6) * cam.zoom, 8);
-      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 4);
-      ctx.fillStyle = rgba([255, 60, 60], (inField ? 0.16 : 0.07) + 0.06 * pulse);
-      ctx.beginPath(); ctx.arc(sx, sy, mouthR, 0, TAU); ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = rgba([255, 80, 80], inField ? 0.75 : 0.3);
-      ctx.beginPath(); ctx.arc(sx, sy, mouthR, 0, TAU); ctx.stroke();
-    } else if (pm > wm * CONSUME_RATIO) {
-      const pinR = Math.max((player.coreR() + w.coreR() * 0.6) * cam.zoom, 8);
-      const closeK = clamp01(1 - dP / (player.reachR() * 2));
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = rgba([138, 240, 150], 0.25 + 0.5 * closeK);
-      ctx.setLineDash([4, 5]);
-      ctx.beginPath(); ctx.arc(sx, sy, pinR, 0, TAU); ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }
-
-  // orbiting swarm — real bodies, with a velocity streak so motion reads physically
-  for (const o of w.orbiters) {
+  // orbiting swarm
+  for (const o of P.orbiters) {
     const [ox, oy] = toScreen(o.x, o.y);
     const u = o.size * cam.zoom;
     if (ox < -20 || ox > W+20 || oy < -20 || oy > H+20 || u < 0.4) continue;
@@ -806,36 +744,72 @@ function drawWell(w) {
     starMark(ox, oy, u, o.warm, tw, Math.atan2(o.rvy, o.rvx));
   }
 
-  // core bloom, tinted by the well's hue, brighter on a flash
-  const bloomR = Math.max(cc * 2.0, 9) * (1 + 0.5 * w.flash);
+  // core
+  const cc = coreVis() * clamp(cam.zoom, 0.5, 1.6);
+  const bloomR = Math.max(cc * 2.4, 12);
   const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
-  bloom.addColorStop(0, 'rgba(255,252,240,0.95)');
-  bloom.addColorStop(0.28, rgba(w.hue, 0.6));
-  bloom.addColorStop(1, rgba(w.hue, 0));
+  bloom.addColorStop(0, `rgba(255,252,240,${blink ? 0.4 : 0.95})`);
+  bloom.addColorStop(0.3, 'rgba(255,220,140,0.55)');
+  bloom.addColorStop(1, 'rgba(240,120,90,0)');
   ctx.fillStyle = bloom;
   ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
-  starMark(sx, sy, clamp(cc * 1.1, 6, 44), 1, 0.9 + 0.1*Math.sin(perfNow*4), perfNow * 0.6);
-
-  // devour channel: an arc fills around the doomed core — red when it's bad
-  // news for you, green when you're the one devouring
-  if (w.doom) {
-    const t = clamp01(w.doom.t);
-    const col = w.isPlayer ? [255, 70, 70] : (w.doom.by === player ? [138, 240, 150] : [255, 120, 80]);
-    const rA = Math.max(cc * 2.2, 14);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = rgba(col, 0.22);
-    ctx.beginPath(); ctx.arc(sx, sy, rA, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = rgba(col, 0.92);
-    ctx.beginPath(); ctx.arc(sx, sy, rA, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
-    if (w.isPlayer || w.doom.by === player) {
-      ctx.font = '600 11px ui-monospace, Menlo, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = rgba(col, 0.95);
-      ctx.fillText(Math.round(t * 100) + '%', sx, sy - rA - 7);
+  starMark(sx, sy, clamp(cc, 6, 26), 1, blink ? 0.4 : 0.95, Math.atan2(P.vy, P.vx));
+}
+function drawHunters() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const h of hunters) {
+    const [sx, sy] = toScreen(h.x, h.y);
+    if (sx < -80 || sx > W+80 || sy < -80 || sy > H+80) continue;
+    streak(h.x - h.vx*0.06, h.y - h.vy*0.06, h.x, h.y, [255, 80, 90], 0.4, 3);
+    const R = Math.max(24 * cam.zoom, 9);
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * 2.4);
+    g.addColorStop(0, 'rgba(255,120,120,0.9)');
+    g.addColorStop(0.35, 'rgba(255,60,80,0.4)');
+    g.addColorStop(1, 'rgba(255,40,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, R * 2.4, 0, TAU); ctx.fill();
+    // angular mark: rotated square, reads as 'sharp'
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.atan2(h.vy, h.vx) + Math.PI/4);
+    const u = Math.max(10 * cam.zoom, 6);
+    ctx.fillStyle = 'rgba(255,220,220,0.95)';
+    ctx.fillRect(-u/2, -u/2, u, u);
+    ctx.strokeStyle = 'rgba(255,90,90,0.9)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(-u*0.9, -u*0.9, u*1.8, u*1.8);
+    ctx.restore();
+    if (h.chasing && P.inv <= 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 6);
+      ctx.strokeStyle = rgba([255, 80, 80], 0.3 + 0.3 * pulse);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(sx, sy, R * 3.2, 0, TAU); ctx.stroke();
     }
   }
 }
-// floating '+N★ / −N★' receipts so every mass flow has a visible cause
+function drawEffects(dt) {
+  ctx.globalCompositeOperation = 'lighter';
+  // engine exhaust
+  for (let i = exhaust.length - 1; i >= 0; i--) {
+    const e = exhaust[i];
+    e.t -= dt * 1.8;
+    if (e.t <= 0) { exhaust.splice(i, 1); continue; }
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    const [x, y] = toScreen(e.x, e.y);
+    const s = Math.max(1.5, e.s * cam.zoom * e.t);
+    ctx.fillStyle = rgba(ramp(e.warm), 0.55 * e.t);
+    ctx.fillRect(x - s/2, y - s/2, s, s);
+  }
+  // shock rings
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i];
+    b.t -= dt * 1.3;
+    if (b.t <= 0) { bursts.splice(i, 1); continue; }
+    const [x, y] = toScreen(b.x, b.y);
+    const R = (b.r0 + (1 - b.t) * b.r0 * 6) * cam.zoom;
+    ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke();
+  }
+}
 function drawFloaters(dt) {
   if (!floaters.length) return;
   ctx.save();
@@ -851,29 +825,6 @@ function drawFloaters(dt) {
     ctx.fillText(f.txt, x, y - (1 - f.t) * 38);
   }
   ctx.restore();
-}
-function drawEffects(dt) {
-  ctx.globalCompositeOperation = 'lighter';
-  // siphon beams: bright dashed flow from victim toward raider
-  for (const bm of beams) {
-    const [x0, y0] = toScreen(bm.x0, bm.y0), [x1, y1] = toScreen(bm.x1, bm.y1);
-    ctx.strokeStyle = rgba(bm.hue, 0.18); ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    ctx.strokeStyle = rgba(bm.hue, 0.75); ctx.lineWidth = 2;
-    ctx.setLineDash([3, 8]); ctx.lineDashOffset = -(perfNow * 120) % 11;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    ctx.setLineDash([]); ctx.lineDashOffset = 0;
-  }
-  // consume shock rings
-  for (let i = bursts.length - 1; i >= 0; i--) {
-    const b = bursts[i];
-    b.t -= dt * 1.3;
-    if (b.t <= 0) { bursts.splice(i, 1); continue; }
-    const [x, y] = toScreen(b.x, b.y);
-    const R = (b.r0 + (1 - b.t) * b.r0 * 6) * cam.zoom;
-    ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
-    ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke();
-  }
 }
 function drawBoundary() {
   const [sx, sy] = toScreen(0, 0);
@@ -892,76 +843,42 @@ function drawBoundary() {
 function drawMinimap() {
   const mmR = clamp(MINSIDE * 0.11, 56, 92);
   const cxm = W - 20 - mmR, cym = 20 + mmR;
-  const scale = mmR / WORLD_R;                 // world is centered on (0,0)
-
+  const scale = mmR / WORLD_R;
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
-
-  // dish + boundary
   ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU);
   ctx.fillStyle = 'rgba(10,5,20,0.5)'; ctx.fill();
   ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,196,110,0.32)'; ctx.stroke();
-
   ctx.save();
   ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
-
-  // the slice of world currently on screen
   const [wx0, wy0] = toWorld(0, 0);
   const [wx1, wy1] = toWorld(W, H);
-  const rx = cxm + wx0 * scale, ry = cym + wy0 * scale;
-  const rw = (wx1 - wx0) * scale, rh = (wy1 - wy0) * scale;
-  ctx.fillStyle = 'rgba(226,208,255,0.07)'; ctx.fillRect(rx, ry, rw, rh);
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,208,255,0.6)'; ctx.strokeRect(rx, ry, rw, rh);
-
-  // wells — colored dots; you outlined white, threats red, prey green
-  const pm = player.mass();
-  for (const w of wells) {
-    const dx = cxm + w.x * scale, dy = cym + w.y * scale;
-    const r = clamp(Math.sqrt(w.mass()) * 0.06, 1.6, 5.5);
-    ctx.beginPath(); ctx.arc(dx, dy, r, 0, TAU);
-    ctx.fillStyle = rgba(w.hue, 0.95); ctx.fill();
-    let outline = null;
-    if (w.isPlayer) outline = [255, 255, 255];
-    else if (w.mass() > pm * CONSUME_RATIO) outline = [255, 86, 86];
-    else if (pm > w.mass() * CONSUME_RATIO) outline = [138, 240, 150];
-    if (outline) { ctx.lineWidth = 1.3; ctx.strokeStyle = rgba(outline, 0.95); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(226,208,255,0.07)';
+  ctx.fillRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,208,255,0.6)';
+  ctx.strokeRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
+  for (const gal of galaxies) {
+    const gx = cxm + gal.x * scale, gy = cym + gal.y * scale;
+    ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, gal.r * scale), 0, TAU);
+    if (gal.lit) { ctx.fillStyle = 'rgba(255,214,120,0.5)'; ctx.fill(); }
+    ctx.strokeStyle = gal.lit ? 'rgba(255,224,150,0.9)' : 'rgba(180,110,220,0.5)';
+    ctx.lineWidth = 1; ctx.stroke();
   }
+  for (const h of hunters) {
+    ctx.beginPath(); ctx.arc(cxm + h.x*scale, cym + h.y*scale, 2, 0, TAU);
+    ctx.fillStyle = 'rgba(255,80,90,0.95)'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(cxm + P.x*scale, cym + P.y*scale, 2.4, 0, TAU);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
   ctx.restore();
   ctx.restore();
-}
-// one line of words that answers "what is happening to me right now, and why"
-function updateStateLine() {
-  if (mode !== 'play') { stateEl.textContent = ''; return; }
-  let txt = '', col = '#b795d8';
-  const pm = player.mass();
-  if (player.doom) {
-    txt = '⚠ BEING DEVOURED — BOOST AWAY'; col = '#ff6a6a';
-  } else {
-    const victim = wells.find(w => w.doom && w.doom.by === player);
-    if (victim) { txt = 'devouring rival — ' + Math.round(clamp01(victim.doom.t) * 100) + '%'; col = '#8ef09a'; }
-    else if (siphonState.raiding) { txt = 'siphoning their swarm ↯ — stay out of the red core'; col = '#ffd27e'; }
-    else if (siphonState.raided) { txt = 'a raider is draining you — chase it off or flee'; col = '#ff9a7e'; }
-    else {
-      let near = null, nd = 1e9;
-      for (const w of wells) {
-        if (w.isPlayer) continue;
-        const d = Math.hypot(w.x - player.x, w.y - player.y);
-        if (d < nd) { nd = d; near = w; }
-      }
-      if (near && nd < near.reachR() + player.reachR() * 2.5) {
-        if (near.mass() > pm * CONSUME_RATIO) { txt = 'giant nearby — dive its amber field to steal, avoid the red core'; col = '#ffd27e'; }
-        else if (pm > near.mass() * CONSUME_RATIO) { txt = 'prey nearby — pin your core inside its green ring'; col = '#8ef09a'; }
-      }
-    }
-  }
-  stateEl.textContent = txt;
-  stateEl.style.color = col;
 }
 function drawCursor() {
   const x = mouse.sx, y = mouse.sy;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255,225,160,0.5)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = thrustHeld ? 'rgba(255,240,190,0.85)' : 'rgba(255,225,160,0.5)';
+  ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(x-11, y); ctx.lineTo(x-3, y); ctx.moveTo(x+3, y); ctx.lineTo(x+11, y);
@@ -969,148 +886,148 @@ function drawCursor() {
   ctx.stroke();
   ctx.restore();
 }
+function updateStateLine() {
+  if (mode !== 'play') { stateEl.textContent = ''; return; }
+  let txt = '', col = '#b795d8';
+  if (P.inv > 0) { txt = 'reforming — brief shield'; col = '#a8c8ff'; }
+  else {
+    let hunterNear = null, hd = 1e9;
+    for (const h of hunters) {
+      if (!h.chasing) continue;
+      const d = Math.hypot(h.x - P.x, h.y - P.y);
+      if (d < hd) { hd = d; hunterNear = h; }
+    }
+    const gi = nearestGalaxy(P.x, P.y);
+    const gal = galaxies[gi];
+    const dCore = Math.hypot(gal.x - P.x, gal.y - P.y);
+    const closing = ((gal.x - P.x) * P.vx + (gal.y - P.y) * P.vy) > 0;
+    if (hunterNear && hd < 700) { txt = '⚠ hunter locked on — slingshot it off'; col = '#ff8a8a'; }
+    else if (dCore < gal.killR * 4 && closing) { txt = '⚠ core ahead — swing around it, never through'; col = '#ffb07e'; }
+    else if (!gal.lit && dCore < gal.r * 1.2) {
+      txt = 'ignite this galaxy — ' + gal.got + ' / ' + gal.need + ' stars'; col = '#ffd98a';
+    }
+  }
+  stateEl.textContent = txt;
+  stateEl.style.color = col;
+}
 
 /* ------------------------- simulation --------------------------- */
-function botThink(w, dt) {
-  w.think -= dt;
-  if (w.think > 0) return;
-  w.think = 0.35;
-  // escaping a devour channel overrides everything — boost away hard
-  if (w.doom) {
-    const by = w.doom.by;
-    w.target = [w.x + (w.x - by.x) * 3, w.y + (w.y - by.y) * 3];
-    w.state = 'flee'; w.boosting = true;
-    return;
+function updatePlayer(dt) {
+  if (P.inv > 0) P.inv -= dt;
+  // thrust toward the cursor
+  P.thrusting = thrustHeld && mode === 'play';
+  if (P.thrusting) {
+    const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+    const dx = tx - P.x, dy = ty - P.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    const ax = dx / d, ay = dy / d;
+    // heavier well, softer engine
+    const acc = TUNE.thrust * Math.pow(20 / (10 + pmass()), 0.18);
+    P.vx += ax * acc * dt; P.vy += ay * acc * dt;
+    // exhaust juice
+    for (let k = 0; k < 2; k++) {
+      exhaust.push({
+        x: P.x - ax * coreVis() * 1.6, y: P.y - ay * coreVis() * 1.6,
+        vx: -ax * rand(180, 330) + P.vx * 0.5 + gauss() * 60,
+        vy: -ay * rand(180, 330) + P.vy * 0.5 + gauss() * 60,
+        s: rand(3, 6), warm: rand(0.65, 0.95), t: 1,
+      });
+    }
+    if (exhaust.length > 240) exhaust.splice(0, exhaust.length - 240);
   }
-  const myMass = w.mass();
-  let threat = null, tD = 1e9, prey = null, pD = 1e9;
-  for (const o of wells) {
-    if (o === w) continue;
-    const d = Math.hypot(o.x - w.x, o.y - w.y);
-    if (o.mass() > myMass * 1.15 && d < 1600 && d < tD) { threat = o; tD = d; }
-    if (o.mass() * 1.15 < myMass && o.orbiters.length > 3 && d < 1400 && d < pD) { prey = o; pD = d; }
+  // gravity: every galaxy core pulls you (flat rotation-curve field ~1/d)
+  for (const gal of galaxies) {
+    const dx = gal.x - P.x, dy = gal.y - P.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    if (d > gal.r * 1.6) continue;
+    const f = clamp01(1.6 - d / gal.r);
+    const gp = TUNE.gpull * (gal.r / 700);
+    const a = gp / (d + 20) * f;
+    P.vx += (dx / d) * a * dt;
+    P.vy += (dy / d) * a * dt;
+    // the core burns: shed your whole swarm and get thrown clear
+    if (d < gal.killR + coreVis() * 0.4 && P.inv <= 0) {
+      scatterSwarm(1);
+      P.inv = 2.2; shake = 1;
+      P.vx = -(dx / d) * 760 + gauss() * 80;
+      P.vy = -(dy / d) * 760 + gauss() * 80;
+      showToast('shredded by the core');
+      bursts.push({ x: P.x, y: P.y, r0: 60, t: 1, hue: [255, 140, 80] });
+    }
   }
-  if (threat) {
-    w.target = [w.x + (w.x - threat.x), w.y + (w.y - threat.y)];
-    w.state = 'flee'; w.boosting = tD < 600;      // burn stars to escape
-    return;
+  // drag: linear + a soft quadratic ceiling
+  const v = Math.hypot(P.vx, P.vy);
+  const dragA = TUNE.drag * v + 0.0006 * v * v;
+  if (v > 1) { P.vx -= (P.vx / v) * dragA * dt; P.vy -= (P.vy / v) * dragA * dt; }
+  P.x += P.vx * dt; P.y += P.vy * dt;
+  // world edge
+  const pr = Math.hypot(P.x, P.y);
+  if (pr > WORLD_R - 20) {
+    P.x *= (WORLD_R - 20) / pr; P.y *= (WORLD_R - 20) / pr;
+    const out = (P.x * P.vx + P.y * P.vy) / (WORLD_R - 20);
+    if (out > 0) { P.vx -= P.x / (WORLD_R - 20) * out * 1.6; P.vy -= P.y / (WORLD_R - 20) * out * 1.6; }
   }
-  if (prey) {
-    w.target = [prey.x, prey.y];
-    w.state = 'hunt'; w.boosting = pD < 700 && w.orbiters.length > 8;  // burn to close
-    return;
-  }
-  let bx = w.x, by = w.y, bd = 1e9;              // sample the field for nearby food
-  for (let k = 0; k < 48; k++) {
-    const s = stars[(Math.random() * stars.length) | 0];
-    const d = Math.hypot(s.x - w.x, s.y - w.y);
-    if (d < bd) { bd = d; bx = s.x; by = s.y; }
-  }
-  w.target = [bx, by]; w.state = 'feed'; w.boosting = false;
 }
-// boost: throw one of your own stars backward for thrust — momentum for mass
-function ejectStar(w, dirx, diry) {
-  const o = w.popOuter(); if (!o) return;
-  let gal = galaxies[0], bg = 1e18;              // nearest galaxy anchors its drift
-  for (const g of galaxies) { const dd = (g.x-w.x)*(g.x-w.x) + (g.y-w.y)*(g.y-w.y); if (dd < bg) { bg = dd; gal = g; } }
-  const s = makeStar(gal, 0.5);
-  s.size = o.size; s.warm = o.warm; s.mass = o.mass;
-  s.x = w.x - dirx * (w.coreR() + 8);
-  s.y = w.y - diry * (w.coreR() + 8);
-  s.vx = -dirx * 460 + w.vx * 0.4;
-  s.vy = -diry * 460 + w.vy * 0.4;
-  s.gx = gal.x; s.gy = gal.y; s.GM = gal.GM; s.gspin = gal.omega < 0 ? -1 : 1;
-  s.immuneW = w; s.immuneT = 1.3;                // can't instantly re-eat your exhaust
-  s.transient = true;
-  stars.push(s);
-  w.flash = Math.max(w.flash, 0.2);
-}
-function moveWell(w, dt) {
-  if (!w.target) return;
-  const dx = w.target[0] - w.x, dy = w.target[1] - w.y;
-  const d = Math.hypot(dx, dy) + 1e-4;
-  const canBoost = w.boosting && w.orbiters.length > 0;
-  let sMax = w.maxSpeed() * TUNE.speed;
-  if (canBoost) sMax *= TUNE.boost;
-  const spd = Math.min(sMax, d * 3.2);
-  w.vx = dx / d * spd; w.vy = dy / d * spd;
-  w.x += w.vx * dt; w.y += w.vy * dt;
-  if (canBoost) {                                // thrust costs a star every beat
-    w.boostT -= dt;
-    if (w.boostT <= 0) { w.boostT = 0.22; ejectStar(w, dx / d, dy / d); }
-  }
-  const pr = Math.hypot(w.x, w.y), lim = WORLD_R - w.coreR();
-  if (pr > lim) { w.x *= lim / pr; w.y *= lim / pr; }
-}
-
-// Every star is a body in one shared gravitational field: its home galaxy's
-// central mass plus every well's field (within reach). A gentle "galaxy lock"
-// reins free stars toward their circular flow so the arms persist, and a
-// capture assist (swirl + drag) warps infall into a sweep instead of a slingshot.
 function updateStars(dt, live) {
+  const pr = pickupR(), suckR = pr * 2.8;
   for (let si = stars.length - 1; si >= 0; si--) {
     const s = stars[si];
-    if (s.immuneT > 0) { s.immuneT -= dt; if (s.immuneT <= 0) s.immuneW = null; }
-    // --- home galaxy gravity ---
+    if (s.heldT > 0) s.heldT -= dt;
+    // home galaxy orbit
     const dxg = s.gx - s.x, dyg = s.gy - s.y;
     const rg = Math.hypot(dxg, dyg) + 1e-4;
     const ag = s.GM / (rg * rg + 900);
     let ax = (dxg / rg) * ag, ay = (dyg / rg) * ag;
-
-    // --- plus every well's real field within its reach ---
-    let best = null, bestPull = 0, bd = 0, bdx = 0, bdy = 0, brr = 0;
-    if (live) {
-      for (const w of wells) {
-        if (w === s.immuneW && s.immuneT > 0) continue;   // fresh exhaust
-        const dx = w.x - s.x, dy = w.y - s.y;
-        const rr = w.reachR();
-        if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
-        const d2 = dx*dx + dy*dy;
-        if (d2 > rr*rr) continue;
-        const d = Math.sqrt(d2) + 1e-4;
-        const soft = w.coreR() * 0.7;
-        const aw = TUNE.grav * w.mass() / (d2 + soft*soft);
-        ax += (dx / d) * aw; ay += (dy / d) * aw;
-        if (aw > bestPull) { bestPull = aw; best = w; bd = d; bdx = dx; bdy = dy; brr = rr; }
+    let vacuum = false;
+    if (live && !(s.heldT > 0)) {
+      const dx = P.x - s.x, dy = P.y - s.y;
+      if (dx < suckR && dx > -suckR && dy < suckR && dy > -suckR) {
+        const d = Math.hypot(dx, dy);
+        if (d < pr) {                        // swept up!
+          admitStar(s);
+          P.collected++; gainAcc++;
+          const gal = galaxies[s.gi];
+          if (!gal.lit) {
+            gal.got++;
+            if (gal.got >= gal.need) {
+              gal.lit = true; gal.igniteT = 1; litCount++;
+              bursts.push({ x: gal.x, y: gal.y, r0: gal.killR * 2, t: 1, hue: [255, 224, 150] });
+              showToast('galaxy ignited — ' + litCount + ' / ' + galaxies.length);
+              shake = Math.max(shake, 0.5);
+              if (litCount >= galaxies.length && !won) {
+                won = true;
+                const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
+                winTag.textContent = 'all eight cores burn for you · ' + mm + ':' + String(ss).padStart(2, '0') + ' · press R to run it again';
+                winEl.classList.add('show');
+              }
+            }
+          }
+          if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
+          else respawnStar(s);
+          continue;
+        }
+        if (d < suckR) {                     // short-range vacuum
+          vacuum = true;
+          const f = 1 - d / suckR;
+          const a = 2600 * f * f;
+          ax += (dx / d) * a; ay += (dy / d) * a;
+          s.vx *= 0.985; s.vy *= 0.985;
+        }
       }
     }
-
-    if (best) {
-      s.captured = true;
-      // capture assist — the artificial warp that sweeps the star into a disk
-      const ux = bdx/bd, uy = bdy/bd;
-      const tx = -uy * best.spin, ty = ux * best.spin;
-      const f = 1 - bd/brr;
-      ax += (ux * PULL * (0.4 + 0.6*f) + tx * SWIRL * f) * TUNE.assist;
-      const drag = 1 - 0.01 * TUNE.assist;
-      s.vx *= drag; s.vy *= drag;
-    } else {
-      if (s.captured) s.captured = false;
-      // galaxy lock: ease toward the local circular flow so arms stay coherent
-      const ox = -dxg/rg, oy = -dyg/rg;                 // outward unit
+    if (!vacuum) {
+      // galaxy lock keeps arms coherent
+      const ox = -dxg/rg, oy = -dyg/rg;
       const vC = Math.sqrt(s.GM / (rg + 30));
       const cvx = -oy * vC * s.gspin, cvy = ox * vC * s.gspin;
-      const k = Math.min(1, dt * 0.5 * (0.5 + TUNE.lock));
+      const k = Math.min(1, dt * 0.5);
       s.vx += (cvx - s.vx) * k; s.vy += (cvy - s.vy) * k;
     }
-
     s.vx += ax * dt; s.vy += ay * dt;
-    const cap = s.captured ? 1600 : 320;
+    const cap = vacuum ? 1600 : 340;
     const v = Math.hypot(s.vx, s.vy);
     if (v > cap) { s.vx *= cap/v; s.vy *= cap/v; }
     s.x += s.vx * dt; s.y += s.vy * dt;
-
-    // capture: hand off into a real orbit carrying its momentum
-    if (best && bd < brr * CAPTURE_BAND) {
-      best.captureStar(s);
-      if (best.isPlayer) { best.collected++; gainAcc++; }
-      // ejected exhaust stars are extra — retire them instead of respawning
-      if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
-      else respawnStar(s);
-      continue;
-    }
-
-    // stay inside the world disk
     const rw2 = s.x*s.x + s.y*s.y;
     if (rw2 > WORLD_R * WORLD_R) {
       const rw = Math.sqrt(rw2);
@@ -1120,141 +1037,51 @@ function updateStars(dt, live) {
     }
   }
 }
-// Orbiters live in one shared field too: their owner's 1/r^2 gravity plus the
-// (tunable) perturbation from every rival well. The "orbit lock" is the
-// artificial warp — it reins each body toward the local circular orbit and
-// soft-walls the reach edge, so disks stay disks even in a contested field.
 function updateOrbiters(simDt) {
   if (simDt <= 0) return;
-  const n = clamp(Math.ceil(simDt / 0.02), 1, 4), h = simDt / n;  // substeps keep fast orbits stable
-  for (const w of wells) {
-    const M = w.mass();
-    const soft = w.coreR() * 0.7, soft2 = soft * soft;
-    const mergeR2 = Math.pow(w.coreR() * 0.55, 2);
-    const RR = w.reachR();
-    const vCap = Math.sqrt(TUNE.grav * M / soft) * 1.7;
-    for (let i = w.orbiters.length - 1; i >= 0; i--) {
-      const o = w.orbiters[i];
-      o.px = o.x; o.py = o.y;
-      let merged = false;
-      for (let k = 0; k < n; k++) {
-        const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
-        // owner gravity (softened 1/r^2), semi-implicit Euler
-        const a = TUNE.grav * M / (r2 + soft2);
-        o.rvx -= (o.rx / r) * a * h;
-        o.rvy -= (o.ry / r) * a * h;
-        // rival fields warp the disk — fly near a giant and feel your swarm lean
-        if (TUNE.perturb > 0) {
-          const wx = w.x + o.rx, wy = w.y + o.ry;
-          for (const ow of wells) {
-            if (ow === w) continue;
-            const dx = ow.x - wx, dy = ow.y - wy;
-            const lim = ow.reachR() * 1.3;
-            if (dx > lim || dx < -lim || dy > lim || dy < -lim) continue;
-            const d2 = dx*dx + dy*dy;
-            if (d2 > lim*lim) continue;
-            const d = Math.sqrt(d2) + 1e-4;
-            const os = ow.coreR() * 0.7;
-            const ap = TUNE.perturb * TUNE.grav * ow.mass() / (d2 + os*os);
-            o.rvx += (dx / d) * ap * h;
-            o.rvy += (dy / d) * ap * h;
-          }
-        }
-        // orbit lock: rein toward the local circular orbit + soft wall at reach
-        const r_ = Math.sqrt(o.rx*o.rx + o.ry*o.ry) + 1e-4;
-        const vC = Math.sqrt(TUNE.grav * M / (r_ + soft));
-        const tx = -o.ry/r_ * w.spin, ty = o.rx/r_ * w.spin;
-        const kl = Math.min(1, TUNE.lock * h * 3);
-        o.rvx += (tx * vC - o.rvx) * kl;
-        o.rvy += (ty * vC - o.rvy) * kl;
-        const out = (o.rx*o.rvx + o.ry*o.rvy) / r_;
-        if (r_ > RR * 0.92 && out > 0) {
-          const kw = Math.min(1, h * 8);
-          o.rvx -= (o.rx/r_) * out * kw;
-          o.rvy -= (o.ry/r_) * out * kw;
-        }
-        const v = Math.hypot(o.rvx, o.rvy);
-        if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
-        o.rx += o.rvx * h; o.ry += o.rvy * h;
-        if (o.rx*o.rx + o.ry*o.ry < mergeR2) { merged = true; break; }
+  const n = clamp(Math.ceil(simDt / 0.02), 1, 4), h = simDt / n;
+  const M = pmass();
+  const soft = 12, soft2 = soft * soft;
+  const mergeR2 = 64;
+  const RR = orbitR() * 1.25;
+  const vCap = Math.sqrt(TUNE.swarmG * M / soft) * 1.7;
+  for (let i = P.orbiters.length - 1; i >= 0; i--) {
+    const o = P.orbiters[i];
+    o.px = o.x; o.py = o.y;
+    let merged = false;
+    for (let k = 0; k < n; k++) {
+      const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
+      const a = TUNE.swarmG * M / (r2 + soft2);
+      o.rvx -= (o.rx / r) * a * h;
+      o.rvy -= (o.ry / r) * a * h;
+      const vC = Math.sqrt(TUNE.swarmG * M / (r + soft));
+      const tx = -o.ry/r * P.spin, ty = o.rx/r * P.spin;
+      const kl = Math.min(1, TUNE.lock * h * 3);
+      o.rvx += (tx * vC - o.rvx) * kl;
+      o.rvy += (ty * vC - o.rvy) * kl;
+      const out = (o.rx*o.rvx + o.ry*o.rvy) / r;
+      if (r > RR * 0.92 && out > 0) {
+        const kw = Math.min(1, h * 8);
+        o.rvx -= (o.rx/r) * out * kw;
+        o.rvy -= (o.ry/r) * out * kw;
       }
-      o.x = w.x + o.rx; o.y = w.y + o.ry;
-      // accretion: a body that falls to the core merges into it
-      if (merged) {
-        w.coreMass += o.mass; w.orbMass -= o.mass;
-        w.orbiters.splice(i, 1);
-        w.flash = Math.max(w.flash, 0.25);
-      }
+      const v = Math.hypot(o.rvx, o.rvy);
+      if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
+      o.rx += o.rvx * h; o.ry += o.rvy * h;
+      if (o.rx*o.rx + o.ry*o.ry < mergeR2) { merged = true; break; }
     }
-  }
-}
-function wellClashes(dt) {
-  for (const w of wells) w._doomFresh = false;
-  for (let i = 0; i < wells.length; i++) {
-    for (let j = i + 1; j < wells.length; j++) {
-      const a = wells[i], b = wells[j];
-      const big = a.mass() >= b.mass() ? a : b;
-      const small = big === a ? b : a;
-      const d = Math.hypot(big.x - small.x, big.y - small.y);
-
-      // DEVOUR CHANNEL: pin the smaller core inside yours and a red arc fills
-      // over TUNE.devour seconds while its swarm drains — it can still boost
-      // free. Only completes if you hold the pin. The only combat kill.
-      if (d < big.coreR() + small.coreR() * 0.6 && big.mass() > small.mass() * CONSUME_RATIO) {
-        if (!small.doom || small.doom.by !== big) small.doom = { by: big, t: 0 };
-        small.doom.t += dt / TUNE.devour;
-        small._doomFresh = true;
-        big._steal += 12 * dt;                    // the channel force-drains the victim
-        let drained = 0;
-        while (big._steal >= 1 && small.orbiters.length) {
-          const o = small.popOuter();
-          if (o) big.receiveOrbiter(o);
-          big._steal -= 1; drained++;
-        }
-        if (drained) {
-          beams.push({ x0: small.x, y0: small.y, x1: big.x, y1: big.y, hue: big.hue });
-          if (big.isPlayer) gainAcc += drained;
-          if (small.isPlayer) lossAcc += drained;
-        }
-        big.flash = Math.max(big.flash, 0.4);
-        if (small.doom.t >= 1) { consume(big, small); continue; }
-      }
-
-      // SIPHON favours the underdog: the smaller well, diving into the bigger
-      // one's field, peels stars off its outer swarm. Rate rises with the size
-      // gap (David bites Goliath) and falls as the raider itself grows large.
-      if (d < big.reachR() * 0.95 && big.orbiters.length && small.mass() < big.mass() * 0.9) {
-        const gap = clamp(big.mass() / Math.max(1, small.mass()), 1, 8);
-        const rate = TUNE.steal * Math.sqrt(gap) / (1 + small.mass() / BIG_SOFT);
-        small._steal += rate * dt;
-        let took = 0;
-        while (small._steal >= 1 && big.orbiters.length) {
-          const o = big.popOuter();
-          if (o) small.receiveOrbiter(o);
-          small._steal -= 1; took++;
-          small.flash = Math.max(small.flash, 0.5);
-          big.flash = Math.max(big.flash, 0.3);
-        }
-        beams.push({ x0: big.x, y0: big.y, x1: small.x, y1: small.y, hue: small.hue });
-        if (took) {
-          if (small.isPlayer) { siphonState.raiding = true; gainAcc += took; }
-          if (big.isPlayer) { siphonState.raided = true; lossAcc += took; }
-        }
-      }
-    }
-  }
-  // devour channels decay fast once the victim slips the pin
-  for (const w of wells) {
-    if (w.doom && !w._doomFresh) {
-      w.doom.t -= dt * 1.2;
-      if (w.doom.t <= 0) w.doom = null;
+    o.x = P.x + o.rx; o.y = P.y + o.ry;
+    if (merged) {
+      P.coreMass += o.mass; P.orbMass -= o.mass;
+      P.orbiters.splice(i, 1);
     }
   }
 }
 
 /* ----------------------------- loop ----------------------------- */
 buildWorld();
-spawnWells();
+spawnHunters();
+resetPlayer();
 cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
 let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
@@ -1264,66 +1091,50 @@ function frame(now) {
   const live = (mode === 'play');
   const simDt = TUNE.paused ? 0 : dt * TUNE.time;
 
-  if (!live) beams = [];
   if (simDt > 0) {
     if (live) {
-      const [tx, ty] = toWorld(mouse.sx, mouse.sy);
-      player.target = [tx, ty];
-      player.boosting = boostHeld;
-      for (const w of wells) { if (!w.isPlayer) botThink(w, simDt); moveWell(w, simDt); }
+      playT += simDt;
+      updatePlayer(simDt);
+      updateHunters(simDt);
     }
     updateStars(simDt, live);
+    updateOrbiters(simDt);
     if (live) {
-      beams = []; siphonState.raiding = false; siphonState.raided = false;
-      wellClashes(simDt);
-      // announce siphon state on the rising edge only (devour warnings outrank)
-      if (siphonState.raiding && !siphonState.wasRaiding && !player.doom) showToast('siphoning ↯');
-      else if (siphonState.raided && !siphonState.wasRaided && !player.doom) showToast('being siphoned!');
-      siphonState.wasRaiding = siphonState.raiding;
-      siphonState.wasRaided = siphonState.raided;
-      // devour warnings on their rising edges
-      const pDoom = !!player.doom;
-      if (pDoom && !prevPDoom) showToast('⚠ being devoured — boost away!');
-      prevPDoom = pDoom;
-      const devouring = wells.some(x => x.doom && x.doom.by === player);
-      if (devouring && !prevDevour) showToast('devouring…');
-      prevDevour = devouring;
-      // aggregate mass receipts into readable floaters
       floatT -= dt;
       if (floatT <= 0) {
-        const fy = player.y - player.coreR() * 3 / Math.max(cam.zoom, 0.2);
-        if (gainAcc > 0) addFloater(player.x + rand(-8, 8), fy, '+' + gainAcc + '★', [255, 216, 130]);
-        if (lossAcc > 0) addFloater(player.x + rand(-8, 8), fy, '−' + lossAcc + '★', [255, 110, 110]);
+        const fy = P.y - orbitR() * 1.2;
+        if (gainAcc > 0) addFloater(P.x + rand(-8, 8), fy, '+' + gainAcc + '★', [255, 216, 130]);
+        if (lossAcc > 0) addFloater(P.x + rand(-8, 8), fy, '−' + lossAcc + '★', [255, 110, 110]);
         gainAcc = 0; lossAcc = 0; floatT = 0.4;
       }
     }
-    updateOrbiters(simDt);
   }
-  for (const w of wells) if (w.flash > 0) w.flash = Math.max(0, w.flash - dt * 2);
-
-  // fps meter for the dev panel
-  fpsE += (1 / Math.max(dt, 1e-3) - fpsE) * 0.06;
-  fpsT -= dt;
-  if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
 
   // camera
   if (anim) {
     anim.t += dt;
     const k = clamp01(anim.t / anim.dur), e = easeInOut(k);
-    cam.x = lerp(anim.from.x, mode === 'diving' ? player.x : anim.to.x, e);
-    cam.y = lerp(anim.from.y, mode === 'diving' ? player.y : anim.to.y, e);
+    cam.x = lerp(anim.from.x, mode === 'diving' ? P.x : anim.to.x, e);
+    cam.y = lerp(anim.from.y, mode === 'diving' ? P.y : anim.to.y, e);
     cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
     if (k >= 1) { mode = anim.target; anim = null; }
   } else if (mode === 'play') {
-    cam.x += (player.x - cam.x) * Math.min(1, dt * 6);
-    cam.y += (player.y - cam.y) * Math.min(1, dt * 6);
-    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 2.2);
+    // look slightly ahead of the velocity — flying feel
+    const lx = P.x + P.vx * 0.3, ly = P.y + P.vy * 0.3;
+    cam.x += (lx - cam.x) * Math.min(1, dt * 4.5);
+    cam.y += (ly - cam.y) * Math.min(1, dt * 4.5);
+    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 1.6);
   } else if (mode === 'overview') {
     cam.x += (0 - cam.x) * Math.min(1, dt * 2);
     cam.y += (0 - cam.y) * Math.min(1, dt * 2);
   }
 
-  // screen shake on devours (world-space jitter so zoom doesn't change feel)
+  // fps meter
+  fpsE += (1 / Math.max(dt, 1e-3) - fpsE) * 0.06;
+  fpsT -= dt;
+  if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
+
+  // screen shake
   let jx = 0, jy = 0;
   if (shake > 0) {
     const j = shake * shake * 7 / cam.zoom;
@@ -1333,9 +1144,14 @@ function frame(now) {
   cam.x += jx; cam.y += jy;
 
   drawBackground();
-  drawGalaxyGlows();
+  drawGalaxies();
   drawStars();
-  if (mode !== 'overview') { for (const w of wells) drawWell(w); drawEffects(dt); drawFloaters(dt); }
+  if (mode !== 'overview') {
+    drawPlayer();
+    drawHunters();
+    drawEffects(dt);
+    drawFloaters(dt);
+  }
   drawBoundary();
   ctx.globalCompositeOperation = 'source-over';
   const wantCursor = mode === 'play' ? 'none' : 'default';
@@ -1343,28 +1159,17 @@ function frame(now) {
   if (mode !== 'overview') drawMinimap();
   if (mode === 'play') drawCursor();
 
-  // danger vignette while a devour channel is eating you
-  if (mode === 'play' && player.doom) {
-    const t = clamp01(player.doom.t);
-    const g = ctx.createRadialGradient(W/2, H/2, MINSIDE * 0.3, W/2, H/2, MINSIDE * 0.8);
-    g.addColorStop(0, 'rgba(255,40,40,0)');
-    g.addColorStop(1, `rgba(255,32,32,${(0.10 + 0.30*t) * (0.75 + 0.25*Math.sin(perfNow*9))})`);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  }
-
   cam.x -= jx; cam.y -= jy;
 
   // toast fade
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('show'); }
 
   // hud
-  massEl.textContent = Math.round(player.mass()).toLocaleString();
-  swarmEl.textContent = player.orbiters.length;
-  starsEl.textContent = player.collected.toLocaleString();
-  reachEl.textContent = Math.round(player.reachR()).toLocaleString();
-  let rank = 1; const pm = player.mass();
-  for (const w of wells) if (!w.isPlayer && w.mass() > pm) rank++;
-  rankEl.textContent = '#' + rank + ' / ' + wells.length;
+  litEl.textContent = litCount + '/' + galaxies.length;
+  swarmEl.textContent = P.orbiters.length;
+  massEl.textContent = Math.round(pmass()).toLocaleString();
+  const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
+  timeEl.textContent = mm + ':' + String(ss).padStart(2, '0');
   updateStateLine();
 
   requestAnimationFrame(frame);
