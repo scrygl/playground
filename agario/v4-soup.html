@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KIKI // BOUBA</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #0a0616; }
+  #stage { display: block; width: 100vw; height: 100vh; cursor: default; }
+
+  .panel {
+    position: fixed; z-index: 3;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: .04em; user-select: none; pointer-events: none;
+    text-shadow: 0 0 8px rgba(120,40,180,.6);
+  }
+  #stats { left: 16px; top: 14px; color: #d9b6ff; }
+  #form { font-size: 22px; font-weight: 600; letter-spacing: .1em; color: #ffd9f0; }
+  #form.kiki { color: #ffe6a8; }
+  #stats .row { opacity: .82; }
+  #stats b { color: #ffd98a; font-weight: 600; }
+  #stambox {
+    width: 130px; height: 5px; margin: 6px 0 4px;
+    border: 1px solid rgba(255,205,180,.35); border-radius: 3px;
+  }
+  #stam { height: 100%; width: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, #ff9a6a, #ffe6a8); }
+  #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
+  #state {
+    left: 50%; bottom: 52px; transform: translateX(-50%);
+    font-size: 13px; letter-spacing: .14em; text-align: center;
+    color: #b795d8; text-shadow: 0 0 12px rgba(120,40,180,.8);
+  }
+
+  #toast {
+    position: fixed; left: 50%; top: 32%; transform: translate(-50%,-50%);
+    z-index: 4; pointer-events: none; user-select: none;
+    font: 600 22px/1.2 ui-monospace, Menlo, monospace;
+    letter-spacing: .18em; text-indent: .18em; text-align: center;
+    color: #ffdca0; text-shadow: 0 0 24px rgba(255,150,80,.7);
+    opacity: 0; transition: opacity .35s ease;
+  }
+  #toast.show { opacity: 1; }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 22px; text-align: center;
+    pointer-events: none; transition: opacity .9s ease;
+  }
+  .overlay.gone { opacity: 0; }
+  .overlay .sub {
+    font: 12px/1.6 ui-monospace, Menlo, monospace;
+    letter-spacing: .4em; text-indent: .4em;
+    color: #e6b7ff; opacity: .72; text-transform: uppercase;
+  }
+  .overlay h1 {
+    margin: 0;
+    font: 300 clamp(30px, 7vw, 82px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .14em; text-indent: .14em; color: #fff;
+    text-shadow: 0 0 34px rgba(255,150,200,.5), 0 0 70px rgba(190,60,160,.35);
+  }
+  .overlay h1 .k { color: #ffe6a8; text-shadow: 0 0 30px rgba(255,190,90,.7); }
+  .overlay h1 .b { color: #ffb9e2; }
+  .overlay .tag {
+    max-width: 46ch;
+    font: 13px/1.85 ui-monospace, Menlo, monospace;
+    color: #c9a8e6; opacity: .78;
+  }
+  .overlay .tag b { color: #ffe6a8; font-weight: 600; }
+  #dive {
+    pointer-events: auto; cursor: pointer; margin-top: 4px;
+    padding: 13px 30px; border-radius: 999px;
+    background: rgba(255,180,220,.06); border: 1px solid rgba(255,170,215,.5);
+    color: #ffd9f0; font: 600 13px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
+    backdrop-filter: blur(3px);
+    transition: background .25s, box-shadow .25s, transform .25s, border-color .25s;
+  }
+  #dive:hover {
+    background: rgba(255,180,220,.16); border-color: rgba(255,200,230,.9);
+    box-shadow: 0 0 34px rgba(255,120,190,.35); transform: translateY(-1px);
+  }
+
+  /* dev panel */
+  #devchip {
+    position: fixed; left: 16px; bottom: 14px; z-index: 6;
+    font: 11px/1.4 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+    color: #a884c8; opacity: .55; cursor: pointer; user-select: none;
+  }
+  #devchip:hover { opacity: .9; }
+  #dev {
+    position: fixed; left: 16px; bottom: 40px; z-index: 6; display: none;
+    min-width: 252px; padding: 10px 12px 9px;
+    max-height: calc(100vh - 120px); overflow-y: auto;
+    background: rgba(14,7,26,.88); border: 1px solid rgba(190,120,220,.28);
+    border-radius: 10px; backdrop-filter: blur(4px);
+    font: 11px/1.7 ui-monospace, Menlo, monospace; color: #d9b6ff;
+  }
+  .devsec { margin-top: 5px; font-size: 10px; letter-spacing: .22em;
+    text-transform: uppercase; color: #ffd98a; opacity: .65; }
+  .devhead { display: flex; justify-content: space-between; margin-bottom: 6px;
+    letter-spacing: .18em; text-transform: uppercase; color: #ffd98a; }
+  .devrow { display: grid; grid-template-columns: 100px 1fr 42px; gap: 8px; align-items: center; }
+  .devrow label { opacity: .8; }
+  .devrow span { text-align: right; color: #ffe6ad; }
+  .devrow input[type=range] { width: 100%; accent-color: #ffce7a; height: 3px; }
+  .devfoot { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .devfoot button {
+    font: 11px ui-monospace, Menlo, monospace; letter-spacing: .1em;
+    padding: 3px 10px; border-radius: 6px; cursor: pointer;
+    background: rgba(255,214,120,.08); border: 1px solid rgba(255,205,120,.35); color: #ffe6ad;
+  }
+  .devfoot button:hover { background: rgba(255,214,120,.18); }
+  .devnote { opacity: .5; margin-left: auto; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="intro" class="overlay">
+  <div class="sub">a shape has two natures</div>
+  <h1><span class="k">KIKI</span>&nbsp;//&nbsp;<span class="b">BOUBA</span></h1>
+  <div class="tag">your body is a living membrane. <b>round</b>, it flows like water —
+    drift over something smaller and your skin simply closes around it.
+    <b>click</b>, and it crystallizes: a slow spiked star that grinds whatever it
+    touches — including whoever is trapped inside you.
+    swallowed? push the soft wall until you slip through. or crystallize
+    in their belly and cut your way out.</div>
+  <button id="dive" type="button">enter the soup ↯</button>
+</div>
+
+<div id="stats" class="panel">
+  <div id="form">BOUBA&nbsp;~</div>
+  <div id="stambox"><div id="stam"></div></div>
+  <div class="row">mass&nbsp;&nbsp;&nbsp; <b id="mass">0</b></div>
+  <div class="row">belly&nbsp;&nbsp; <b id="belly">0</b></div>
+  <div class="row">bursts&nbsp; <b id="eaten">0</b></div>
+</div>
+<div id="toast"></div>
+<div id="state" class="panel"></div>
+<div id="hint" class="panel">mouse to steer · click / space to shift form · R reset · ` dev</div>
+
+<div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
+<div id="dev">
+  <div class="devhead"><span>tuning</span><span id="fps"></span></div>
+  <div id="devrows"></div>
+  <div class="devfoot">
+    <button id="devdefaults" type="button">defaults</button>
+    <button id="devpause" type="button">pause</button>
+    <span class="devnote">® on R reset</span>
+  </div>
+</div>
+
+<script>
+/* ==================================================================
+ *  KIKI // BOUBA — soft-body soup
+ *
+ *  Every creature is a real membrane: a nucleus plus a ring of nodes
+ *  bound by radial + edge springs. There are NO discrete actions —
+ *  everything emerges from forces:
+ *
+ *  · membrane nodes are repelled (magnet-like, finite) by foreign
+ *    nuclei, and bouba skin adheres lightly to smaller bodies — so a
+ *    big blob drifting over a small one simply FLOWS AROUND it and
+ *    seals behind. Swallowing is just what soft matter does.
+ *  · the repulsion is finite, so a hard sustained push squeezes
+ *    THROUGH a soft membrane: escape is emergent too.
+ *  · kiki = the same membrane crystallized: stiff springs, a rotating
+ *    star rest-shape, a tighter rest volume. Its nodes grind mass off
+ *    whatever they touch — one force that is both stabbing (from
+ *    outside) and digestion (squeezing a captive from all sides).
+ *  · a captive can crystallize INSIDE you and cut its way out.
+ * ================================================================== */
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const intro = document.getElementById('intro');
+const formEl = document.getElementById('form');
+const stamEl = document.getElementById('stam');
+const massEl = document.getElementById('mass');
+const bellyEl = document.getElementById('belly');
+const eatenEl = document.getElementById('eaten');
+const toastEl = document.getElementById('toast');
+const stateEl = document.getElementById('state');
+
+let W = 0, H = 0, DPR = 1, MINSIDE = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight; MINSIDE = Math.min(W, H);
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const rand = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpC = (a, b, t) => [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+const clamp01 = t => t < 0 ? 0 : t > 1 ? 1 : t;
+const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+const TAU = Math.PI * 2;
+const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
+
+/* ------------------ dev tuning (press ` in game) ------------------ */
+const TUNE_DEF = {
+  time: 1,        // sim speed
+  speed: 1,       // bouba drive multiplier
+  kikiSpd: 0.55,  // kiki drive as a fraction of bouba
+  drain: 20,      // kiki stamina drain /s
+  regen: 16,      // bouba stamina regen /s
+  softK: 26,      // bouba membrane stiffness
+  hardK: 150,     // kiki membrane stiffness
+  rep: 420,       // membrane <-> foreign-nucleus repulsion (finite!)
+  adhere: 26,     // bouba skin adhesion to smaller bodies (drives engulfment)
+  grind: 26,      // mass/s a kiki node grinds off what it touches
+  squeeze: 0.74,  // kiki rest-volume factor (crushes captives inward)
+  spikes: 7,      // star points
+  spin: 1.1,      // star rotation (rad/s)
+  bots: 8,        // rivals (on R reset)
+  food: 140,      // pellets (on R reset)
+  wobble: 1,      // idle jiggle
+  glow: 1,
+  bgStars: 0.5,
+};
+const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('kb2_tune') || '{}'), { paused: false }); } catch (e) {}
+function saveTune() {
+  try { const { paused, ...t } = TUNE; localStorage.setItem('kb2_tune', JSON.stringify(t)); } catch (e) {}
+}
+
+/* --------------------------- world ------------------------------- */
+const WORLD_R = 2400;
+const NPTS = 24;                       // membrane nodes per creature
+
+const HUES = [
+  [255, 205, 150],  // player — warm cream
+  [150, 226, 214], [244, 148, 170], [186, 152, 255], [166, 226, 148],
+  [140, 178, 255], [255, 178, 128], [222, 142, 226], [252, 220, 132],
+  [150, 210, 250], [242, 160, 200], [172, 236, 190],
+];
+const KIKI_TINT = [255, 244, 224];
+
+let creatures = [], pellets = [];
+const restR = c => 14 + Math.sqrt(c.mass) * 2.0;
+const nucR = c => restR(c) * 0.42;
+
+function makeCreature(o) {
+  const c = Object.assign({
+    x: 0, y: 0, vx: 0, vy: 0,
+    mass: 60, hue: HUES[1], isPlayer: false,
+    k: 0, morph: 0, stam: 100,
+    spikePhase: rand(0, TAU), wobPh: rand(0, TAU),
+    nodes: null, host: null, inv: 0,
+    think: rand(0, 0.3), tx: 0, ty: 0,
+    bursts: 0, grindT: 0,
+  }, o);
+  return c;
+}
+function seedNodes(c) {
+  const R = restR(c);
+  c.nodes = [];
+  for (let i = 0; i < NPTS; i++) {
+    const a = i / NPTS * TAU;
+    c.nodes.push({ x: c.x + Math.cos(a) * R, y: c.y + Math.sin(a) * R, vx: 0, vy: 0 });
+  }
+}
+function spawnAt(c) {
+  const a = rand(0, TAU), d = rand(WORLD_R * 0.25, WORLD_R * 0.88);
+  c.x = Math.cos(a) * d; c.y = Math.sin(a) * d;
+  c.vx = c.vy = 0;
+  seedNodes(c);
+}
+function makePellet() {
+  const a = rand(0, TAU), d = Math.sqrt(Math.random()) * WORLD_R * 0.96;
+  return {
+    x: Math.cos(a) * d, y: Math.sin(a) * d, vx: 0, vy: 0,
+    mass: rand(3, 6.5),
+    hue: HUES[(Math.random() * HUES.length) | 0],
+    sharp: Math.random() < 0.4,
+    wob: rand(0, TAU),
+  };
+}
+let player = null;
+function buildWorld() {
+  creatures = []; pellets = [];
+  player = makeCreature({ mass: 75, hue: HUES[0], isPlayer: true });
+  spawnAt(player);
+  creatures.push(player);
+  for (let i = 0; i < Math.round(TUNE.bots); i++) {
+    const c = makeCreature({ mass: rand(40, 160), hue: HUES[1 + i % (HUES.length - 1)] });
+    spawnAt(c);
+    creatures.push(c);
+  }
+  for (let i = 0; i < Math.round(TUNE.food); i++) pellets.push(makePellet());
+}
+
+/* -------------------------- effects ------------------------------ */
+let toastT = 0;
+function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 2.0; }
+const ringFx = [];
+const floaters = [];
+let shake = 0;
+function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
+function spill(x, y, hue, n, m) {
+  for (let i = 0; i < n; i++) {
+    const p = makePellet();
+    p.x = x + gauss() * 16; p.y = y + gauss() * 16;
+    p.hue = hue; p.mass = m / n;
+    p.vx = gauss() * 180; p.vy = gauss() * 180;
+    pellets.push(p);
+  }
+  while (pellets.length > TUNE.food + 180) pellets.splice((Math.random() * TUNE.food) | 0, 1);
+}
+function burst(c, by) {
+  spill(c.x, c.y, c.hue, 8, Math.max(20, c.mass) * 0.6);
+  ringFx.push({ x: c.x, y: c.y, r0: restR(c), t: 1, hue: c.hue });
+  if (c.isPlayer) { showToast('burst! reborn small.'); shake = 1; }
+  else if (by && by.isPlayer) { showToast('burst a rival'); by.bursts++; }
+  c.mass = c.isPlayer ? 55 : rand(40, 90);
+  c.k = 0; c.morph = 0; c.stam = 100; c.inv = 2.5;
+  spawnAt(c);
+}
+
+/* --------------------------- camera ------------------------------ */
+const cam = { x: 0, y: 0, zoom: 0.12 };
+const overviewCam = () => ({ x: 0, y: 0, zoom: 0.42 * MINSIDE / WORLD_R });
+function playZoom() {
+  const focus = player.host ? restR(player.host) * 2.6 : restR(player) * 6.2;
+  return clamp(0.34 * MINSIDE / focus, 0.18, 1.8);
+}
+let mode = 'overview', anim = null;
+function flyTo(target, to, dur) {
+  anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
+}
+function enterPlay() {
+  if (mode === 'play' || mode === 'diving') return;
+  mode = 'diving';
+  flyTo('play', { x: player.x, y: player.y, zoom: playZoom() }, 2.2);
+  intro.classList.add('gone');
+}
+const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
+const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.zoom + cam.y ];
+
+/* --------------------------- input ------------------------------- */
+const mouse = { sx: W/2, sy: H/2 };
+window.addEventListener('pointermove', e => {
+  if (e.target !== canvas) return;
+  mouse.sx = e.clientX; mouse.sy = e.clientY;
+});
+function toggleForm() {
+  if (mode !== 'play') return;
+  if (player.k === 0 && player.stam < 12) { showToast('too tired to crystallize'); return; }
+  player.k = player.k === 0 ? 1 : 0;
+}
+canvas.addEventListener('pointerdown', () => { if (mode === 'play') toggleForm(); });
+document.getElementById('dive').addEventListener('click', enterPlay);
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') { toggleForm(); e.preventDefault(); }
+  else if (e.key === 'Escape') { if (mode === 'play') { mode = 'rising'; flyTo('overview', overviewCam(), 1.8); intro.classList.remove('gone'); } }
+  else if (e.key === 'r' || e.key === 'R') resetGame();
+  else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
+  else if (e.key === 'p' || e.key === 'P') togglePause();
+});
+function resetGame() {
+  buildWorld();
+  anim = null; mode = 'overview';
+  cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+  intro.classList.remove('gone');
+  showToast('soup reset');
+}
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.05, 5);
+}, { passive: false });
+
+/* --------------------------- dev panel --------------------------- */
+const PARAMS = [
+  ['#', 'soup'],
+  ['time',    'sim speed',     0,    3,    0.05],
+  ['speed',   'bouba drive',   0.4,  2,    0.05],
+  ['kikiSpd', 'kiki drive ×',  0.2,  1,    0.05],
+  ['drain',   'kiki drain',    5,    60,   1   ],
+  ['regen',   'stam regen',    4,    40,   1   ],
+  ['#', 'membrane'],
+  ['softK',   'soft skin',     8,    80,   1   ],
+  ['hardK',   'hard skin',     60,   300,  5   ],
+  ['rep',     'repulsion',     100,  900,  10  ],
+  ['adhere',  'adhesion',      0,    80,   1   ],
+  ['grind',   'grind dps',     3,    40,   0.5 ],
+  ['squeeze', 'kiki squeeze',  0.5,  0.95, 0.01],
+  ['spikes',  'star points',   4,    12,   1   ],
+  ['spin',    'star spin',     0,    3,    0.05],
+  ['#', 'world'],
+  ['bots',    'rivals ®',      2,    14,   1   ],
+  ['food',    'pellets ®',     40,   300,  10  ],
+  ['wobble',  'wobble',        0,    2,    0.05],
+  ['glow',    'glow',          0,    2,    0.05],
+  ['bgStars', 'bg stars',      0,    1,    0.05],
+];
+const devPanel = document.getElementById('dev');
+const devRows = document.getElementById('devrows');
+const fpsEl = document.getElementById('fps');
+let devOpen = false;
+const devInputs = {};
+for (const [key, label, min, max, step] of PARAMS) {
+  if (key === '#') {
+    const h = document.createElement('div');
+    h.className = 'devsec'; h.textContent = label;
+    devRows.appendChild(h);
+    continue;
+  }
+  const row = document.createElement('div'); row.className = 'devrow';
+  const lab = document.createElement('label'); lab.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = TUNE[key];
+  const val = document.createElement('span'); val.textContent = TUNE[key];
+  inp.addEventListener('input', () => {
+    TUNE[key] = parseFloat(inp.value);
+    val.textContent = TUNE[key];
+    saveTune();
+  });
+  devInputs[key] = { inp, val };
+  row.append(lab, inp, val);
+  devRows.appendChild(row);
+}
+function toggleDev(force) {
+  devOpen = force ?? !devOpen;
+  devPanel.style.display = devOpen ? 'block' : 'none';
+}
+document.getElementById('devchip').addEventListener('click', () => toggleDev());
+document.getElementById('devdefaults').addEventListener('click', () => {
+  Object.assign(TUNE, TUNE_DEF); saveTune();
+  for (const [key] of PARAMS) {
+    if (!devInputs[key]) continue;
+    devInputs[key].inp.value = TUNE[key]; devInputs[key].val.textContent = TUNE[key];
+  }
+});
+const pauseBtn = document.getElementById('devpause');
+function togglePause() {
+  TUNE.paused = !TUNE.paused;
+  pauseBtn.textContent = TUNE.paused ? 'resume' : 'pause';
+}
+pauseBtn.addEventListener('click', togglePause);
+
+/* ------------------------- soft-body sim -------------------------- */
+const speedOf = c => {
+  const base = 300 * TUNE.speed * Math.pow(46 / restR(c), 0.35);
+  return c.morph > 0.5 ? base * TUNE.kikiSpd : base;
+};
+function updateForm(c, dt) {
+  if (c.k === 1) {
+    c.stam -= TUNE.drain * dt;
+    if (c.stam <= 0) { c.stam = 0; c.k = 0; if (c.isPlayer) showToast('exhausted — soft again'); }
+  } else {
+    c.stam = Math.min(100, c.stam + TUNE.regen * dt);
+  }
+  c.morph += clamp(c.k - c.morph, -dt / 0.4, dt / 0.4);
+  c.spikePhase += TUNE.spin * dt * (0.25 + 0.75 * c.morph);
+  if (c.inv > 0) c.inv -= dt;
+}
+// membrane internal forces: radial spring to a rest shape (round or star),
+// edge springs, smoothing, damping. Rest volume shrinks when crystallized.
+function membraneStep(c, h) {
+  const m = c.morph;
+  const R = restR(c) * lerp(1, TUNE.squeeze, m);
+  const NS = Math.round(TUNE.spikes);
+  const kR = lerp(TUNE.softK, TUNE.hardK, m);
+  // star perimeters are long: edge springs must loosen + lengthen as the
+  // skin crystallizes, or they crush the spikes into a buckled knot
+  const kE = lerp(24, 34, m);
+  const restE = R * TAU / NPTS * lerp(1, 1.32, m);
+  const damp = Math.exp(-3.2 * h);
+  const wobA = 0.05 * TUNE.wobble * (1 - m);
+  for (let i = 0; i < NPTS; i++) {
+    const n = c.nodes[i];
+    let dx = n.x - c.x, dy = n.y - c.y;
+    let d = Math.hypot(dx, dy) + 1e-4;
+    const ang = Math.atan2(dy, dx);
+    // rest radius: wobbly circle -> rotating star
+    const sp = Math.pow(Math.max(0, Math.cos(ang * NS + c.spikePhase)), 3);
+    const rest = R * lerp(
+      1 + wobA * Math.sin(ang * 3 + perfNow * 1.6 + c.wobPh),
+      0.72 + 0.74 * sp,
+      m
+    );
+    const fr = kR * (rest - d);
+    n.vx += (dx / d) * fr * h;
+    n.vy += (dy / d) * fr * h;
+    c.vx -= (dx / d) * fr * h * 0.06;      // reaction tugs the nucleus
+    c.vy -= (dy / d) * fr * h * 0.06;
+    // edge springs + smoothing
+    const nn = c.nodes[(i + 1) % NPTS], pp = c.nodes[(i - 1 + NPTS) % NPTS];
+    let ex = nn.x - n.x, ey = nn.y - n.y;
+    let ed = Math.hypot(ex, ey) + 1e-4;
+    const fe = kE * (ed - restE);
+    n.vx += (ex / ed) * fe * h; n.vy += (ey / ed) * fe * h;
+    nn.vx -= (ex / ed) * fe * h; nn.vy -= (ey / ed) * fe * h;
+    const kS = 6 - 4 * m;                  // smoothing also fights spikes
+    n.vx += ((pp.x + nn.x) / 2 - n.x) * kS * h;
+    n.vy += ((pp.y + nn.y) / 2 - n.y) * kS * h;
+    n.vx *= damp; n.vy *= damp;
+    const v = Math.hypot(n.vx, n.vy);
+    if (v > 900) { n.vx *= 900/v; n.vy *= 900/v; }
+    n.x += n.vx * h; n.y += n.vy * h;
+  }
+}
+// the whole contact model: foreign nuclei repel membrane nodes (finite,
+// magnet-like), bouba skin adheres to smaller bodies, kiki nodes grind.
+function interact(A, B, h) {
+  const dx = B.x - A.x, dy = B.y - A.y;
+  const gate = restR(A) * 1.7 + restR(B) * 1.7;
+  if (dx > gate || dx < -gate || dy > gate || dy < -gate) return;
+
+  const pairs = [[A, B], [B, A]];
+  for (const [me, other] of pairs) {
+    const rN = nucR(other);
+    const contactR = rN + 6;
+    const canGrind = me.morph > 0.5 && other.inv <= 0;
+    const canStick = me.morph < 0.4 && restR(me) > restR(other) * 1.12 && other.morph < 0.5;
+    // the engulfment asymmetry: a much bigger body's skin YIELDS and parts
+    // around small outside bodies (weak reaction), but once they're deep
+    // inside, the same skin pushes back at full strength — containment.
+    // similar sizes always collide at full strength.
+    const dCenter = Math.hypot(other.x - me.x, other.y - me.y);
+    const sizeDom = clamp01((restR(me) / restR(other) - 1.05) / 0.6);
+    const insideT = clamp01(1.6 - dCenter / (restR(me) * 0.75));
+    // momentum fairness: a small membrane barely moves a big body
+    const ratio = restR(me) / restR(other);
+    const massK = clamp(ratio * ratio * ratio, 0.04, 1);
+    const reactK = massK * lerp(0.85, lerp(0.1, 0.85, insideT), sizeDom);
+    let grinding = false;
+    for (const n of me.nodes) {
+      const ndx = n.x - other.x, ndy = n.y - other.y;
+      if (ndx > contactR + 30 || ndx < -contactR - 30 || ndy > contactR + 30 || ndy < -contactR - 30) continue;
+      const nd = Math.hypot(ndx, ndy) + 1e-4;
+      if (nd < contactR) {
+        // finite repulsion: soft membranes can be pushed through;
+        // crystallized skin repels much harder — a sealed cell
+        const f = TUNE.rep * (1 + me.morph * 1.4) * (1 - nd / contactR);
+        n.vx += (ndx / nd) * f * h;
+        n.vy += (ndy / nd) * f * h;
+        other.vx -= (ndx / nd) * f * h * reactK;
+        other.vy -= (ndy / nd) * f * h * reactK;
+        if (canGrind) grinding = true;
+      } else if (canStick && nd < contactR + 26) {
+        // adhesion: skin creeps along the smaller body -> engulfment
+        const f = TUNE.adhere * (1 - (nd - contactR) / 26);
+        n.vx -= (ndx / nd) * f * h;
+        n.vy -= (ndy / nd) * f * h;
+      }
+    }
+    // cytoplasm: a body deep inside rides the host's interior fluid
+    if (sizeDom > 0.5 && insideT > 0.2) {
+      const kd = Math.min(1, 6 * insideT * h);
+      other.vx += (me.vx - other.vx) * kd;
+      other.vy += (me.vy - other.vy) * kd;
+    }
+    if (grinding) {
+      const dm = TUNE.grind * h;
+      other.mass = Math.max(10, other.mass - dm);
+      me.mass += dm * 0.7;
+      me.grindT = 0.15;
+      if (Math.random() < h * 14) {
+        ringFx.push({ x: other.x + gauss() * 8, y: other.y + gauss() * 8, r0: 8, t: 0.6, hue: [255, 150, 150] });
+      }
+      if ((other.isPlayer || me.isPlayer) && Math.random() < h * 5) shake = Math.max(shake, 0.35);
+      if (other.mass <= 12) burst(other, me);
+    }
+  }
+  // nuclei never coincide — the lighter one yields
+  const d = Math.hypot(dx, dy) + 1e-4;
+  const rr = (nucR(A) + nucR(B)) * 1.05;
+  if (d < rr) {
+    const f = 260 * (1 - d / rr);
+    const mSum = A.mass + B.mass;
+    A.vx -= (dx / d) * f * h * 2 * B.mass / mSum;
+    A.vy -= (dy / d) * f * h * 2 * B.mass / mSum;
+    B.vx += (dx / d) * f * h * 2 * A.mass / mSum;
+    B.vy += (dy / d) * f * h * 2 * A.mass / mSum;
+  }
+}
+function driveNucleus(c, dt) {
+  const px = c.x, py = c.y;
+  const dxT = c.tx - c.x, dyT = c.ty - c.y;
+  const d = Math.hypot(dxT, dyT) + 1e-4;
+  const sMax = speedOf(c);
+  const want = Math.min(sMax, d * 3.2);
+  const k = Math.min(1, dt * 4.5);
+  c.vx += ((dxT / d) * want - c.vx) * k;
+  c.vy += ((dyT / d) * want - c.vy) * k;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  const rr = Math.hypot(c.x, c.y), lim = WORLD_R - nucR(c);
+  if (rr > lim) { c.x *= lim / rr; c.y *= lim / rr; }
+  // the membrane rides the body frame: nodes inherit the nucleus's
+  // translation, springs only resolve DEFORMATION — no more lag-crumple
+  const mx = c.x - px, my = c.y - py;
+  for (const n of c.nodes) { n.x += mx; n.y += my; }
+}
+function eatPellets(c, dt) {
+  const r = restR(c) * 0.82;
+  for (let i = pellets.length - 1; i >= 0; i--) {
+    const p = pellets[i];
+    const dx = p.x - c.x, dy = p.y - c.y;
+    if (dx > r || dx < -r || dy > r || dy < -r) continue;
+    if (dx*dx + dy*dy < r*r) {
+      c.mass += p.mass * (c.morph > 0.5 ? 0.4 : 1);
+      if (pellets.length <= TUNE.food) Object.assign(p, makePellet());
+      else pellets.splice(i, 1);
+    }
+  }
+}
+// who is inside whom (for HUD/AI only — physics doesn't care)
+function updateContainment() {
+  for (const c of creatures) c.host = null;
+  for (const c of creatures) {
+    for (const o of creatures) {
+      if (o === c) continue;
+      const d = Math.hypot(o.x - c.x, o.y - c.y);
+      if (restR(o) > restR(c) * 1.15 && d < restR(o) * 0.8) { c.host = o; break; }
+    }
+  }
+}
+function botThink(c, dt) {
+  c.think -= dt;
+  if (c.think > 0) return;
+  c.think = rand(0.25, 0.4);
+  const myR = restR(c);
+  // trapped inside someone
+  if (c.host) {
+    const h = c.host;
+    if (h.morph > 0.5 && c.stam > 45) c.k = 1;            // fight the squeeze with spikes
+    else if (h.morph < 0.3 && c.k === 1 && c.stam < 70) c.k = 0;
+    // push out along the shortest exit
+    c.tx = c.x + (c.x - h.x) * 6; c.ty = c.y + (c.y - h.y) * 6;
+    return;
+  }
+  // captives inside me? squeeze
+  let captive = null;
+  for (const o of creatures) if (o.host === c) { captive = o; break; }
+  if (captive && c.stam > 35 && c.k === 0) c.k = 1;
+  if (!captive && c.k === 1 && c.stam < 55) c.k = 0;
+  // threats & prey
+  let danger = null, dd = 1e9, prey = null, pd = 1e9;
+  for (const o of creatures) {
+    if (o === c) continue;
+    const d = Math.hypot(o.x - c.x, o.y - c.y);
+    const oR = restR(o);
+    const threat = (o.morph > 0.5 && oR > myR * 0.55) || (o.morph <= 0.5 && oR > myR * 1.2);
+    if (threat && d < 640 && d < dd) { danger = o; dd = d; }
+    if (o.morph <= 0.5 && myR > oR * 1.25 && d < 760 && d < pd) { prey = o; pd = d; }
+  }
+  if (danger && dd < 430) {
+    c.tx = c.x + (c.x - danger.x) * 3; c.ty = c.y + (c.y - danger.y) * 3;
+    if (dd < 210 && c.stam > 45 && danger.morph <= 0.5 && !captive) c.k = 1;  // brace: spikes resist swallowing
+    return;
+  }
+  if (prey && pd < 680) { c.tx = prey.x; c.ty = prey.y; return; }
+  let bx = c.x, by = c.y, bd = 1e9;
+  for (let k = 0; k < 24; k++) {
+    const p = pellets[(Math.random() * pellets.length) | 0];
+    if (!p) break;
+    const d = Math.hypot(p.x - c.x, p.y - c.y);
+    if (d < bd) { bd = d; bx = p.x; by = p.y; }
+  }
+  c.tx = bx; c.ty = by;
+}
+
+/* --------------------------- drawing ----------------------------- */
+const BG_TILE = 520;
+const bgTileStars = Array.from({ length: 12 }, () => ({
+  ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
+  ws: rand(2, 4.4), hue: HUES[(Math.random() * HUES.length) | 0],
+  rank: Math.random(), ph: rand(0, TAU), tws: rand(0.4, 1.2),
+}));
+function drawBackdrop() {
+  ctx.fillStyle = '#0a0616'; ctx.fillRect(0, 0, W, H);
+  const [pcx, pcy] = toScreen(player.x, player.y);
+  const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
+  g.addColorStop(0, 'rgba(66,24,88,0.32)');
+  g.addColorStop(0.5, 'rgba(36,12,56,0.2)');
+  g.addColorStop(1, 'rgba(10,4,20,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  const fade = clamp01((cam.zoom - 0.2) / 0.4) * TUNE.bgStars;
+  if (fade <= 0.005) return;
+  const keep = clamp01(cam.zoom * 0.6);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const [wx0, wy0] = toWorld(-20, -20);
+  const [wx1, wy1] = toWorld(W + 20, H + 20);
+  const ix0 = Math.floor(wx0 / BG_TILE), ix1 = Math.floor(wx1 / BG_TILE);
+  const iy0 = Math.floor(wy0 / BG_TILE), iy1 = Math.floor(wy1 / BG_TILE);
+  if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) <= 400) {
+    for (let iy = iy0; iy <= iy1; iy++) for (let ix = ix0; ix <= ix1; ix++) {
+      const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
+      for (const st of bgTileStars) {
+        if (st.rank > keep) continue;
+        const wx = ix * BG_TILE + (st.ox + j * 260) % BG_TILE;
+        const wy = iy * BG_TILE + (st.oy + j * 410) % BG_TILE;
+        const [sx, sy] = toScreen(wx, wy);
+        if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
+        const s = clamp(st.ws * cam.zoom, 2.5, 7);
+        const tw = 0.6 + 0.4 * Math.sin(perfNow * st.tws + st.ph + j * 6);
+        ctx.fillStyle = rgba(st.hue, fade * 0.35 * tw);
+        ctx.fillRect(sx - s/2, sy - s/2, s, s);
+      }
+    }
+  }
+  ctx.restore();
+}
+function drawPellets() {
+  ctx.globalCompositeOperation = 'lighter';
+  const m = 20;
+  for (const p of pellets) {
+    const [sx, sy] = toScreen(p.x, p.y);
+    if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
+    const s = clamp((5 + p.mass * 0.5) * cam.zoom, 1.5, 12);
+    if (p.sharp) {
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(p.wob + perfNow * 0.4);
+      ctx.fillStyle = rgba(p.hue, 0.85);
+      ctx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const a = k * TAU / 8;
+        const r = (k % 2 === 0 ? s : s * 0.42);
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      const wob = 1 + 0.15 * Math.sin(perfNow * 2 + p.wob);
+      ctx.fillStyle = rgba(p.hue, 0.8);
+      ctx.beginPath(); ctx.arc(sx, sy, s * 0.62 * wob, 0, TAU); ctx.fill();
+    }
+  }
+}
+function drawCreature(c) {
+  const R = restR(c) * cam.zoom;
+  const [cx, cy] = toScreen(c.x, c.y);
+  if (cx < -R*3 || cx > W + R*3 || cy < -R*3 || cy > H + R*3) return;
+  const m = c.morph;
+  const col = lerpC(c.hue, KIKI_TINT, m * 0.55);
+  const blink = c.inv > 0 && Math.sin(perfNow * 16) > 0;
+
+  ctx.globalCompositeOperation = 'lighter';
+  if (TUNE.glow > 0.01) {
+    const g = ctx.createRadialGradient(cx, cy, R * 0.4, cx, cy, R * (1.9 + m * 0.5));
+    g.addColorStop(0, rgba(col, (0.1 + 0.1 * m + (c.grindT > 0 ? 0.12 : 0)) * TUNE.glow));
+    g.addColorStop(1, rgba(col, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * (1.9 + m * 0.5), 0, TAU); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // membrane path through the actual simulated nodes
+  const pts = c.nodes.map(n => toScreen(n.x, n.y));
+  const sharp = m > 0.45;
+  ctx.beginPath();
+  for (let i = 0; i <= NPTS; i++) {
+    const p = pts[i % NPTS];
+    if (i === 0) ctx.moveTo((pts[NPTS-1][0] + p[0]) / 2, (pts[NPTS-1][1] + p[1]) / 2);
+    else {
+      const prev = pts[(i - 1) % NPTS];
+      if (sharp) { ctx.lineTo(prev[0], prev[1]); ctx.lineTo((prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2); }
+      else ctx.quadraticCurveTo(prev[0], prev[1], (prev[0] + p[0]) / 2, (prev[1] + p[1]) / 2);
+    }
+  }
+  ctx.closePath();
+  ctx.fillStyle = rgba(lerpC(col, [10, 6, 22], 0.6), blink ? 0.3 : 0.6);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, R * 0.055);
+  ctx.strokeStyle = rgba(col, blink ? 0.4 : 0.95);
+  ctx.stroke();
+
+  // nucleus
+  const nr = Math.max(nucR(c) * cam.zoom * 0.55, 3);
+  ctx.globalCompositeOperation = 'lighter';
+  const ng = ctx.createRadialGradient(cx, cy, 0, cx, cy, nr * 2.6);
+  ng.addColorStop(0, rgba([255, 252, 244], blink ? 0.4 : 0.95));
+  ng.addColorStop(0.4, rgba(col, 0.5));
+  ng.addColorStop(1, rgba(col, 0));
+  ctx.fillStyle = ng;
+  ctx.beginPath(); ctx.arc(cx, cy, nr * 2.6, 0, TAU); ctx.fill();
+  if (c.grindT > 0) c.grindT -= 0.016;
+}
+function drawBoundary() {
+  const [sx, sy] = toScreen(0, 0);
+  const R = WORLD_R * cam.zoom;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.rect(0, 0, W, H);
+  ctx.arc(sx, sy, R, 0, TAU, true);
+  ctx.fillStyle = 'rgba(6,3,14,0.66)'; ctx.fill('evenodd');
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,170,215,0.3)';
+  ctx.shadowColor = 'rgba(255,120,190,0.7)'; ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+function drawEffects(dt) {
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = ringFx.length - 1; i >= 0; i--) {
+    const b = ringFx[i];
+    b.t -= dt * 1.4;
+    if (b.t <= 0) { ringFx.splice(i, 1); continue; }
+    const [x, y] = toScreen(b.x, b.y);
+    const R = (b.r0 + (1 - b.t) * b.r0 * 5) * cam.zoom;
+    ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke();
+  }
+}
+function drawFloaters(dt) {
+  if (!floaters.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.font = '600 13px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'center';
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.t -= dt * 0.75;
+    if (f.t <= 0) { floaters.splice(i, 1); continue; }
+    const [x, y] = toScreen(f.x, f.y);
+    ctx.fillStyle = rgba(f.col, Math.min(1, f.t * 1.4));
+    ctx.fillText(f.txt, x, y - (1 - f.t) * 38);
+  }
+  ctx.restore();
+}
+function drawMinimap() {
+  const mmR = clamp(MINSIDE * 0.11, 56, 92);
+  const cxm = W - 20 - mmR, cym = 20 + mmR;
+  const scale = mmR / WORLD_R;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU);
+  ctx.fillStyle = 'rgba(10,5,20,0.5)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,170,215,0.35)'; ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
+  for (const c of creatures) {
+    const r = clamp(restR(c) * scale * 1.6, 1.6, 6);
+    ctx.beginPath(); ctx.arc(cxm + c.x * scale, cym + c.y * scale, r, 0, TAU);
+    ctx.fillStyle = rgba(c.morph > 0.5 ? lerpC(c.hue, KIKI_TINT, 0.6) : c.hue, 0.9);
+    ctx.fill();
+    if (c.isPlayer) { ctx.lineWidth = 1.4; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+    else if (c.morph > 0.5) { ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,120,120,0.9)'; ctx.stroke(); }
+  }
+  ctx.restore();
+  ctx.restore();
+}
+function drawCursor() {
+  const x = mouse.sx, y = mouse.sy;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,215,240,0.55)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x-11, y); ctx.lineTo(x-3, y); ctx.moveTo(x+3, y); ctx.lineTo(x+11, y);
+  ctx.moveTo(x, y-11); ctx.lineTo(x, y-3); ctx.moveTo(x, y+3); ctx.lineTo(x, y+11);
+  ctx.stroke();
+  ctx.restore();
+}
+function updateStateLine() {
+  if (mode !== 'play') { stateEl.textContent = ''; return; }
+  let txt = '', col = '#b795d8';
+  if (player.host) {
+    const h = player.host;
+    if (h.morph > 0.5) { txt = '⚠ being ground down — crystallize or push out!'; col = '#ff8a8a'; }
+    else { txt = 'inside — shove through the soft wall'; col = '#9cf0b0'; }
+  } else if (player.k === 1) {
+    txt = 'kiki: everything you touch, you grind'; col = '#ffe6a8';
+    if (player.stam < 25) { txt = 'stamina fading — you will soften soon'; col = '#ffb07e'; }
+  } else {
+    let danger = null, dd = 1e9, prey = null, pd = 1e9;
+    const pr = restR(player);
+    for (const c of creatures) {
+      if (c === player) continue;
+      const d = Math.hypot(c.x - player.x, c.y - player.y);
+      const cr = restR(c);
+      if ((cr > pr * 1.2 && c.morph < 0.5 || c.morph > 0.5) && d < 800 && d < dd) { danger = c; dd = d; }
+      if (pr > cr * 1.25 && c.morph < 0.5 && d < 800 && d < pd) { prey = c; pd = d; }
+    }
+    if (danger && dd < 480) { txt = danger.morph > 0.5 ? '⚠ kiki nearby — keep clear or crystallize' : '⚠ bigger blob near — it will flow around you'; col = '#ff9a8a'; }
+    else if (prey && pd < 600) { txt = 'smaller blob nearby — drift over it and your skin will take it'; col = '#9cf0b0'; }
+  }
+  stateEl.textContent = txt;
+  stateEl.style.color = col;
+}
+
+/* ----------------------------- loop ------------------------------ */
+buildWorld();
+cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+
+let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
+function frame(now) {
+  const dt0 = Math.min(0.04, (now - last) / 1000);
+  last = now; perfNow = now / 1000;
+  const live = (mode === 'play');
+  const dt = TUNE.paused ? 0 : dt0 * TUNE.time;
+
+  if (dt > 0) {
+    for (const p of pellets) {
+      if (p.vx || p.vy) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; }
+    }
+    for (const c of creatures) {
+      updateForm(c, dt);
+      if (c.isPlayer) {
+        if (live) { const [tx, ty] = toWorld(mouse.sx, mouse.sy); c.tx = tx; c.ty = ty; }
+      } else botThink(c, dt);
+      driveNucleus(c, dt);
+      eatPellets(c, dt);
+    }
+    // membrane physics substeps
+    const n = clamp(Math.ceil(dt / 0.008), 1, 4), h = dt / n;
+    for (let s = 0; s < n; s++) {
+      for (const c of creatures) membraneStep(c, h);
+      for (let i = 0; i < creatures.length; i++)
+        for (let j = i + 1; j < creatures.length; j++)
+          interact(creatures[i], creatures[j], h);
+    }
+    updateContainment();
+  }
+
+  // camera
+  if (anim) {
+    anim.t += dt0;
+    const k = clamp01(anim.t / anim.dur), e = easeInOut(k);
+    cam.x = lerp(anim.from.x, mode === 'diving' ? player.x : anim.to.x, e);
+    cam.y = lerp(anim.from.y, mode === 'diving' ? player.y : anim.to.y, e);
+    cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
+    if (k >= 1) { mode = anim.target; anim = null; }
+  } else if (mode === 'play') {
+    cam.x += (player.x + player.vx * 0.2 - cam.x) * Math.min(1, dt0 * 5);
+    cam.y += (player.y + player.vy * 0.2 - cam.y) * Math.min(1, dt0 * 5);
+    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt0 * 2.5);
+  } else if (mode === 'overview') {
+    cam.x += (0 - cam.x) * Math.min(1, dt0 * 2);
+    cam.y += (0 - cam.y) * Math.min(1, dt0 * 2);
+  }
+
+  fpsE += (1 / Math.max(dt0, 1e-3) - fpsE) * 0.06;
+  fpsT -= dt0;
+  if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
+
+  let jx = 0, jy = 0;
+  if (shake > 0) {
+    const j = shake * shake * 7 / cam.zoom;
+    jx = gauss() * j; jy = gauss() * j;
+    shake = Math.max(0, shake - dt0 * 1.6);
+  }
+  cam.x += jx; cam.y += jy;
+
+  drawBackdrop();
+  drawPellets();
+  // big blobs first so anything engulfed renders on top, visible inside
+  const order = [...creatures].sort((a, b) => restR(b) - restR(a));
+  for (const c of order) drawCreature(c);
+  drawEffects(dt0);
+  drawFloaters(dt0);
+  drawBoundary();
+  ctx.globalCompositeOperation = 'source-over';
+  const wantCursor = mode === 'play' ? 'none' : 'default';
+  if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
+  if (mode !== 'overview') drawMinimap();
+  if (mode === 'play') drawCursor();
+
+  cam.x -= jx; cam.y -= jy;
+
+  if (toastT > 0) { toastT -= dt0; if (toastT <= 0) toastEl.classList.remove('show'); }
+
+  const kiki = player.morph > 0.5;
+  formEl.textContent = kiki ? 'KIKI ^' : 'BOUBA ~';
+  formEl.className = kiki ? 'kiki' : '';
+  stamEl.style.width = clamp(player.stam, 0, 100) + '%';
+  massEl.textContent = Math.round(player.mass);
+  bellyEl.textContent = creatures.filter(c => c.host === player).length;
+  eatenEl.textContent = player.bursts;
+  updateStateLine();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
