@@ -99,11 +99,12 @@
   <div class="mode" data-mode="add"><b>2</b>add</div>
   <div class="mode" data-mode="dec"><b>3</b>decrease</div>
   <div class="mode" data-mode="del"><b>4</b>delete</div>
+  <div class="mode" data-mode="ctrl"><b>5</b>control</div>
 </div>
 
 <div id="count">blobs <b id="nblobs">0</b> · nodes <b id="nnodes">0</b></div>
 <div id="toast"></div>
-<div id="hint">click to use mode (hold for add/decrease) · 1–4 modes · R clear · ` dev</div>
+<div id="hint">click to use mode (hold for add/decrease) · control: click a blob, it follows the cursor · 1–5 modes · R clear · ` dev</div>
 
 <div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
 <div id="dev">
@@ -163,13 +164,14 @@ const TUNE_DEF = {
   grow: 9000,     // mass px²/s pumped while holding add / decrease
   seg: 13,        // px of membrane per node (smaller = more resolution)
   pressure: 3200, // incompressibility (the liquid feel)
-  tension: 22,    // surface tension (edge springs)
-  smooth: 8,      // curvature smoothing
+  tension: 45,    // surface tension (edge springs) — rounds shapes back
+  smooth: 11,     // curvature smoothing
   damp: 2.6,      // velocity damping /s
   wobble: 1,      // idle liveliness noise
   poke: 1100,     // cursor push force
   pokeR: 80,      // cursor push radius
-  squish: 500,    // blob-vs-blob softness
+  squish: 900,    // membrane-vs-membrane contact force
+  swim: 1100,     // controlled blob steering force
   gravity: 0,     // pull everything down (try it)
   drift: 14,      // gentle brownian wander
 };
@@ -279,8 +281,8 @@ function blobStep(b, h) {
     n.vy += Math.cos(t * 1.1 + b.seed * 2 + i * 1.3) * wob * h;
     // gravity
     n.vy += TUNE.gravity * h;
-    // cursor pokes the goo aside
-    if (mouse.in) {
+    // cursor pokes the goo aside (not the blob you're driving)
+    if (mouse.in && b !== selected) {
       const mdx = n.x - mouse.x, mdy = n.y - mouse.y;
       const md = Math.hypot(mdx, mdy);
       if (md < TUNE.pokeR && md > 0.01) {
@@ -301,23 +303,51 @@ function blobStep(b, h) {
     if (n.y > H - m) { n.y = H - m; if (n.vy > 0) n.vy *= -0.4; }
   }
 }
-// blobs squish each other: nodes are pushed out of other blobs' bodies
+// real membrane contact: nodes of different blobs repel at short range,
+// so pressed blobs flatten against each other instead of overlapping
 function squish(A, B, h) {
   const rA = Math.sqrt(A.mass / Math.PI), rB = Math.sqrt(B.mass / Math.PI);
   const dx = B.x - A.x, dy = B.y - A.y;
-  const gate = (rA + rB) * 1.3;
-  if (dx > gate || dx < -gate || dy > gate || dy < -gate) return;
-  const pairs = [[A, B, rB], [B, A, rA]];
-  for (const [me, other, oR] of pairs) {
-    for (const n of me.nodes) {
-      const ndx = n.x - other.x, ndy = n.y - other.y;
-      const nd = Math.hypot(ndx, ndy) + 1e-4;
-      if (nd < oR) {
-        const f = TUNE.squish * (1 - nd / oR);
-        n.vx += (ndx / nd) * f * h;
-        n.vy += (ndy / nd) * f * h;
+  const d = Math.hypot(dx, dy);
+  if (d > rA + rB + 40) return;
+  const range = 18, rep = TUNE.squish;
+  for (const n of A.nodes) {
+    for (const m of B.nodes) {
+      const ex = m.x - n.x; if (ex > range || ex < -range) continue;
+      const ey = m.y - n.y; if (ey > range || ey < -range) continue;
+      const ed = Math.hypot(ex, ey) + 1e-4;
+      if (ed < range) {
+        const f = rep * (1 - ed / range);
+        n.vx -= (ex / ed) * f * h; n.vy -= (ey / ed) * f * h;
+        m.vx += (ex / ed) * f * h; m.vy += (ey / ed) * f * h;
       }
     }
+  }
+  // deep-overlap: bodies are incompressible — the force ramps hard with
+  // depth, and the lighter blob yields more
+  const thr = (rA + rB) * 0.62;
+  if (d < thr) {
+    const ux = dx / (d + 1e-4), uy = dy / (d + 1e-4);
+    const f = 900 * Math.pow(1 - d / thr, 1.5);
+    const mSum = A.mass + B.mass;
+    const fA = f * 2 * B.mass / mSum, fB = f * 2 * A.mass / mSum;
+    for (const n of A.nodes) { n.vx -= ux * fA * h; n.vy -= uy * fA * h; }
+    for (const n of B.nodes) { n.vx += ux * fB * h; n.vy += uy * fB * h; }
+  }
+}
+// control mode: the selected blob swims toward the cursor, leading edge first
+function steer(b, h) {
+  const dx = mouse.x - b.x, dy = mouse.y - b.y;
+  const d = Math.hypot(dx, dy) + 1e-4;
+  const k = clamp(d / 140, 0, 1);
+  if (k < 0.02) return;
+  const ux = dx / d, uy = dy / d;
+  const R = Math.sqrt(b.mass / Math.PI) + 1e-4;
+  for (const n of b.nodes) {
+    // pseudopod bias: the side facing travel pulls harder
+    const lead = 0.55 + clamp(((n.x - b.x) * ux + (n.y - b.y) * uy) / R, -1, 1) * 0.45 + 0.45;
+    n.vx += ux * TUNE.swim * k * lead * h;
+    n.vy += uy * TUNE.swim * k * lead * h;
   }
 }
 
@@ -345,6 +375,7 @@ function blobAt(x, y) {
   }
   return best;
 }
+let selected = null;
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.down = true;
   if (modeName === 'spawn') {
@@ -352,7 +383,9 @@ canvas.addEventListener('pointerdown', e => {
     blobs.push(makeBlob(mouse.x, mouse.y, 5200));
   } else if (modeName === 'del') {
     const b = blobAt(mouse.x, mouse.y);
-    if (b && !b.dying) b.dying = 0.001;      // deflate, then pop
+    if (b && !b.dying) { b.dying = 0.001; if (selected === b) selected = null; }
+  } else if (modeName === 'ctrl') {
+    selected = blobAt(mouse.x, mouse.y);   // click empty space = release
   }
 });
 window.addEventListener('keydown', e => {
@@ -360,7 +393,8 @@ window.addEventListener('keydown', e => {
   else if (e.key === '2') setMode('add');
   else if (e.key === '3') setMode('dec');
   else if (e.key === '4') setMode('del');
-  else if (e.key === 'r' || e.key === 'R') { blobs = []; showToast('cleared'); }
+  else if (e.key === '5') setMode('ctrl');
+  else if (e.key === 'r' || e.key === 'R') { blobs = []; selected = null; showToast('cleared'); }
   else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
   else if (e.key === 'p' || e.key === 'P') togglePause();
 });
@@ -376,7 +410,8 @@ const PARAMS = [
   ['wobble',  'wobble',       0,    3,     0.05],
   ['poke',    'poke force',   0,    4000,  50 ],
   ['pokeR',   'poke radius',  20,   240,   5  ],
-  ['squish',  'squish',       0,    2000,  25 ],
+  ['squish',  'squish',       0,    3000,  25 ],
+  ['swim',    'swim force',   200,  3000,  50 ],
   ['gravity', 'gravity',      0,    900,   10 ],
   ['drift',   'drift',        0,    80,    1  ],
 ];
@@ -454,6 +489,13 @@ function drawBlob(b) {
   ctx.lineWidth = Math.max(1.5, R * 0.045);
   ctx.strokeStyle = rgba(col, 0.95);
   ctx.stroke();
+  if (b === selected) {                        // you're driving this one
+    ctx.setLineDash([6, 7]);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath(); ctx.arc(b.x, b.y, R * 1.35 + 8, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+  }
   // nucleus glint
   ctx.globalCompositeOperation = 'lighter';
   const ng = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, Math.max(6, R * 0.3));
@@ -465,7 +507,7 @@ function drawBlob(b) {
 }
 function drawCursor() {
   if (!mouse.in) return;
-  const colors = { spawn: [255, 217, 240], add: [166, 226, 148], dec: [255, 178, 128], del: [255, 120, 120] };
+  const colors = { spawn: [255, 217, 240], add: [166, 226, 148], dec: [255, 178, 128], del: [255, 120, 120], ctrl: [255, 255, 255] };
   const col = colors[modeName];
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -476,7 +518,7 @@ function drawCursor() {
   ctx.font = '600 10px ui-monospace, Menlo, monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = rgba(col, 0.8);
-  const glyph = { spawn: '+·', add: '▲', dec: '▼', del: '×' }[modeName];
+  const glyph = { spawn: '+·', add: '▲', dec: '▼', del: '×', ctrl: '◎' }[modeName];
   ctx.fillText(glyph, mouse.x, mouse.y - 14);
   ctx.restore();
 }
@@ -521,9 +563,11 @@ function frame(now) {
       for (const n of b.nodes) { n.vx += fx * dt; n.vy += fy * dt; }
     }
     // physics substeps
+    if (selected && (selected.dying > 0 || !blobs.includes(selected))) selected = null;
     const nSub = clamp(Math.ceil(dt / 0.008), 1, 4), h = dt / nSub;
     for (let s = 0; s < nSub; s++) {
       for (const b of blobs) blobStep(b, h);
+      if (selected && mouse.in) steer(selected, h);
       for (let i = 0; i < blobs.length; i++)
         for (let j = i + 1; j < blobs.length; j++)
           squish(blobs[i], blobs[j], h);
