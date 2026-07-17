@@ -162,12 +162,9 @@
  *  core IGNITES in your color. Ignite all eight to win. Cores shred
  *  your swarm on contact; hunters chase — out-fly them.
  *
- *  Star squares keep the twinkle "diamond" mark:
- *              .
- *              o
- *          . o [] o .
- *              o
- *              .
+ *  Stars are plain glowing squares — color rides the sunset ramp by
+ *  SIZE (small purple -> big white-gold) — and everything that moves
+ *  sheds a shimmering blue/violet particle wake.
  * ================================================================== */
 
 const canvas = document.getElementById('stage');
@@ -236,8 +233,12 @@ const TUNE_DEF = {
   hunters: 3,    // hunter count (on R reset)
   need: 22,      // % of a galaxy's stars to ignite it (on R reset)
   // --- square appearance ---
-  billboard: 0, starScale: 1, markAt: 3.2, gap: 1.7,
-  sats: 4, satSize: 0.6, dots: 4, dotSize: 0.32, twinkle: 1,
+  billboard: 0,  // 1 = squares never rotate
+  starScale: 1,  // global size multiplier
+  markAt: 3.2,   // px size at which a square earns its glow + pip
+  glow: 1,       // square-glow strength
+  twinkle: 1,    // twinkle depth
+  shimmer: 1,    // blue/violet particle-wake emission rate
   bgStars: 0.55,
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
@@ -250,13 +251,15 @@ function saveTune() {
 const WORLD_R = 4600;
 let galaxies = [], stars = [], litCount = 0;
 
+// color is a pure function of size: small squares purple, giants white-gold
+const sizeToWarm = size => clamp01(Math.pow((size - 1.6) / 13.4, 0.8));
 function makeStar(gal, gi) {
   const g = clamp01(Math.pow(Math.random(), 2.2) + gauss()*0.04);
   const size = lerp(1.6, 15, Math.pow(g, 1.4));
   return {
     gi, gx: gal.x, gy: gal.y, GM: gal.GM, gspin: gal.omega < 0 ? -1 : 1,
     size, mass: size * size * 0.06,
-    warm: clamp01(0.12 + g * 0.86 + gauss()*0.05),
+    warm: sizeToWarm(size),
     phase: rand(0, TAU), tw: rand(0.7, 2.6),
     x: 0, y: 0, vx: 0, vy: 0, held: false,
   };
@@ -430,6 +433,20 @@ function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show
 const bursts = [];
 const exhaust = [];
 const floaters = [];
+
+// shimmering blue/violet particle wake — stars, swarm, and you all shed it
+const shimmer = [];
+const SHIM_CAP = 520;
+function emitShimmer(x, y, vx, vy) {
+  if (shimmer.length >= SHIM_CAP) return;
+  shimmer.push({
+    x: x + gauss() * 3, y: y + gauss() * 3,
+    vx: vx * 0.25 + gauss() * 14, vy: vy * 0.25 + gauss() * 14,
+    t: 1, life: rand(0.5, 1.1), s: rand(1.6, 3),
+    hue: [rand(120, 190), rand(110, 165), 255],
+    ph: rand(0, TAU),
+  });
+}
 let gainAcc = 0, lossAcc = 0, floatT = 0;
 let shake = 0;
 let baseStarCount = 0;
@@ -516,13 +533,10 @@ const PARAMS = [
   ['#', 'squares'],
   ['billboard','billboard',     0,   1,    1   ],
   ['starScale','star scale',    0.4, 2.5,  0.05],
-  ['markAt',  'detail at px',   1,   12,   0.2 ],
-  ['gap',     'pattern gap',    1,   3,    0.05],
-  ['sats',    'satellites',     0,   8,    4   ],
-  ['satSize', 'sat size',       0,   1.2,  0.02],
-  ['dots',    'outer dots',     0,   8,    4   ],
-  ['dotSize', 'dot size',       0,   0.8,  0.02],
+  ['markAt',  'glow at px',     1,   12,   0.2 ],
+  ['glow',    'glow',           0,   2,    0.05],
   ['twinkle', 'twinkle',        0,   1.5,  0.05],
+  ['shimmer', 'shimmer trail',  0,   2,    0.05],
   ['bgStars', 'bg stars',       0,   1,    0.05],
 ];
 const devPanel = document.getElementById('dev');
@@ -571,41 +585,37 @@ function togglePause() {
 pauseBtn.addEventListener('click', togglePause);
 
 /* --------------------------- drawing ---------------------------- */
+// plain glowing square: color rides the sunset ramp by SIZE (small = purple,
+// big = white-gold). The glow is square too — layered low-alpha squares.
 function starMark(sx, sy, u, warm, tw, spin) {
   u *= TUNE.starScale;
   tw = clamp01(1 - (1 - tw) * TUNE.twinkle);
-  const cCore = ramp(warm);
-  if (u < TUNE.markAt) {
-    const s = u * (0.75 + 0.45 * tw);
-    ctx.fillStyle = rgba(cCore, Math.min(1, 0.4 + 0.55 * tw));
+  const c = ramp(warm);
+  if (u < TUNE.markAt) {                     // small: bare square, axis-aligned
+    const s = u * (0.8 + 0.35 * tw);
+    ctx.fillStyle = rgba(c, Math.min(1, 0.45 + 0.5 * tw));
     ctx.fillRect(sx - s/2, sy - s/2, s, s);
     return;
   }
-  const gap = u * TUNE.gap;
-  ctx.save();
-  ctx.translate(sx, sy);
-  if (TUNE.billboard < 0.5) ctx.rotate(spin);
-  const nd = Math.round(TUNE.dots), du = u * TUNE.dotSize;
-  if (nd > 0 && du > 0.05) {
-    ctx.fillStyle = rgba(ramp(Math.max(0, warm - 0.28)), 0.5 * tw);
-    for (let k = 0; k < nd; k++) {
-      const a = -Math.PI/2 + k * TAU / nd;
-      ctx.fillRect(Math.cos(a)*gap*2 - du/2, Math.sin(a)*gap*2 - du/2, du, du);
-    }
+  const rot = TUNE.billboard < 0.5;
+  if (rot) { ctx.save(); ctx.translate(sx, sy); ctx.rotate(spin); sx = 0; sy = 0; }
+  if (TUNE.glow > 0.01) {                    // square glow halo
+    const k = TUNE.glow * (0.6 + 0.4 * tw);
+    const g1 = u * (2.1 + 0.4 * tw);
+    ctx.fillStyle = rgba(c, 0.10 * k);
+    ctx.fillRect(sx - g1/2, sy - g1/2, g1, g1);
+    const g2 = u * 1.45;
+    ctx.fillStyle = rgba(c, 0.20 * k);
+    ctx.fillRect(sx - g2/2, sy - g2/2, g2, g2);
   }
-  const ns = Math.round(TUNE.sats), su = u * TUNE.satSize;
-  if (ns > 0 && su > 0.05) {
-    ctx.fillStyle = rgba(ramp(Math.min(1, warm + 0.1)), 0.72 * tw);
-    for (let k = 0; k < ns; k++) {
-      const a = -Math.PI/2 + k * TAU / ns;
-      ctx.fillRect(Math.cos(a)*gap - su/2, Math.sin(a)*gap - su/2, su, su);
-    }
+  const s = u * (0.82 + 0.28 * tw);
+  ctx.fillStyle = rgba(c, Math.min(1, 0.6 + 0.4 * tw));
+  ctx.fillRect(sx - s/2, sy - s/2, s, s);
+  if (u > 6) {                               // hot pip on the big ones
+    ctx.fillStyle = rgba(ramp(Math.min(1, warm + 0.3)), Math.min(1, tw));
+    ctx.fillRect(sx - u*0.18, sy - u*0.18, u*0.36, u*0.36);
   }
-  ctx.fillStyle = rgba(cCore, Math.min(1, 0.85 * tw + 0.15));
-  ctx.fillRect(-u/2, -u/2, u, u);
-  ctx.fillStyle = rgba(ramp(1), Math.min(1, tw));
-  ctx.fillRect(-u*0.2, -u*0.2, u*0.4, u*0.4);
-  ctx.restore();
+  if (rot) ctx.restore();
 }
 
 /* backdrop stars: fixed in world space, same camera as everything else */
@@ -711,12 +721,19 @@ function streak(wx0, wy0, wx1, wy1, color, alpha, width) {
 function drawStars() {
   ctx.globalCompositeOperation = 'lighter';
   const m = 40;
+  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
   for (const s of stars) {
     const [sx, sy] = toScreen(s.x, s.y);
     if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
     const u = s.size * cam.zoom;
     if (u < 0.35) continue;
     const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
+    // visible stars shed a slow shimmer wake; fast (vacuumed) ones shed more
+    if (shimGate) {
+      const spd = Math.hypot(s.vx, s.vy);
+      if (Math.random() < frameDt * TUNE.shimmer * (0.4 + spd / 260) * Math.min(1, s.size / 5))
+        emitShimmer(s.x, s.y, s.vx, s.vy);
+    }
     starMark(sx, sy, u, s.warm, tw, s.phase);
   }
 }
@@ -734,15 +751,22 @@ function drawPlayer() {
   ctx.setLineDash([]);
 
   // orbiting swarm
+  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
   for (const o of P.orbiters) {
     const [ox, oy] = toScreen(o.x, o.y);
     const u = o.size * cam.zoom;
     if (ox < -20 || ox > W+20 || oy < -20 || oy > H+20 || u < 0.4) continue;
     const speed = Math.hypot(o.rvx, o.rvy);
     if (speed > 30 && u > 0.6) streak(o.px, o.py, o.x, o.y, ramp(o.warm), 0.22, Math.max(1, u*0.45));
+    if (shimGate && Math.random() < frameDt * TUNE.shimmer * (0.5 + speed / 300))
+      emitShimmer(o.x, o.y, o.rvx + P.vx, o.rvy + P.vy);
     const tw = 0.5 + 0.5 * Math.sin(perfNow * o.tw + o.phase);
     starMark(ox, oy, u, o.warm, tw, Math.atan2(o.rvy, o.rvx));
   }
+  // and you leave a wake when moving fast
+  const pspd = Math.hypot(P.vx, P.vy);
+  if (shimGate && pspd > 130 && Math.random() < frameDt * TUNE.shimmer * pspd / 110)
+    emitShimmer(P.x, P.y, -P.vx * 0.2, -P.vy * 0.2);
 
   // core
   const cc = coreVis() * clamp(cam.zoom, 0.5, 1.6);
@@ -788,6 +812,19 @@ function drawHunters() {
 }
 function drawEffects(dt) {
   ctx.globalCompositeOperation = 'lighter';
+  // shimmering blue/violet wake particles
+  for (let i = shimmer.length - 1; i >= 0; i--) {
+    const p = shimmer[i];
+    p.t -= dt / p.life;
+    if (p.t <= 0) { shimmer.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const [x, y] = toScreen(p.x, p.y);
+    if (x < -6 || x > W + 6 || y < -6 || y > H + 6) continue;
+    const flick = 0.55 + 0.45 * Math.sin(perfNow * 16 + p.ph);   // the shimmer
+    const s = clamp(p.s * cam.zoom, 1, 4);
+    ctx.fillStyle = rgba(p.hue, 0.55 * p.t * flick);
+    ctx.fillRect(x - s/2, y - s/2, s, s);
+  }
   // engine exhaust
   for (let i = exhaust.length - 1; i >= 0; i--) {
     const e = exhaust[i];
@@ -1084,10 +1121,10 @@ spawnHunters();
 resetPlayer();
 cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
-let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
+let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0, frameDt = 0.016;
 function frame(now) {
   const dt = Math.min(0.045, (now - last) / 1000);
-  last = now; perfNow = now / 1000;
+  last = now; perfNow = now / 1000; frameDt = dt;
   const live = (mode === 'play');
   const simDt = TUNE.paused ? 0 : dt * TUNE.time;
 
