@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gravity Well — fly, slingshot, ignite</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #070311; }
+  #stage { display: block; width: 100vw; height: 100vh; cursor: default; }
+
+  .panel {
+    position: fixed; z-index: 3;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: .04em; user-select: none; pointer-events: none;
+    text-shadow: 0 0 8px rgba(120,40,180,.6);
+  }
+  #stats { left: 16px; top: 14px; color: #d9b6ff; }
+  #stats .big { font-size: 20px; color: #ffe6ad; font-weight: 600; letter-spacing: .02em; }
+  #stats .row { opacity: .82; }
+  #stats b { color: #ffd98a; font-weight: 600; }
+  #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
+  #state {
+    left: 50%; bottom: 52px; transform: translateX(-50%);
+    font-size: 13px; letter-spacing: .14em; text-align: center;
+    color: #b795d8; text-shadow: 0 0 12px rgba(120,40,180,.8);
+  }
+
+  #toast {
+    position: fixed; left: 50%; top: 32%; transform: translate(-50%,-50%);
+    z-index: 4; pointer-events: none; user-select: none;
+    font: 600 22px/1.2 ui-monospace, Menlo, monospace;
+    letter-spacing: .18em; text-indent: .18em; text-align: center;
+    color: #ffdca0; text-shadow: 0 0 24px rgba(255,150,80,.7);
+    opacity: 0; transition: opacity .35s ease;
+  }
+  #toast.show { opacity: 1; }
+
+  /* intro + win overlays */
+  .overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 24px; text-align: center;
+    pointer-events: none; transition: opacity .9s ease;
+  }
+  .overlay.gone { opacity: 0; }
+  .overlay .sub {
+    font: 12px/1.6 ui-monospace, Menlo, monospace;
+    letter-spacing: .4em; text-indent: .4em;
+    color: #e6b7ff; opacity: .72; text-transform: uppercase;
+  }
+  .overlay h1 {
+    margin: 0;
+    font: 300 clamp(30px, 7vw, 78px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .16em; text-indent: .16em; color: #fff;
+    text-shadow: 0 0 34px rgba(255,190,110,.5), 0 0 70px rgba(190,60,160,.35);
+  }
+  .overlay .tag {
+    max-width: 40ch;
+    font: 13px/1.8 ui-monospace, Menlo, monospace;
+    color: #c9a8e6; opacity: .75;
+  }
+  #dive {
+    pointer-events: auto; cursor: pointer; margin-top: 4px;
+    padding: 13px 30px; border-radius: 999px;
+    background: rgba(255,214,120,.06); border: 1px solid rgba(255,205,120,.5);
+    color: #ffe6ad; font: 600 13px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
+    backdrop-filter: blur(3px);
+    transition: background .25s, box-shadow .25s, transform .25s, border-color .25s;
+  }
+  #dive:hover {
+    background: rgba(255,214,120,.16); border-color: rgba(255,224,150,.9);
+    box-shadow: 0 0 34px rgba(255,180,90,.35); transform: translateY(-1px);
+  }
+  #win { display: none; }
+  #win.show { display: flex; }
+  #win h1 { color: #ffe9b0; }
+
+  /* dev panel */
+  #devchip {
+    position: fixed; left: 16px; bottom: 14px; z-index: 6;
+    font: 11px/1.4 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+    color: #a884c8; opacity: .55; cursor: pointer; user-select: none;
+  }
+  #devchip:hover { opacity: .9; }
+  #dev {
+    position: fixed; left: 16px; bottom: 40px; z-index: 6; display: none;
+    min-width: 252px; padding: 10px 12px 9px;
+    max-height: calc(100vh - 120px); overflow-y: auto;
+    background: rgba(14,7,26,.88); border: 1px solid rgba(190,120,220,.28);
+    border-radius: 10px; backdrop-filter: blur(4px);
+    font: 11px/1.7 ui-monospace, Menlo, monospace; color: #d9b6ff;
+  }
+  .devsec { margin-top: 5px; font-size: 10px; letter-spacing: .22em;
+    text-transform: uppercase; color: #ffd98a; opacity: .65; }
+  .devhead { display: flex; justify-content: space-between; margin-bottom: 6px;
+    letter-spacing: .18em; text-transform: uppercase; color: #ffd98a; }
+  .devrow { display: grid; grid-template-columns: 100px 1fr 42px; gap: 8px; align-items: center; }
+  .devrow label { opacity: .8; }
+  .devrow span { text-align: right; color: #ffe6ad; }
+  .devrow input[type=range] { width: 100%; accent-color: #ffce7a; height: 3px; }
+  .devfoot { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .devfoot button {
+    font: 11px ui-monospace, Menlo, monospace; letter-spacing: .1em;
+    padding: 3px 10px; border-radius: 6px; cursor: pointer;
+    background: rgba(255,214,120,.08); border: 1px solid rgba(255,205,120,.35); color: #ffe6ad;
+  }
+  .devfoot button:hover { background: rgba(255,214,120,.18); }
+  .devnote { opacity: .5; margin-left: auto; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="intro" class="overlay">
+  <div class="sub">gravity well</div>
+  <h1>SWALLOW&nbsp;THE&nbsp;FRACTAL</h1>
+  <div class="tag">you are a young gravity well with a working engine.
+    fly. slingshot the burning cores — never touch them.
+    sweep up stars to grow your swarm, ignite all eight galaxies,
+    and don't let the hunters catch you.</div>
+  <button id="dive" type="button">dive in ↯</button>
+</div>
+
+<div id="win" class="overlay">
+  <div class="sub">every core burns your color</div>
+  <h1>THE&nbsp;FRACTAL,&nbsp;SWALLOWED</h1>
+  <div class="tag" id="wintag"></div>
+</div>
+
+<div id="stats" class="panel">
+  <div class="big">lit <b id="lit">0/8</b></div>
+  <div class="row">swarm&nbsp; <b id="swarm">0</b></div>
+  <div class="row">mass&nbsp;&nbsp; <b id="mass">0</b></div>
+  <div class="row">time&nbsp;&nbsp; <b id="time">0:00</b></div>
+</div>
+<div id="toast"></div>
+<div id="state" class="panel"></div>
+<div id="hint" class="panel">hold click / space to thrust · release to coast · esc back · R reset · ` dev</div>
+
+<div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
+<div id="dev">
+  <div class="devhead"><span>tuning</span><span id="fps"></span></div>
+  <div id="devrows"></div>
+  <div class="devfoot">
+    <button id="devdefaults" type="button">defaults</button>
+    <button id="devpause" type="button">pause</button>
+    <span class="devnote">® on R reset</span>
+  </div>
+</div>
+
+<script>
+/* ==================================================================
+ *  GRAVITY WELL v2 — fly, slingshot, ignite
+ *
+ *  You are a body in the field: momentum, thrust, and the pull of
+ *  eight burning galaxy cores. Sweep through star clusters to grow
+ *  your orbiting swarm; collect enough of a galaxy's stars and its
+ *  core IGNITES in your color. Ignite all eight to win. Cores shred
+ *  your swarm on contact; hunters chase — out-fly them.
+ *
+ *  Stars are plain glowing squares — color rides the sunset ramp by
+ *  SIZE (small purple -> big white-gold) — and everything that moves
+ *  sheds a shimmering blue/violet particle wake.
+ * ================================================================== */
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const intro = document.getElementById('intro');
+const winEl = document.getElementById('win');
+const winTag = document.getElementById('wintag');
+const litEl = document.getElementById('lit');
+const swarmEl = document.getElementById('swarm');
+const massEl = document.getElementById('mass');
+const timeEl = document.getElementById('time');
+const toastEl = document.getElementById('toast');
+const stateEl = document.getElementById('state');
+
+let W = 0, H = 0, DPR = 1, MINSIDE = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight; MINSIDE = Math.min(W, H);
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- palette: MATLAB-ish sunset ramp ---------- */
+const STOPS = [
+  [0.00, [120, 46, 150]],
+  [0.22, [176, 44, 132]],
+  [0.44, [226, 84,  96]],
+  [0.64, [248, 148, 58]],
+  [0.82, [255, 216, 120]],
+  [1.00, [255, 252, 232]],
+];
+function ramp(t) {
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  for (let i = 1; i < STOPS.length; i++) {
+    if (t <= STOPS[i][0]) {
+      const [t0, c0] = STOPS[i-1], [t1, c1] = STOPS[i];
+      const f = (t - t0) / (t1 - t0);
+      return [c0[0]+(c1[0]-c0[0])*f, c0[1]+(c1[1]-c0[1])*f, c0[2]+(c1[2]-c0[2])*f];
+    }
+  }
+  return STOPS[STOPS.length-1][1];
+}
+const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const rand = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+const clamp01 = t => t < 0 ? 0 : t > 1 ? 1 : t;
+const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+const TAU = Math.PI * 2;
+const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
+
+/* ------------------ dev tuning (press ` in game) ------------------ */
+const TUNE_DEF = {
+  time: 1,       // simulation speed
+  thrust: 380,   // engine acceleration
+  drag: 0.12,    // coasting drag (per second)
+  gpull: 160000, // core pull strength (flat rotation-curve field, ~1/d)
+  pickup: 1,     // pickup radius multiplier
+  swarmG: 2100,  // gravity binding your orbiting swarm
+  lock: 0.55,    // 0 = pure Newton swarm, 1 = hard-reined disk
+  huntSpd: 590,  // hunter top speed
+  hunters: 3,    // hunter count (on R reset)
+  need: 22,      // % of a galaxy's stars to ignite it (on R reset)
+  // --- square appearance ---
+  billboard: 0,  // 1 = squares never rotate
+  starScale: 1,  // global size multiplier
+  markAt: 3.2,   // px size at which a square earns its glow + pip
+  glow: 1,       // square-glow strength
+  twinkle: 1,    // twinkle depth
+  shimmer: 1,    // blue/violet particle-wake emission rate
+  bgStars: 0.55,
+};
+const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw2_tune') || '{}'), { paused: false }); } catch (e) {}
+function saveTune() {
+  try { const { paused, ...t } = TUNE; localStorage.setItem('gw2_tune', JSON.stringify(t)); } catch (e) {}
+}
+
+/* ------------------------- the world ---------------------------- */
+const WORLD_R = 4600;
+let galaxies = [], stars = [], litCount = 0;
+
+// color is a pure function of size: small squares purple, giants white-gold
+const sizeToWarm = size => clamp01(Math.pow((size - 1.6) / 13.4, 0.8));
+function makeStar(gal, gi) {
+  const g = clamp01(Math.pow(Math.random(), 2.2) + gauss()*0.04);
+  const size = lerp(1.6, 15, Math.pow(g, 1.4));
+  return {
+    gi, gx: gal.x, gy: gal.y, GM: gal.GM, gspin: gal.omega < 0 ? -1 : 1,
+    size, mass: size * size * 0.06,
+    warm: sizeToWarm(size),
+    phase: rand(0, TAU), tw: rand(0.7, 2.6),
+    x: 0, y: 0, vx: 0, vy: 0, held: false,
+  };
+}
+function seatStar(s, gal) {
+  const rr = Math.pow(Math.random(), 0.6);
+  const arm = (Math.floor(Math.random() * gal.arms) / gal.arms) * TAU;
+  let ang = arm + rr * gal.wind * TAU + gauss() * (0.18 + 0.4 * rr);
+  let hr = rr * gal.r;
+  if (Math.random() < 0.5) {                 // clump into sub-cluster knots
+    const knot = Math.floor(rr * 5) / 5 + 0.1;
+    hr = knot * gal.r + gauss() * gal.r * 0.06;
+    ang = arm + knot * gal.wind * TAU + gauss() * 0.14;
+  }
+  hr = Math.max(hr, gal.killR * 1.6);        // don't seed food inside the furnace
+  s.x = gal.x + Math.cos(ang) * hr;
+  s.y = gal.y + Math.sin(ang) * hr;
+  const v = Math.sqrt(gal.GM / (hr + 30));
+  s.vx = -Math.sin(ang) * v * s.gspin;
+  s.vy =  Math.cos(ang) * v * s.gspin;
+  s.held = false;
+}
+function buildWorld() {
+  galaxies = []; stars = []; litCount = 0;
+  const N = 8;
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const ang = t * TAU * 1.35 + 0.6;
+    const rad = t * WORLD_R * 0.82;
+    const r = lerp(1050, 380, t) * rand(0.85, 1.12);
+    const omega = rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1);
+    galaxies.push({
+      x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r, omega,
+      GM: Math.pow(omega * r * 0.5, 2) * (r * 0.5 + 30),
+      arms: 2 + (Math.floor(Math.random()*3)), wind: rand(1.8, 3.0),
+      killR: 26 + r * 0.02,                  // the burning core
+      got: 0, need: 1, lit: false, igniteT: 0,
+    });
+  }
+  const TOTAL = clamp(Math.round((W*H)/1500) * 2, 1500, 2800);
+  const wsum = galaxies.reduce((a, g) => a + g.r, 0);
+  galaxies.forEach((gal, gi) => {
+    const n = Math.round(TOTAL * (gal.r / wsum));
+    gal.need = clamp(Math.round(n * TUNE.need / 100), 15, 120);
+    for (let k = 0; k < n; k++) { const s = makeStar(gal, gi); seatStar(s, gal); stars.push(s); }
+  });
+  baseStarCount = stars.length;
+}
+function respawnStar(s) {
+  const gi = (Math.random() * galaxies.length) | 0;
+  Object.assign(s, makeStar(galaxies[gi], gi));
+  seatStar(s, galaxies[gi]);
+}
+
+/* --------------------------- player ------------------------------ */
+const P = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  coreMass: 0, orbMass: 0, orbiters: [],
+  spin: 1, collected: 0, inv: 0, thrusting: false,
+};
+const pmass = () => 10 + P.coreMass + P.orbMass;
+const pickupR = () => (26 + 2.6 * Math.sqrt(pmass())) * TUNE.pickup;
+const orbitR = () => 34 + 3.2 * Math.sqrt(pmass());
+const coreVis = () => clamp(4 + Math.sqrt(pmass()) * 0.9, 6, 30);
+
+function admitStar(st) {
+  const r = orbitR() * rand(0.45, 0.95), a = rand(0, TAU);
+  const vC = Math.sqrt(TUNE.swarmG * pmass() / (r + 12));
+  P.orbiters.push({
+    rx: Math.cos(a) * r, ry: Math.sin(a) * r,
+    rvx: -Math.sin(a) * vC * P.spin, rvy: Math.cos(a) * vC * P.spin,
+    x: 0, y: 0, px: 0, py: 0,
+    size: st.size, warm: st.warm, mass: st.mass,
+    phase: rand(0, TAU), tw: rand(0.7, 2.6),
+  });
+  P.orbMass += st.mass;
+  while (P.orbiters.length > 80) {           // fold smallest into the core
+    let mi = 0;
+    for (let i = 1; i < P.orbiters.length; i++)
+      if (P.orbiters[i].mass < P.orbiters[mi].mass) mi = i;
+    P.coreMass += P.orbiters[mi].mass;
+    P.orbMass  -= P.orbiters[mi].mass;
+    P.orbiters.splice(mi, 1);
+  }
+}
+// shatter: fling part of the swarm back into the world as free stars
+function scatterSwarm(frac) {
+  const k = Math.ceil(P.orbiters.length * frac);
+  for (let i = 0; i < k && P.orbiters.length; i++) {
+    const o = P.orbiters.splice((Math.random() * P.orbiters.length) | 0, 1)[0];
+    P.orbMass -= o.mass;
+    const gi = nearestGalaxy(P.x, P.y);
+    const s = makeStar(galaxies[gi], gi);
+    s.size = o.size; s.warm = o.warm; s.mass = o.mass;
+    s.x = P.x + o.rx; s.y = P.y + o.ry;
+    const a = rand(0, TAU), sp = rand(160, 420);
+    s.vx = Math.cos(a) * sp + P.vx * 0.3;
+    s.vy = Math.sin(a) * sp + P.vy * 0.3;
+    s.held = true; s.heldT = rand(0.8, 1.6);   // brief immunity so they visibly fly
+    stars.push(s);
+    lossAcc++;
+  }
+  while (stars.length > baseStarCount + 500) stars.splice(0, 1);
+}
+function nearestGalaxy(x, y) {
+  let bi = 0, bd = 1e18;
+  for (let i = 0; i < galaxies.length; i++) {
+    const g = galaxies[i], d = (g.x-x)*(g.x-x) + (g.y-y)*(g.y-y);
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return bi;
+}
+
+/* --------------------------- hunters ----------------------------- */
+let hunters = [];
+function spawnHunters() {
+  hunters = [];
+  const n = Math.round(TUNE.hunters);
+  for (let i = 0; i < n; i++) {
+    const gal = galaxies[(i * 3 + 4) % galaxies.length];
+    hunters.push({
+      x: gal.x + rand(-gal.r, gal.r) * 0.6,
+      y: gal.y + rand(-gal.r, gal.r) * 0.6,
+      vx: 0, vy: 0, tx: 0, ty: 0, repick: 0, chasing: false,
+      ph: rand(0, TAU),
+    });
+  }
+}
+function updateHunters(dt) {
+  for (const h of hunters) {
+    const dP = Math.hypot(P.x - h.x, P.y - h.y);
+    h.chasing = dP < 950 && P.inv <= 0 && mode === 'play';
+    if (h.chasing) {
+      const lead = clamp(dP / 600, 0.15, 0.8);           // aim where you're going
+      h.tx = P.x + P.vx * lead; h.ty = P.y + P.vy * lead;
+    } else {
+      h.repick -= dt;
+      if (h.repick <= 0) {
+        const gal = galaxies[(Math.random() * galaxies.length) | 0];
+        h.tx = gal.x + rand(-gal.r, gal.r) * 0.6;
+        h.ty = gal.y + rand(-gal.r, gal.r) * 0.6;
+        h.repick = rand(4, 9);
+      }
+    }
+    const dx = h.tx - h.x, dy = h.ty - h.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    const acc = h.chasing ? 300 : 140;
+    h.vx += (dx / d) * acc * dt;
+    h.vy += (dy / d) * acc * dt;
+    const vmax = h.chasing ? TUNE.huntSpd : TUNE.huntSpd * 0.45;
+    const v = Math.hypot(h.vx, h.vy);
+    if (v > vmax) { h.vx *= vmax / v; h.vy *= vmax / v; }
+    h.x += h.vx * dt; h.y += h.vy * dt;
+    const pr = Math.hypot(h.x, h.y);
+    if (pr > WORLD_R) { h.x *= WORLD_R / pr; h.y *= WORLD_R / pr; }
+    // strike: shred half the swarm and bounce the player away
+    if (dP < 26 + coreVis() && P.inv <= 0 && mode === 'play') {
+      scatterSwarm(0.5);
+      P.inv = 2.5; shake = 1;
+      const ax = (P.x - h.x) / (dP + 1e-3), ay = (P.y - h.y) / (dP + 1e-3);
+      P.vx += ax * 620; P.vy += ay * 620;
+      showToast('caught — half your swarm scattered');
+      bursts.push({ x: P.x, y: P.y, r0: 40, t: 1, hue: [255, 90, 90] });
+    }
+  }
+}
+
+/* --------------------------- effects ----------------------------- */
+let toastT = 0;
+function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 2.0; }
+const bursts = [];
+const exhaust = [];
+const floaters = [];
+
+// shimmering blue/violet particle wake — stars, swarm, and you all shed it
+const shimmer = [];
+const SHIM_CAP = 520;
+function emitShimmer(x, y, vx, vy) {
+  if (shimmer.length >= SHIM_CAP) return;
+  shimmer.push({
+    x: x + gauss() * 3, y: y + gauss() * 3,
+    vx: vx * 0.25 + gauss() * 14, vy: vy * 0.25 + gauss() * 14,
+    t: 1, life: rand(0.5, 1.1), s: rand(1.6, 3),
+    hue: [rand(120, 190), rand(110, 165), 255],
+    ph: rand(0, TAU),
+  });
+}
+let gainAcc = 0, lossAcc = 0, floatT = 0;
+let shake = 0;
+let baseStarCount = 0;
+function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
+
+/* --------------------------- camera ----------------------------- */
+const cam = { x: 0, y: 0, zoom: 0.1 };
+const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
+function playZoom() {
+  const spd = Math.hypot(P.vx, P.vy);
+  return clamp(0.30 * MINSIDE / (140 + 26 * Math.sqrt(pmass()) + 0.22 * spd), 0.12, 2.2);
+}
+let mode = 'overview', anim = null, won = false, playT = 0;
+function flyTo(target, to, dur) {
+  anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
+}
+function enterPlay() {
+  if (mode === 'play' || mode === 'diving') return;
+  mode = 'diving';
+  flyTo('play', { x: P.x, y: P.y, zoom: playZoom() }, 2.6);
+  intro.classList.add('gone');
+}
+function backToOverview() {
+  if (mode === 'overview' || mode === 'rising') return;
+  mode = 'rising';
+  flyTo('overview', overviewCam(), 2.0);
+  intro.classList.remove('gone');
+}
+const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
+const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.zoom + cam.y ];
+
+/* --------------------------- input ------------------------------ */
+const mouse = { sx: W/2, sy: H/2 };
+window.addEventListener('pointermove', e => {
+  if (e.target !== canvas) return;
+  mouse.sx = e.clientX; mouse.sy = e.clientY;
+});
+let thrustHeld = false;
+canvas.addEventListener('pointerdown', () => { if (mode === 'play') thrustHeld = true; });
+window.addEventListener('pointerup', () => thrustHeld = false);
+window.addEventListener('blur', () => thrustHeld = false);
+document.getElementById('dive').addEventListener('click', enterPlay);
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') backToOverview();
+  else if (e.key === ' ') { thrustHeld = true; e.preventDefault(); }
+  else if (e.key === 'r' || e.key === 'R') resetGame();
+  else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
+  else if (e.key === 'p' || e.key === 'P') togglePause();
+});
+window.addEventListener('keyup', e => { if (e.key === ' ') thrustHeld = false; });
+function resetGame() {
+  buildWorld(); spawnHunters(); resetPlayer();
+  won = false; playT = 0; winEl.classList.remove('show');
+  anim = null; mode = 'overview';
+  cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+  intro.classList.remove('gone');
+  showToast('world reset');
+}
+function resetPlayer() {
+  const gal = galaxies[0];
+  P.x = gal.x + gal.r * 0.55; P.y = gal.y;
+  P.vx = 0; P.vy = -Math.sqrt(gal.GM / (gal.r * 0.55 + 30)) * (gal.omega < 0 ? -1 : 1);
+  P.coreMass = 0; P.orbMass = 0; P.orbiters = [];
+  P.collected = 0; P.inv = 0;
+}
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
+}, { passive: false });
+
+/* --------------------------- dev panel --------------------------- */
+const PARAMS = [
+  ['#', 'flight'],
+  ['time',    'sim speed',      0,     3,      0.05],
+  ['thrust',  'thrust',         150,   700,    10  ],
+  ['drag',    'drag',           0.02,  0.4,    0.01],
+  ['gpull',   'core pull',      20000, 320000, 5000],
+  ['pickup',  'pickup radius',  0.5,   2,      0.05],
+  ['swarmG',  'swarm gravity',  500,   6000,   50  ],
+  ['lock',    'orbit lock',     0,     1,      0.05],
+  ['huntSpd', 'hunter speed',   200,   900,    10  ],
+  ['hunters', 'hunters ®',      0,     6,      1   ],
+  ['need',    'ignite % ®',     5,     40,     1   ],
+  ['#', 'squares'],
+  ['billboard','billboard',     0,   1,    1   ],
+  ['starScale','star scale',    0.4, 2.5,  0.05],
+  ['markAt',  'glow at px',     1,   12,   0.2 ],
+  ['glow',    'glow',           0,   2,    0.05],
+  ['twinkle', 'twinkle',        0,   1.5,  0.05],
+  ['shimmer', 'shimmer trail',  0,   2,    0.05],
+  ['bgStars', 'bg stars',       0,   1,    0.05],
+];
+const devPanel = document.getElementById('dev');
+const devRows = document.getElementById('devrows');
+const fpsEl = document.getElementById('fps');
+let devOpen = false;
+const devInputs = {};
+for (const [key, label, min, max, step] of PARAMS) {
+  if (key === '#') {
+    const h = document.createElement('div');
+    h.className = 'devsec'; h.textContent = label;
+    devRows.appendChild(h);
+    continue;
+  }
+  const row = document.createElement('div'); row.className = 'devrow';
+  const lab = document.createElement('label'); lab.textContent = label;
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = TUNE[key];
+  const val = document.createElement('span'); val.textContent = TUNE[key];
+  inp.addEventListener('input', () => {
+    TUNE[key] = parseFloat(inp.value);
+    val.textContent = TUNE[key];
+    saveTune();
+  });
+  devInputs[key] = { inp, val };
+  row.append(lab, inp, val);
+  devRows.appendChild(row);
+}
+function toggleDev(force) {
+  devOpen = force ?? !devOpen;
+  devPanel.style.display = devOpen ? 'block' : 'none';
+}
+document.getElementById('devchip').addEventListener('click', () => toggleDev());
+document.getElementById('devdefaults').addEventListener('click', () => {
+  Object.assign(TUNE, TUNE_DEF); saveTune();
+  for (const [key] of PARAMS) {
+    if (!devInputs[key]) continue;
+    devInputs[key].inp.value = TUNE[key]; devInputs[key].val.textContent = TUNE[key];
+  }
+});
+const pauseBtn = document.getElementById('devpause');
+function togglePause() {
+  TUNE.paused = !TUNE.paused;
+  pauseBtn.textContent = TUNE.paused ? 'resume' : 'pause';
+}
+pauseBtn.addEventListener('click', togglePause);
+
+/* --------------------------- drawing ---------------------------- */
+// plain glowing square: color rides the sunset ramp by SIZE (small = purple,
+// big = white-gold). The glow is square too — layered low-alpha squares.
+function starMark(sx, sy, u, warm, tw, spin) {
+  u *= TUNE.starScale;
+  tw = clamp01(1 - (1 - tw) * TUNE.twinkle);
+  const c = ramp(warm);
+  if (u < TUNE.markAt) {                     // small: bare square, axis-aligned
+    const s = u * (0.8 + 0.35 * tw);
+    ctx.fillStyle = rgba(c, Math.min(1, 0.45 + 0.5 * tw));
+    ctx.fillRect(sx - s/2, sy - s/2, s, s);
+    return;
+  }
+  const rot = TUNE.billboard < 0.5;
+  if (rot) { ctx.save(); ctx.translate(sx, sy); ctx.rotate(spin); sx = 0; sy = 0; }
+  if (TUNE.glow > 0.01) {                    // square glow halo
+    const k = TUNE.glow * (0.6 + 0.4 * tw);
+    const g1 = u * (2.1 + 0.4 * tw);
+    ctx.fillStyle = rgba(c, 0.10 * k);
+    ctx.fillRect(sx - g1/2, sy - g1/2, g1, g1);
+    const g2 = u * 1.45;
+    ctx.fillStyle = rgba(c, 0.20 * k);
+    ctx.fillRect(sx - g2/2, sy - g2/2, g2, g2);
+  }
+  const s = u * (0.82 + 0.28 * tw);
+  ctx.fillStyle = rgba(c, Math.min(1, 0.6 + 0.4 * tw));
+  ctx.fillRect(sx - s/2, sy - s/2, s, s);
+  if (u > 6) {                               // hot pip on the big ones
+    ctx.fillStyle = rgba(ramp(Math.min(1, warm + 0.3)), Math.min(1, tw));
+    ctx.fillRect(sx - u*0.18, sy - u*0.18, u*0.36, u*0.36);
+  }
+  if (rot) ctx.restore();
+}
+
+/* backdrop stars: fixed in world space, same camera as everything else */
+const BG_TILE = 620;
+const bgTileStars = Array.from({ length: 14 }, () => ({
+  ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
+  ws: rand(2.2, 4.6), warm: rand(0.15, 0.7),
+  rank: Math.random(), ph: rand(0, TAU), tws: rand(0.4, 1.4),
+}));
+function drawBgStars() {
+  const fade = clamp01((cam.zoom - 0.18) / 0.4);
+  const A = TUNE.bgStars * fade;
+  if (A <= 0.005) return;
+  const keep = clamp01(cam.zoom * 0.55);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const [wx0, wy0] = toWorld(-20, -20);
+  const [wx1, wy1] = toWorld(W + 20, H + 20);
+  const ix0 = Math.floor(wx0 / BG_TILE), ix1 = Math.floor(wx1 / BG_TILE);
+  const iy0 = Math.floor(wy0 / BG_TILE), iy1 = Math.floor(wy1 / BG_TILE);
+  if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) <= 400) {
+    for (let iy = iy0; iy <= iy1; iy++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
+        for (const st of bgTileStars) {
+          if (st.rank > keep) continue;
+          const wx = ix * BG_TILE + (st.ox + j * 300) % BG_TILE;
+          const wy = iy * BG_TILE + (st.oy + j * 520) % BG_TILE;
+          const [sx, sy] = toScreen(wx, wy);
+          if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
+          const s = clamp(st.ws * cam.zoom, 3, 9);
+          const tw = 0.6 + 0.4 * Math.sin(perfNow * st.tws + st.ph + j * 6);
+          ctx.fillStyle = rgba(ramp(st.warm), A * 0.5 * tw);
+          ctx.fillRect(sx - s/2, sy - s/2, s, s);
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawBackground() {
+  ctx.fillStyle = '#070311'; ctx.fillRect(0, 0, W, H);
+  const [pcx, pcy] = toScreen(P.x, P.y);
+  const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
+  g.addColorStop(0, 'rgba(60,18,84,0.35)');
+  g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
+  g.addColorStop(1, 'rgba(8,3,18,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  drawBgStars();
+}
+function drawGalaxies() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const gal of galaxies) {
+    const [sx, sy] = toScreen(gal.x, gal.y);
+    const R = Math.max(6, gal.r * 0.5 * cam.zoom);
+    if (sx < -R*2 || sx > W + R*2 || sy < -R*2 || sy > H + R*2) continue;
+    // haze
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
+    if (gal.lit) {
+      g.addColorStop(0, 'rgba(255,240,200,0.6)');
+      g.addColorStop(0.3, 'rgba(255,214,120,0.30)');
+      g.addColorStop(1, 'rgba(255,170,90,0)');
+    } else {
+      g.addColorStop(0, 'rgba(255,244,214,0.5)');
+      g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
+      g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
+      g.addColorStop(1, 'rgba(120,40,120,0)');
+    }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.fill();
+
+    // the burning core: bright heart + DANGER ring at the true kill radius
+    const kr = Math.max(gal.killR * cam.zoom, 5);
+    const heart = ctx.createRadialGradient(sx, sy, 0, sx, sy, kr * 2.2);
+    const hcol = gal.lit ? [255, 246, 220] : [255, 190, 110];
+    heart.addColorStop(0, rgba(hcol, 0.95));
+    heart.addColorStop(0.35, rgba(gal.lit ? [255, 220, 140] : [255, 120, 70], 0.55));
+    heart.addColorStop(1, rgba([200, 60, 80], 0));
+    ctx.fillStyle = heart;
+    ctx.beginPath(); ctx.arc(sx, sy, kr * 2.2, 0, TAU); ctx.fill();
+    const pulse = 0.5 + 0.5 * Math.sin(perfNow * 3 + gal.x);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = gal.lit ? rgba([255, 228, 160], 0.7) : rgba([255, 70, 70], 0.35 + 0.3 * pulse);
+    ctx.beginPath(); ctx.arc(sx, sy, kr, 0, TAU); ctx.stroke();
+
+    // ignition progress arc (only while unlit and started)
+    if (!gal.lit && gal.got > 0) {
+      const t = clamp01(gal.got / gal.need);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(255,214,120,0.25)';
+      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,224,150,0.9)';
+      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
+    }
+    if (gal.igniteT > 0) gal.igniteT -= 0.016;
+  }
+}
+function streak(wx0, wy0, wx1, wy1, color, alpha, width) {
+  const [x0, y0] = toScreen(wx0, wy0), [x1, y1] = toScreen(wx1, wy1);
+  ctx.strokeStyle = rgba(color, alpha); ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+}
+function drawStars() {
+  ctx.globalCompositeOperation = 'lighter';
+  const m = 40;
+  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
+  for (const s of stars) {
+    const [sx, sy] = toScreen(s.x, s.y);
+    if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
+    const u = s.size * cam.zoom;
+    if (u < 0.35) continue;
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
+    // visible stars shed a slow shimmer wake; fast (vacuumed) ones shed more
+    if (shimGate) {
+      const spd = Math.hypot(s.vx, s.vy);
+      if (Math.random() < frameDt * TUNE.shimmer * (0.4 + spd / 260) * Math.min(1, s.size / 5))
+        emitShimmer(s.x, s.y, s.vx, s.vy);
+    }
+    starMark(sx, sy, u, s.warm, tw, s.phase);
+  }
+}
+function drawPlayer() {
+  const [sx, sy] = toScreen(P.x, P.y);
+  const blink = P.inv > 0 && Math.sin(perfNow * 18) > 0;
+  ctx.globalCompositeOperation = 'lighter';
+
+  // pickup ring — the honest 'my reach' circle
+  const pr = pickupR() * cam.zoom;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(255,220,150,${blink ? 0.1 : 0.25})`;
+  ctx.setLineDash([4, 7]);
+  ctx.beginPath(); ctx.arc(sx, sy, pr, 0, TAU); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // orbiting swarm
+  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
+  for (const o of P.orbiters) {
+    const [ox, oy] = toScreen(o.x, o.y);
+    const u = o.size * cam.zoom;
+    if (ox < -20 || ox > W+20 || oy < -20 || oy > H+20 || u < 0.4) continue;
+    const speed = Math.hypot(o.rvx, o.rvy);
+    if (speed > 30 && u > 0.6) streak(o.px, o.py, o.x, o.y, ramp(o.warm), 0.22, Math.max(1, u*0.45));
+    if (shimGate && Math.random() < frameDt * TUNE.shimmer * (0.5 + speed / 300))
+      emitShimmer(o.x, o.y, o.rvx + P.vx, o.rvy + P.vy);
+    const tw = 0.5 + 0.5 * Math.sin(perfNow * o.tw + o.phase);
+    starMark(ox, oy, u, o.warm, tw, Math.atan2(o.rvy, o.rvx));
+  }
+  // and you leave a wake when moving fast
+  const pspd = Math.hypot(P.vx, P.vy);
+  if (shimGate && pspd > 130 && Math.random() < frameDt * TUNE.shimmer * pspd / 110)
+    emitShimmer(P.x, P.y, -P.vx * 0.2, -P.vy * 0.2);
+
+  // core
+  const cc = coreVis() * clamp(cam.zoom, 0.5, 1.6);
+  const bloomR = Math.max(cc * 2.4, 12);
+  const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
+  bloom.addColorStop(0, `rgba(255,252,240,${blink ? 0.4 : 0.95})`);
+  bloom.addColorStop(0.3, 'rgba(255,220,140,0.55)');
+  bloom.addColorStop(1, 'rgba(240,120,90,0)');
+  ctx.fillStyle = bloom;
+  ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
+  starMark(sx, sy, clamp(cc, 6, 26), 1, blink ? 0.4 : 0.95, Math.atan2(P.vy, P.vx));
+}
+function drawHunters() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const h of hunters) {
+    const [sx, sy] = toScreen(h.x, h.y);
+    if (sx < -80 || sx > W+80 || sy < -80 || sy > H+80) continue;
+    streak(h.x - h.vx*0.06, h.y - h.vy*0.06, h.x, h.y, [255, 80, 90], 0.4, 3);
+    const R = Math.max(24 * cam.zoom, 9);
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * 2.4);
+    g.addColorStop(0, 'rgba(255,120,120,0.9)');
+    g.addColorStop(0.35, 'rgba(255,60,80,0.4)');
+    g.addColorStop(1, 'rgba(255,40,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, R * 2.4, 0, TAU); ctx.fill();
+    // angular mark: rotated square, reads as 'sharp'
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.atan2(h.vy, h.vx) + Math.PI/4);
+    const u = Math.max(10 * cam.zoom, 6);
+    ctx.fillStyle = 'rgba(255,220,220,0.95)';
+    ctx.fillRect(-u/2, -u/2, u, u);
+    ctx.strokeStyle = 'rgba(255,90,90,0.9)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(-u*0.9, -u*0.9, u*1.8, u*1.8);
+    ctx.restore();
+    if (h.chasing && P.inv <= 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 6);
+      ctx.strokeStyle = rgba([255, 80, 80], 0.3 + 0.3 * pulse);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(sx, sy, R * 3.2, 0, TAU); ctx.stroke();
+    }
+  }
+}
+function drawEffects(dt) {
+  ctx.globalCompositeOperation = 'lighter';
+  // shimmering blue/violet wake particles
+  for (let i = shimmer.length - 1; i >= 0; i--) {
+    const p = shimmer[i];
+    p.t -= dt / p.life;
+    if (p.t <= 0) { shimmer.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const [x, y] = toScreen(p.x, p.y);
+    if (x < -6 || x > W + 6 || y < -6 || y > H + 6) continue;
+    const flick = 0.55 + 0.45 * Math.sin(perfNow * 16 + p.ph);   // the shimmer
+    const s = clamp(p.s * cam.zoom, 1, 4);
+    ctx.fillStyle = rgba(p.hue, 0.55 * p.t * flick);
+    ctx.fillRect(x - s/2, y - s/2, s, s);
+  }
+  // engine exhaust
+  for (let i = exhaust.length - 1; i >= 0; i--) {
+    const e = exhaust[i];
+    e.t -= dt * 1.8;
+    if (e.t <= 0) { exhaust.splice(i, 1); continue; }
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    const [x, y] = toScreen(e.x, e.y);
+    const s = Math.max(1.5, e.s * cam.zoom * e.t);
+    ctx.fillStyle = rgba(ramp(e.warm), 0.55 * e.t);
+    ctx.fillRect(x - s/2, y - s/2, s, s);
+  }
+  // shock rings
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i];
+    b.t -= dt * 1.3;
+    if (b.t <= 0) { bursts.splice(i, 1); continue; }
+    const [x, y] = toScreen(b.x, b.y);
+    const R = (b.r0 + (1 - b.t) * b.r0 * 6) * cam.zoom;
+    ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
+    ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke();
+  }
+}
+function drawFloaters(dt) {
+  if (!floaters.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.font = '600 13px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'center';
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.t -= dt * 0.75;
+    if (f.t <= 0) { floaters.splice(i, 1); continue; }
+    const [x, y] = toScreen(f.x, f.y);
+    ctx.fillStyle = rgba(f.col, Math.min(1, f.t * 1.4));
+    ctx.fillText(f.txt, x, y - (1 - f.t) * 38);
+  }
+  ctx.restore();
+}
+function drawBoundary() {
+  const [sx, sy] = toScreen(0, 0);
+  const R = WORLD_R * cam.zoom;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.rect(0, 0, W, H);
+  ctx.arc(sx, sy, R, 0, TAU, true);
+  ctx.fillStyle = 'rgba(5,2,12,0.66)'; ctx.fill('evenodd');
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,196,110,0.32)';
+  ctx.shadowColor = 'rgba(255,170,90,0.8)'; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+function drawMinimap() {
+  const mmR = clamp(MINSIDE * 0.11, 56, 92);
+  const cxm = W - 20 - mmR, cym = 20 + mmR;
+  const scale = mmR / WORLD_R;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU);
+  ctx.fillStyle = 'rgba(10,5,20,0.5)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,196,110,0.32)'; ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
+  const [wx0, wy0] = toWorld(0, 0);
+  const [wx1, wy1] = toWorld(W, H);
+  ctx.fillStyle = 'rgba(226,208,255,0.07)';
+  ctx.fillRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,208,255,0.6)';
+  ctx.strokeRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
+  for (const gal of galaxies) {
+    const gx = cxm + gal.x * scale, gy = cym + gal.y * scale;
+    ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, gal.r * scale), 0, TAU);
+    if (gal.lit) { ctx.fillStyle = 'rgba(255,214,120,0.5)'; ctx.fill(); }
+    ctx.strokeStyle = gal.lit ? 'rgba(255,224,150,0.9)' : 'rgba(180,110,220,0.5)';
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+  for (const h of hunters) {
+    ctx.beginPath(); ctx.arc(cxm + h.x*scale, cym + h.y*scale, 2, 0, TAU);
+    ctx.fillStyle = 'rgba(255,80,90,0.95)'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(cxm + P.x*scale, cym + P.y*scale, 2.4, 0, TAU);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+function drawCursor() {
+  const x = mouse.sx, y = mouse.sy;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = thrustHeld ? 'rgba(255,240,190,0.85)' : 'rgba(255,225,160,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x-11, y); ctx.lineTo(x-3, y); ctx.moveTo(x+3, y); ctx.lineTo(x+11, y);
+  ctx.moveTo(x, y-11); ctx.lineTo(x, y-3); ctx.moveTo(x, y+3); ctx.lineTo(x, y+11);
+  ctx.stroke();
+  ctx.restore();
+}
+function updateStateLine() {
+  if (mode !== 'play') { stateEl.textContent = ''; return; }
+  let txt = '', col = '#b795d8';
+  if (P.inv > 0) { txt = 'reforming — brief shield'; col = '#a8c8ff'; }
+  else {
+    let hunterNear = null, hd = 1e9;
+    for (const h of hunters) {
+      if (!h.chasing) continue;
+      const d = Math.hypot(h.x - P.x, h.y - P.y);
+      if (d < hd) { hd = d; hunterNear = h; }
+    }
+    const gi = nearestGalaxy(P.x, P.y);
+    const gal = galaxies[gi];
+    const dCore = Math.hypot(gal.x - P.x, gal.y - P.y);
+    const closing = ((gal.x - P.x) * P.vx + (gal.y - P.y) * P.vy) > 0;
+    if (hunterNear && hd < 700) { txt = '⚠ hunter locked on — slingshot it off'; col = '#ff8a8a'; }
+    else if (dCore < gal.killR * 4 && closing) { txt = '⚠ core ahead — swing around it, never through'; col = '#ffb07e'; }
+    else if (!gal.lit && dCore < gal.r * 1.2) {
+      txt = 'ignite this galaxy — ' + gal.got + ' / ' + gal.need + ' stars'; col = '#ffd98a';
+    }
+  }
+  stateEl.textContent = txt;
+  stateEl.style.color = col;
+}
+
+/* ------------------------- simulation --------------------------- */
+function updatePlayer(dt) {
+  if (P.inv > 0) P.inv -= dt;
+  // thrust toward the cursor
+  P.thrusting = thrustHeld && mode === 'play';
+  if (P.thrusting) {
+    const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+    const dx = tx - P.x, dy = ty - P.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    const ax = dx / d, ay = dy / d;
+    // heavier well, softer engine
+    const acc = TUNE.thrust * Math.pow(20 / (10 + pmass()), 0.18);
+    P.vx += ax * acc * dt; P.vy += ay * acc * dt;
+    // exhaust juice
+    for (let k = 0; k < 2; k++) {
+      exhaust.push({
+        x: P.x - ax * coreVis() * 1.6, y: P.y - ay * coreVis() * 1.6,
+        vx: -ax * rand(180, 330) + P.vx * 0.5 + gauss() * 60,
+        vy: -ay * rand(180, 330) + P.vy * 0.5 + gauss() * 60,
+        s: rand(3, 6), warm: rand(0.65, 0.95), t: 1,
+      });
+    }
+    if (exhaust.length > 240) exhaust.splice(0, exhaust.length - 240);
+  }
+  // gravity: every galaxy core pulls you (flat rotation-curve field ~1/d)
+  for (const gal of galaxies) {
+    const dx = gal.x - P.x, dy = gal.y - P.y;
+    const d = Math.hypot(dx, dy) + 1e-4;
+    if (d > gal.r * 1.6) continue;
+    const f = clamp01(1.6 - d / gal.r);
+    const gp = TUNE.gpull * (gal.r / 700);
+    const a = gp / (d + 20) * f;
+    P.vx += (dx / d) * a * dt;
+    P.vy += (dy / d) * a * dt;
+    // the core burns: shed your whole swarm and get thrown clear
+    if (d < gal.killR + coreVis() * 0.4 && P.inv <= 0) {
+      scatterSwarm(1);
+      P.inv = 2.2; shake = 1;
+      P.vx = -(dx / d) * 760 + gauss() * 80;
+      P.vy = -(dy / d) * 760 + gauss() * 80;
+      showToast('shredded by the core');
+      bursts.push({ x: P.x, y: P.y, r0: 60, t: 1, hue: [255, 140, 80] });
+    }
+  }
+  // drag: linear + a soft quadratic ceiling
+  const v = Math.hypot(P.vx, P.vy);
+  const dragA = TUNE.drag * v + 0.0006 * v * v;
+  if (v > 1) { P.vx -= (P.vx / v) * dragA * dt; P.vy -= (P.vy / v) * dragA * dt; }
+  P.x += P.vx * dt; P.y += P.vy * dt;
+  // world edge
+  const pr = Math.hypot(P.x, P.y);
+  if (pr > WORLD_R - 20) {
+    P.x *= (WORLD_R - 20) / pr; P.y *= (WORLD_R - 20) / pr;
+    const out = (P.x * P.vx + P.y * P.vy) / (WORLD_R - 20);
+    if (out > 0) { P.vx -= P.x / (WORLD_R - 20) * out * 1.6; P.vy -= P.y / (WORLD_R - 20) * out * 1.6; }
+  }
+}
+function updateStars(dt, live) {
+  const pr = pickupR(), suckR = pr * 2.8;
+  for (let si = stars.length - 1; si >= 0; si--) {
+    const s = stars[si];
+    if (s.heldT > 0) s.heldT -= dt;
+    // home galaxy orbit
+    const dxg = s.gx - s.x, dyg = s.gy - s.y;
+    const rg = Math.hypot(dxg, dyg) + 1e-4;
+    const ag = s.GM / (rg * rg + 900);
+    let ax = (dxg / rg) * ag, ay = (dyg / rg) * ag;
+    let vacuum = false;
+    if (live && !(s.heldT > 0)) {
+      const dx = P.x - s.x, dy = P.y - s.y;
+      if (dx < suckR && dx > -suckR && dy < suckR && dy > -suckR) {
+        const d = Math.hypot(dx, dy);
+        if (d < pr) {                        // swept up!
+          admitStar(s);
+          P.collected++; gainAcc++;
+          const gal = galaxies[s.gi];
+          if (!gal.lit) {
+            gal.got++;
+            if (gal.got >= gal.need) {
+              gal.lit = true; gal.igniteT = 1; litCount++;
+              bursts.push({ x: gal.x, y: gal.y, r0: gal.killR * 2, t: 1, hue: [255, 224, 150] });
+              showToast('galaxy ignited — ' + litCount + ' / ' + galaxies.length);
+              shake = Math.max(shake, 0.5);
+              if (litCount >= galaxies.length && !won) {
+                won = true;
+                const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
+                winTag.textContent = 'all eight cores burn for you · ' + mm + ':' + String(ss).padStart(2, '0') + ' · press R to run it again';
+                winEl.classList.add('show');
+              }
+            }
+          }
+          if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
+          else respawnStar(s);
+          continue;
+        }
+        if (d < suckR) {                     // short-range vacuum
+          vacuum = true;
+          const f = 1 - d / suckR;
+          const a = 2600 * f * f;
+          ax += (dx / d) * a; ay += (dy / d) * a;
+          s.vx *= 0.985; s.vy *= 0.985;
+        }
+      }
+    }
+    if (!vacuum) {
+      // galaxy lock keeps arms coherent
+      const ox = -dxg/rg, oy = -dyg/rg;
+      const vC = Math.sqrt(s.GM / (rg + 30));
+      const cvx = -oy * vC * s.gspin, cvy = ox * vC * s.gspin;
+      const k = Math.min(1, dt * 0.5);
+      s.vx += (cvx - s.vx) * k; s.vy += (cvy - s.vy) * k;
+    }
+    s.vx += ax * dt; s.vy += ay * dt;
+    const cap = vacuum ? 1600 : 340;
+    const v = Math.hypot(s.vx, s.vy);
+    if (v > cap) { s.vx *= cap/v; s.vy *= cap/v; }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    const rw2 = s.x*s.x + s.y*s.y;
+    if (rw2 > WORLD_R * WORLD_R) {
+      const rw = Math.sqrt(rw2);
+      s.x *= WORLD_R/rw; s.y *= WORLD_R/rw;
+      const out = (s.x*s.vx + s.y*s.vy) / WORLD_R;
+      if (out > 0) { s.vx -= (s.x/WORLD_R)*out; s.vy -= (s.y/WORLD_R)*out; }
+    }
+  }
+}
+function updateOrbiters(simDt) {
+  if (simDt <= 0) return;
+  const n = clamp(Math.ceil(simDt / 0.02), 1, 4), h = simDt / n;
+  const M = pmass();
+  const soft = 12, soft2 = soft * soft;
+  const mergeR2 = 64;
+  const RR = orbitR() * 1.25;
+  const vCap = Math.sqrt(TUNE.swarmG * M / soft) * 1.7;
+  for (let i = P.orbiters.length - 1; i >= 0; i--) {
+    const o = P.orbiters[i];
+    o.px = o.x; o.py = o.y;
+    let merged = false;
+    for (let k = 0; k < n; k++) {
+      const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
+      const a = TUNE.swarmG * M / (r2 + soft2);
+      o.rvx -= (o.rx / r) * a * h;
+      o.rvy -= (o.ry / r) * a * h;
+      const vC = Math.sqrt(TUNE.swarmG * M / (r + soft));
+      const tx = -o.ry/r * P.spin, ty = o.rx/r * P.spin;
+      const kl = Math.min(1, TUNE.lock * h * 3);
+      o.rvx += (tx * vC - o.rvx) * kl;
+      o.rvy += (ty * vC - o.rvy) * kl;
+      const out = (o.rx*o.rvx + o.ry*o.rvy) / r;
+      if (r > RR * 0.92 && out > 0) {
+        const kw = Math.min(1, h * 8);
+        o.rvx -= (o.rx/r) * out * kw;
+        o.rvy -= (o.ry/r) * out * kw;
+      }
+      const v = Math.hypot(o.rvx, o.rvy);
+      if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
+      o.rx += o.rvx * h; o.ry += o.rvy * h;
+      if (o.rx*o.rx + o.ry*o.ry < mergeR2) { merged = true; break; }
+    }
+    o.x = P.x + o.rx; o.y = P.y + o.ry;
+    if (merged) {
+      P.coreMass += o.mass; P.orbMass -= o.mass;
+      P.orbiters.splice(i, 1);
+    }
+  }
+}
+
+/* ----------------------------- loop ----------------------------- */
+buildWorld();
+spawnHunters();
+resetPlayer();
+cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
+
+let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0, frameDt = 0.016;
+function frame(now) {
+  const dt = Math.min(0.045, (now - last) / 1000);
+  last = now; perfNow = now / 1000; frameDt = dt;
+  const live = (mode === 'play');
+  const simDt = TUNE.paused ? 0 : dt * TUNE.time;
+
+  if (simDt > 0) {
+    if (live) {
+      playT += simDt;
+      updatePlayer(simDt);
+      updateHunters(simDt);
+    }
+    updateStars(simDt, live);
+    updateOrbiters(simDt);
+    if (live) {
+      floatT -= dt;
+      if (floatT <= 0) {
+        const fy = P.y - orbitR() * 1.2;
+        if (gainAcc > 0) addFloater(P.x + rand(-8, 8), fy, '+' + gainAcc + '★', [255, 216, 130]);
+        if (lossAcc > 0) addFloater(P.x + rand(-8, 8), fy, '−' + lossAcc + '★', [255, 110, 110]);
+        gainAcc = 0; lossAcc = 0; floatT = 0.4;
+      }
+    }
+  }
+
+  // camera
+  if (anim) {
+    anim.t += dt;
+    const k = clamp01(anim.t / anim.dur), e = easeInOut(k);
+    cam.x = lerp(anim.from.x, mode === 'diving' ? P.x : anim.to.x, e);
+    cam.y = lerp(anim.from.y, mode === 'diving' ? P.y : anim.to.y, e);
+    cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
+    if (k >= 1) { mode = anim.target; anim = null; }
+  } else if (mode === 'play') {
+    // look slightly ahead of the velocity — flying feel
+    const lx = P.x + P.vx * 0.3, ly = P.y + P.vy * 0.3;
+    cam.x += (lx - cam.x) * Math.min(1, dt * 4.5);
+    cam.y += (ly - cam.y) * Math.min(1, dt * 4.5);
+    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 1.6);
+  } else if (mode === 'overview') {
+    cam.x += (0 - cam.x) * Math.min(1, dt * 2);
+    cam.y += (0 - cam.y) * Math.min(1, dt * 2);
+  }
+
+  // fps meter
+  fpsE += (1 / Math.max(dt, 1e-3) - fpsE) * 0.06;
+  fpsT -= dt;
+  if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
+
+  // screen shake
+  let jx = 0, jy = 0;
+  if (shake > 0) {
+    const j = shake * shake * 7 / cam.zoom;
+    jx = gauss() * j; jy = gauss() * j;
+    shake = Math.max(0, shake - dt * 1.6);
+  }
+  cam.x += jx; cam.y += jy;
+
+  drawBackground();
+  drawGalaxies();
+  drawStars();
+  if (mode !== 'overview') {
+    drawPlayer();
+    drawHunters();
+    drawEffects(dt);
+    drawFloaters(dt);
+  }
+  drawBoundary();
+  ctx.globalCompositeOperation = 'source-over';
+  const wantCursor = mode === 'play' ? 'none' : 'default';
+  if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
+  if (mode !== 'overview') drawMinimap();
+  if (mode === 'play') drawCursor();
+
+  cam.x -= jx; cam.y -= jy;
+
+  // toast fade
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('show'); }
+
+  // hud
+  litEl.textContent = litCount + '/' + galaxies.length;
+  swarmEl.textContent = P.orbiters.length;
+  massEl.textContent = Math.round(pmass()).toLocaleString();
+  const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
+  timeEl.textContent = mm + ':' + String(ss).padStart(2, '0');
+  updateStateLine();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

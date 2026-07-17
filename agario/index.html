@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gravity Well — fly, slingshot, ignite</title>
+<title>KIKI // BOUBA</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; overflow: hidden; background: #070311; }
+  html, body { height: 100%; overflow: hidden; background: #0a0616; }
   #stage { display: block; width: 100vw; height: 100vh; cursor: default; }
 
   .panel {
@@ -17,9 +17,16 @@
     text-shadow: 0 0 8px rgba(120,40,180,.6);
   }
   #stats { left: 16px; top: 14px; color: #d9b6ff; }
-  #stats .big { font-size: 20px; color: #ffe6ad; font-weight: 600; letter-spacing: .02em; }
+  #form { font-size: 22px; font-weight: 600; letter-spacing: .1em; color: #ffd9f0; }
+  #form.kiki { color: #ffe6a8; }
   #stats .row { opacity: .82; }
   #stats b { color: #ffd98a; font-weight: 600; }
+  #stambox {
+    width: 130px; height: 5px; margin: 6px 0 4px;
+    border: 1px solid rgba(255,205,180,.35); border-radius: 3px;
+  }
+  #stam { height: 100%; width: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, #ff9a6a, #ffe6a8); }
   #hint { right: 16px; bottom: 14px; color: #a884c8; opacity: .55; }
   #state {
     left: 50%; bottom: 52px; transform: translateX(-50%);
@@ -37,12 +44,11 @@
   }
   #toast.show { opacity: 1; }
 
-  /* intro + win overlays */
   .overlay {
     position: fixed; inset: 0; z-index: 5;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 24px; text-align: center;
+    gap: 22px; text-align: center;
     pointer-events: none; transition: opacity .9s ease;
   }
   .overlay.gone { opacity: 0; }
@@ -53,31 +59,31 @@
   }
   .overlay h1 {
     margin: 0;
-    font: 300 clamp(30px, 7vw, 78px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
-    letter-spacing: .16em; text-indent: .16em; color: #fff;
-    text-shadow: 0 0 34px rgba(255,190,110,.5), 0 0 70px rgba(190,60,160,.35);
+    font: 300 clamp(30px, 7vw, 82px)/0.98 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .14em; text-indent: .14em; color: #fff;
+    text-shadow: 0 0 34px rgba(255,150,200,.5), 0 0 70px rgba(190,60,160,.35);
   }
+  .overlay h1 .k { color: #ffe6a8; text-shadow: 0 0 30px rgba(255,190,90,.7); }
+  .overlay h1 .b { color: #ffb9e2; }
   .overlay .tag {
-    max-width: 40ch;
-    font: 13px/1.8 ui-monospace, Menlo, monospace;
-    color: #c9a8e6; opacity: .75;
+    max-width: 44ch;
+    font: 13px/1.85 ui-monospace, Menlo, monospace;
+    color: #c9a8e6; opacity: .78;
   }
+  .overlay .tag b { color: #ffe6a8; font-weight: 600; }
   #dive {
     pointer-events: auto; cursor: pointer; margin-top: 4px;
     padding: 13px 30px; border-radius: 999px;
-    background: rgba(255,214,120,.06); border: 1px solid rgba(255,205,120,.5);
-    color: #ffe6ad; font: 600 13px/1 ui-monospace, Menlo, monospace;
+    background: rgba(255,180,220,.06); border: 1px solid rgba(255,170,215,.5);
+    color: #ffd9f0; font: 600 13px/1 ui-monospace, Menlo, monospace;
     letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
     backdrop-filter: blur(3px);
     transition: background .25s, box-shadow .25s, transform .25s, border-color .25s;
   }
   #dive:hover {
-    background: rgba(255,214,120,.16); border-color: rgba(255,224,150,.9);
-    box-shadow: 0 0 34px rgba(255,180,90,.35); transform: translateY(-1px);
+    background: rgba(255,180,220,.16); border-color: rgba(255,200,230,.9);
+    box-shadow: 0 0 34px rgba(255,120,190,.35); transform: translateY(-1px);
   }
-  #win { display: none; }
-  #win.show { display: flex; }
-  #win h1 { color: #ffe9b0; }
 
   /* dev panel */
   #devchip {
@@ -116,30 +122,26 @@
 <canvas id="stage"></canvas>
 
 <div id="intro" class="overlay">
-  <div class="sub">gravity well</div>
-  <h1>SWALLOW&nbsp;THE&nbsp;FRACTAL</h1>
-  <div class="tag">you are a young gravity well with a working engine.
-    fly. slingshot the burning cores — never touch them.
-    sweep up stars to grow your swarm, ignite all eight galaxies,
-    and don't let the hunters catch you.</div>
-  <button id="dive" type="button">dive in ↯</button>
-</div>
-
-<div id="win" class="overlay">
-  <div class="sub">every core burns your color</div>
-  <h1>THE&nbsp;FRACTAL,&nbsp;SWALLOWED</h1>
-  <div class="tag" id="wintag"></div>
+  <div class="sub">a shape has two natures</div>
+  <h1><span class="k">KIKI</span>&nbsp;//&nbsp;<span class="b">BOUBA</span></h1>
+  <div class="tag"><b>round</b>, you are bouba: soft, quick, hungry — smaller blobs sink into your belly, alive.
+    <b>click</b>, and you crystallize into kiki: sharp, slow, cruel — stab rivals,
+    and everyone in your belly is locked in a spiked cell.
+    if a bigger blob swallows YOU: dodge the spikes, wait for the walls to soften,
+    and push your way out.</div>
+  <button id="dive" type="button">enter the soup ↯</button>
 </div>
 
 <div id="stats" class="panel">
-  <div class="big">lit <b id="lit">0/8</b></div>
-  <div class="row">swarm&nbsp; <b id="swarm">0</b></div>
-  <div class="row">mass&nbsp;&nbsp; <b id="mass">0</b></div>
-  <div class="row">time&nbsp;&nbsp; <b id="time">0:00</b></div>
+  <div id="form">BOUBA&nbsp;~</div>
+  <div id="stambox"><div id="stam"></div></div>
+  <div class="row">mass&nbsp;&nbsp;&nbsp; <b id="mass">0</b></div>
+  <div class="row">belly&nbsp;&nbsp; <b id="belly">0</b></div>
+  <div class="row">digested <b id="eaten">0</b></div>
 </div>
 <div id="toast"></div>
 <div id="state" class="panel"></div>
-<div id="hint" class="panel">hold click / space to thrust · release to coast · esc back · R reset · ` dev</div>
+<div id="hint" class="panel">mouse to steer · click / space to shift form · R reset · ` dev</div>
 
 <div id="devchip">⚙ dev&nbsp;·&nbsp;`</div>
 <div id="dev">
@@ -154,28 +156,30 @@
 
 <script>
 /* ==================================================================
- *  GRAVITY WELL v2 — fly, slingshot, ignite
+ *  KIKI // BOUBA — an agar-like about having two natures
  *
- *  You are a body in the field: momentum, thrust, and the pull of
- *  eight burning galaxy cores. Sweep through star clusters to grow
- *  your orbiting swarm; collect enough of a galaxy's stars and its
- *  core IGNITES in your color. Ignite all eight to win. Cores shred
- *  your swarm on contact; hunters chase — out-fly them.
+ *  BOUBA (round, soft): quick and absorbent. Smaller boubas that touch
+ *  you sink into your belly and float there, alive. You can't stab and
+ *  can't be stabbed apart, but bigger boubas can swallow you.
  *
- *  Stars are plain glowing squares — color rides the sunset ramp by
- *  SIZE (small purple -> big white-gold) — and everything that moves
- *  sheds a shimmering blue/violet particle wake.
+ *  KIKI (spiky, hard): slow, runs on stamina, stabs on contact and
+ *  cannot be swallowed. The cruel part: while you're kiki, your belly
+ *  chamber crystallizes into a spiked cell barely big enough for your
+ *  captives — the spikes slowly sweep, and they must dodge or pop.
+ *
+ *  Get swallowed and you live it from inside: dodge the spikes during
+ *  kiki phases, and when the host relaxes to bouba, shove against the
+ *  membrane until you squeeze out.
  * ================================================================== */
 
 const canvas = document.getElementById('stage');
 const ctx = canvas.getContext('2d');
 const intro = document.getElementById('intro');
-const winEl = document.getElementById('win');
-const winTag = document.getElementById('wintag');
-const litEl = document.getElementById('lit');
-const swarmEl = document.getElementById('swarm');
+const formEl = document.getElementById('form');
+const stamEl = document.getElementById('stam');
 const massEl = document.getElementById('mass');
-const timeEl = document.getElementById('time');
+const bellyEl = document.getElementById('belly');
+const eatenEl = document.getElementById('eaten');
 const toastEl = document.getElementById('toast');
 const stateEl = document.getElementById('state');
 
@@ -191,29 +195,10 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---------- palette: MATLAB-ish sunset ramp ---------- */
-const STOPS = [
-  [0.00, [120, 46, 150]],
-  [0.22, [176, 44, 132]],
-  [0.44, [226, 84,  96]],
-  [0.64, [248, 148, 58]],
-  [0.82, [255, 216, 120]],
-  [1.00, [255, 252, 232]],
-];
-function ramp(t) {
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  for (let i = 1; i < STOPS.length; i++) {
-    if (t <= STOPS[i][0]) {
-      const [t0, c0] = STOPS[i-1], [t1, c1] = STOPS[i];
-      const f = (t - t0) / (t1 - t0);
-      return [c0[0]+(c1[0]-c0[0])*f, c0[1]+(c1[1]-c0[1])*f, c0[2]+(c1[2]-c0[2])*f];
-    }
-  }
-  return STOPS[STOPS.length-1][1];
-}
 const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
 const rand = (a, b) => a + Math.random() * (b - a);
 const lerp = (a, b, t) => a + (b - a) * t;
+const lerpC = (a, b, t) => [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 const clamp01 = t => t < 0 ? 0 : t > 1 ? 1 : t;
 const easeInOut = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
@@ -222,322 +207,209 @@ const gauss = () => (Math.random()+Math.random()+Math.random()-1.5)/1.5;
 
 /* ------------------ dev tuning (press ` in game) ------------------ */
 const TUNE_DEF = {
-  time: 1,       // simulation speed
-  thrust: 380,   // engine acceleration
-  drag: 0.12,    // coasting drag (per second)
-  gpull: 160000, // core pull strength (flat rotation-curve field, ~1/d)
-  pickup: 1,     // pickup radius multiplier
-  swarmG: 2100,  // gravity binding your orbiting swarm
-  lock: 0.55,    // 0 = pure Newton swarm, 1 = hard-reined disk
-  huntSpd: 590,  // hunter top speed
-  hunters: 3,    // hunter count (on R reset)
-  need: 22,      // % of a galaxy's stars to ignite it (on R reset)
-  // --- square appearance ---
-  billboard: 0,  // 1 = squares never rotate
-  starScale: 1,  // global size multiplier
-  markAt: 3.2,   // px size at which a square earns its glow + pip
-  glow: 1,       // square-glow strength
-  twinkle: 1,    // twinkle depth
-  shimmer: 1,    // blue/violet particle-wake emission rate
-  bgStars: 0.55,
+  time: 1,        // sim speed
+  speed: 1,       // bouba speed multiplier
+  kikiSpd: 0.6,   // kiki speed as a fraction of bouba
+  drain: 22,      // kiki stamina drain /s
+  regen: 15,      // bouba stamina regen /s
+  absorb: 1.3,    // radius ratio needed to swallow
+  chunk: 0.13,    // mass fraction chipped per stab
+  spikes: 7,      // spikes in the belly cell
+  spin: 0.55,     // belly spike sweep speed (rad/s)
+  tight: 1.55,    // kiki cell radius as a multiple of the captive
+  escT: 2.6,      // seconds of wall-pushing to escape a soft belly
+  bots: 9,        // rivals (on R reset)
+  food: 150,      // pellets (on R reset)
+  wobble: 1,      // bouba wobble amount
+  glow: 1,        // creature glow
+  bgStars: 0.5,   // backdrop
 };
 const TUNE = Object.assign({}, TUNE_DEF, { paused: false });
-try { Object.assign(TUNE, JSON.parse(localStorage.getItem('gw2_tune') || '{}'), { paused: false }); } catch (e) {}
+try { Object.assign(TUNE, JSON.parse(localStorage.getItem('kb_tune') || '{}'), { paused: false }); } catch (e) {}
 function saveTune() {
-  try { const { paused, ...t } = TUNE; localStorage.setItem('gw2_tune', JSON.stringify(t)); } catch (e) {}
+  try { const { paused, ...t } = TUNE; localStorage.setItem('kb_tune', JSON.stringify(t)); } catch (e) {}
 }
 
-/* ------------------------- the world ---------------------------- */
-const WORLD_R = 4600;
-let galaxies = [], stars = [], litCount = 0;
+/* --------------------------- world ------------------------------- */
+const WORLD_R = 2600;
 
-// color is a pure function of size: small squares purple, giants white-gold
-const sizeToWarm = size => clamp01(Math.pow((size - 1.6) / 13.4, 0.8));
-function makeStar(gal, gi) {
-  const g = clamp01(Math.pow(Math.random(), 2.2) + gauss()*0.04);
-  const size = lerp(1.6, 15, Math.pow(g, 1.4));
+// soft pastel natures; kiki shifts each toward hot white
+const HUES = [
+  [255, 205, 150],  // player — warm cream
+  [150, 226, 214], [244, 148, 170], [186, 152, 255], [166, 226, 148],
+  [140, 178, 255], [255, 178, 128], [222, 142, 226], [252, 220, 132],
+  [150, 210, 250], [242, 160, 200], [172, 236, 190],
+];
+const KIKI_TINT = [255, 244, 224];
+
+let creatures = [], pellets = [];
+const radiusOf = c => 14 + Math.sqrt(c.mass) * 2.2;
+
+function makeCreature(o) {
+  return Object.assign({
+    x: 0, y: 0, vx: 0, vy: 0,
+    mass: 60, hue: HUES[1], isPlayer: false,
+    k: 0, morph: 0,             // form target + eased morph (0 bouba, 1 kiki)
+    stam: 100,
+    wob: rand(0, TAU), wobSp: rand(0.8, 1.4),
+    spikeAng: rand(0, TAU),
+    prisoners: [], host: null,
+    lx: 0, ly: 0, lvx: 0, lvy: 0,   // local coords when imprisoned
+    hp: 3, escape: 0, inv: 0, hitInv: 0,
+    think: rand(0, 0.3), tx: 0, ty: 0, wantK: false,
+    digested: 0,
+  }, o);
+}
+function spawnAt(c) {
+  const a = rand(0, TAU), d = rand(WORLD_R * 0.25, WORLD_R * 0.9);
+  c.x = Math.cos(a) * d; c.y = Math.sin(a) * d;
+  c.vx = c.vy = 0;
+}
+function makePellet() {
+  const a = rand(0, TAU), d = Math.sqrt(Math.random()) * WORLD_R * 0.96;
   return {
-    gi, gx: gal.x, gy: gal.y, GM: gal.GM, gspin: gal.omega < 0 ? -1 : 1,
-    size, mass: size * size * 0.06,
-    warm: sizeToWarm(size),
-    phase: rand(0, TAU), tw: rand(0.7, 2.6),
-    x: 0, y: 0, vx: 0, vy: 0, held: false,
+    x: Math.cos(a) * d, y: Math.sin(a) * d,
+    mass: rand(3.5, 7),
+    hue: HUES[(Math.random() * HUES.length) | 0],
+    sharp: Math.random() < 0.4,           // cosmetic: tiny kiki or tiny bouba
+    wob: rand(0, TAU),
   };
 }
-function seatStar(s, gal) {
-  const rr = Math.pow(Math.random(), 0.6);
-  const arm = (Math.floor(Math.random() * gal.arms) / gal.arms) * TAU;
-  let ang = arm + rr * gal.wind * TAU + gauss() * (0.18 + 0.4 * rr);
-  let hr = rr * gal.r;
-  if (Math.random() < 0.5) {                 // clump into sub-cluster knots
-    const knot = Math.floor(rr * 5) / 5 + 0.1;
-    hr = knot * gal.r + gauss() * gal.r * 0.06;
-    ang = arm + knot * gal.wind * TAU + gauss() * 0.14;
-  }
-  hr = Math.max(hr, gal.killR * 1.6);        // don't seed food inside the furnace
-  s.x = gal.x + Math.cos(ang) * hr;
-  s.y = gal.y + Math.sin(ang) * hr;
-  const v = Math.sqrt(gal.GM / (hr + 30));
-  s.vx = -Math.sin(ang) * v * s.gspin;
-  s.vy =  Math.cos(ang) * v * s.gspin;
-  s.held = false;
-}
+let player = null;
 function buildWorld() {
-  galaxies = []; stars = []; litCount = 0;
-  const N = 8;
-  for (let i = 0; i < N; i++) {
-    const t = i / (N - 1);
-    const ang = t * TAU * 1.35 + 0.6;
-    const rad = t * WORLD_R * 0.82;
-    const r = lerp(1050, 380, t) * rand(0.85, 1.12);
-    const omega = rand(0.03, 0.09) * (Math.random() < 0.5 ? -1 : 1);
-    galaxies.push({
-      x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r, omega,
-      GM: Math.pow(omega * r * 0.5, 2) * (r * 0.5 + 30),
-      arms: 2 + (Math.floor(Math.random()*3)), wind: rand(1.8, 3.0),
-      killR: 26 + r * 0.02,                  // the burning core
-      got: 0, need: 1, lit: false, igniteT: 0,
-    });
+  creatures = []; pellets = [];
+  player = makeCreature({ mass: 70, hue: HUES[0], isPlayer: true });
+  spawnAt(player);
+  creatures.push(player);
+  const nB = Math.round(TUNE.bots);
+  for (let i = 0; i < nB; i++) {
+    const c = makeCreature({ mass: rand(35, 150), hue: HUES[1 + i % (HUES.length - 1)] });
+    spawnAt(c);
+    creatures.push(c);
   }
-  const TOTAL = clamp(Math.round((W*H)/1500) * 2, 1500, 2800);
-  const wsum = galaxies.reduce((a, g) => a + g.r, 0);
-  galaxies.forEach((gal, gi) => {
-    const n = Math.round(TOTAL * (gal.r / wsum));
-    gal.need = clamp(Math.round(n * TUNE.need / 100), 15, 120);
-    for (let k = 0; k < n; k++) { const s = makeStar(gal, gi); seatStar(s, gal); stars.push(s); }
-  });
-  baseStarCount = stars.length;
-}
-function respawnStar(s) {
-  const gi = (Math.random() * galaxies.length) | 0;
-  Object.assign(s, makeStar(galaxies[gi], gi));
-  seatStar(s, galaxies[gi]);
+  const nF = Math.round(TUNE.food);
+  for (let i = 0; i < nF; i++) pellets.push(makePellet());
 }
 
-/* --------------------------- player ------------------------------ */
-const P = {
-  x: 0, y: 0, vx: 0, vy: 0,
-  coreMass: 0, orbMass: 0, orbiters: [],
-  spin: 1, collected: 0, inv: 0, thrusting: false,
-};
-const pmass = () => 10 + P.coreMass + P.orbMass;
-const pickupR = () => (26 + 2.6 * Math.sqrt(pmass())) * TUNE.pickup;
-const orbitR = () => 34 + 3.2 * Math.sqrt(pmass());
-const coreVis = () => clamp(4 + Math.sqrt(pmass()) * 0.9, 6, 30);
-
-function admitStar(st) {
-  const r = orbitR() * rand(0.45, 0.95), a = rand(0, TAU);
-  const vC = Math.sqrt(TUNE.swarmG * pmass() / (r + 12));
-  P.orbiters.push({
-    rx: Math.cos(a) * r, ry: Math.sin(a) * r,
-    rvx: -Math.sin(a) * vC * P.spin, rvy: Math.cos(a) * vC * P.spin,
-    x: 0, y: 0, px: 0, py: 0,
-    size: st.size, warm: st.warm, mass: st.mass,
-    phase: rand(0, TAU), tw: rand(0.7, 2.6),
-  });
-  P.orbMass += st.mass;
-  while (P.orbiters.length > 80) {           // fold smallest into the core
-    let mi = 0;
-    for (let i = 1; i < P.orbiters.length; i++)
-      if (P.orbiters[i].mass < P.orbiters[mi].mass) mi = i;
-    P.coreMass += P.orbiters[mi].mass;
-    P.orbMass  -= P.orbiters[mi].mass;
-    P.orbiters.splice(mi, 1);
-  }
+/* --------------------- belly geometry helpers -------------------- */
+function maxPrisonerR(c) {
+  let m = 0;
+  for (const p of c.prisoners) m = Math.max(m, radiusOf(p));
+  return m;
 }
-// shatter: fling part of the swarm back into the world as free stars
-function scatterSwarm(frac) {
-  const k = Math.ceil(P.orbiters.length * frac);
-  for (let i = 0; i < k && P.orbiters.length; i++) {
-    const o = P.orbiters.splice((Math.random() * P.orbiters.length) | 0, 1)[0];
-    P.orbMass -= o.mass;
-    const gi = nearestGalaxy(P.x, P.y);
-    const s = makeStar(galaxies[gi], gi);
-    s.size = o.size; s.warm = o.warm; s.mass = o.mass;
-    s.x = P.x + o.rx; s.y = P.y + o.ry;
-    const a = rand(0, TAU), sp = rand(160, 420);
-    s.vx = Math.cos(a) * sp + P.vx * 0.3;
-    s.vy = Math.sin(a) * sp + P.vy * 0.3;
-    s.held = true; s.heldT = rand(0.8, 1.6);   // brief immunity so they visibly fly
-    stars.push(s);
-    lossAcc++;
-  }
-  while (stars.length > baseStarCount + 500) stars.splice(0, 1);
+// the chamber: roomy when soft, barely-you-sized when crystallized
+function cavityR(c) {
+  const pr = maxPrisonerR(c);
+  if (pr <= 0) return 0;
+  const crowd = 1 + (c.prisoners.length - 1) * 0.22;
+  return lerp(2.05, TUNE.tight, c.morph) * pr * crowd;
 }
-function nearestGalaxy(x, y) {
-  let bi = 0, bd = 1e18;
-  for (let i = 0; i < galaxies.length; i++) {
-    const g = galaxies[i], d = (g.x-x)*(g.x-x) + (g.y-y)*(g.y-y);
-    if (d < bd) { bd = d; bi = i; }
-  }
-  return bi;
+function displayR(c) {
+  const R = radiusOf(c);
+  const cav = cavityR(c);
+  return Math.max(R, cav * 1.28);
+}
+// spike tips leave a free circle just barely bigger than the captive
+function spikeTipR(c) {
+  const cav = cavityR(c);
+  const pr = maxPrisonerR(c);
+  return lerp(cav, pr * 1.18, c.morph * c.morph);
 }
 
-/* --------------------------- hunters ----------------------------- */
-let hunters = [];
-function spawnHunters() {
-  hunters = [];
-  const n = Math.round(TUNE.hunters);
-  for (let i = 0; i < n; i++) {
-    const gal = galaxies[(i * 3 + 4) % galaxies.length];
-    hunters.push({
-      x: gal.x + rand(-gal.r, gal.r) * 0.6,
-      y: gal.y + rand(-gal.r, gal.r) * 0.6,
-      vx: 0, vy: 0, tx: 0, ty: 0, repick: 0, chasing: false,
-      ph: rand(0, TAU),
-    });
-  }
-}
-function updateHunters(dt) {
-  for (const h of hunters) {
-    const dP = Math.hypot(P.x - h.x, P.y - h.y);
-    h.chasing = dP < 950 && P.inv <= 0 && mode === 'play';
-    if (h.chasing) {
-      const lead = clamp(dP / 600, 0.15, 0.8);           // aim where you're going
-      h.tx = P.x + P.vx * lead; h.ty = P.y + P.vy * lead;
-    } else {
-      h.repick -= dt;
-      if (h.repick <= 0) {
-        const gal = galaxies[(Math.random() * galaxies.length) | 0];
-        h.tx = gal.x + rand(-gal.r, gal.r) * 0.6;
-        h.ty = gal.y + rand(-gal.r, gal.r) * 0.6;
-        h.repick = rand(4, 9);
-      }
-    }
-    const dx = h.tx - h.x, dy = h.ty - h.y;
-    const d = Math.hypot(dx, dy) + 1e-4;
-    const acc = h.chasing ? 300 : 140;
-    h.vx += (dx / d) * acc * dt;
-    h.vy += (dy / d) * acc * dt;
-    const vmax = h.chasing ? TUNE.huntSpd : TUNE.huntSpd * 0.45;
-    const v = Math.hypot(h.vx, h.vy);
-    if (v > vmax) { h.vx *= vmax / v; h.vy *= vmax / v; }
-    h.x += h.vx * dt; h.y += h.vy * dt;
-    const pr = Math.hypot(h.x, h.y);
-    if (pr > WORLD_R) { h.x *= WORLD_R / pr; h.y *= WORLD_R / pr; }
-    // strike: shred half the swarm and bounce the player away
-    if (dP < 26 + coreVis() && P.inv <= 0 && mode === 'play') {
-      scatterSwarm(0.5);
-      P.inv = 2.5; shake = 1;
-      const ax = (P.x - h.x) / (dP + 1e-3), ay = (P.y - h.y) / (dP + 1e-3);
-      P.vx += ax * 620; P.vy += ay * 620;
-      showToast('caught — half your swarm scattered');
-      bursts.push({ x: P.x, y: P.y, r0: 40, t: 1, hue: [255, 90, 90] });
-    }
-  }
-}
-
-/* --------------------------- effects ----------------------------- */
+/* -------------------------- effects ------------------------------ */
 let toastT = 0;
 function showToast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); toastT = 2.0; }
 const bursts = [];
-const exhaust = [];
 const floaters = [];
-
-// shimmering blue/violet particle wake — stars, swarm, and you all shed it
-const shimmer = [];
-const SHIM_CAP = 520;
-function emitShimmer(x, y, vx, vy) {
-  if (shimmer.length >= SHIM_CAP) return;
-  shimmer.push({
-    x: x + gauss() * 3, y: y + gauss() * 3,
-    vx: vx * 0.25 + gauss() * 14, vy: vy * 0.25 + gauss() * 14,
-    t: 1, life: rand(0.5, 1.1), s: rand(1.6, 3),
-    hue: [rand(120, 190), rand(110, 165), 255],
-    ph: rand(0, TAU),
-  });
-}
-let gainAcc = 0, lossAcc = 0, floatT = 0;
 let shake = 0;
-let baseStarCount = 0;
 function addFloater(x, y, txt, col) { floaters.push({ x, y, txt, col, t: 1 }); }
-
-/* --------------------------- camera ----------------------------- */
-const cam = { x: 0, y: 0, zoom: 0.1 };
-const overviewCam = () => ({ x: 0, y: 0, zoom: 0.40 * MINSIDE / WORLD_R });
-function playZoom() {
-  const spd = Math.hypot(P.vx, P.vy);
-  return clamp(0.30 * MINSIDE / (140 + 26 * Math.sqrt(pmass()) + 0.22 * spd), 0.12, 2.2);
+function spill(x, y, hue, n, m) {          // chipped mass becomes pellets
+  for (let i = 0; i < n; i++) {
+    const p = makePellet();
+    p.x = x + gauss() * 14; p.y = y + gauss() * 14;
+    p.hue = hue; p.mass = m / n;
+    p.vx = gauss() * 160; p.vy = gauss() * 160;
+    pellets.push(p);
+  }
+  while (pellets.length > TUNE.food + 160) pellets.splice((Math.random() * TUNE.food) | 0, 1);
 }
-let mode = 'overview', anim = null, won = false, playT = 0;
+
+/* --------------------------- camera ------------------------------ */
+const cam = { x: 0, y: 0, zoom: 0.12 };
+const overviewCam = () => ({ x: 0, y: 0, zoom: 0.42 * MINSIDE / WORLD_R });
+function playZoom() {
+  if (player.host) {
+    const cav = Math.max(cavityR(player.host), radiusOf(player) * 2.2);
+    return clamp(0.26 * MINSIDE / cav, 0.2, 4);
+  }
+  return clamp(0.34 * MINSIDE / (radiusOf(player) * 6.5), 0.16, 1.6);
+}
+let mode = 'overview', anim = null;
 function flyTo(target, to, dur) {
   anim = { t: 0, dur, target, from: { x: cam.x, y: cam.y, zoom: cam.zoom }, to };
 }
 function enterPlay() {
   if (mode === 'play' || mode === 'diving') return;
   mode = 'diving';
-  flyTo('play', { x: P.x, y: P.y, zoom: playZoom() }, 2.6);
+  flyTo('play', { x: player.x, y: player.y, zoom: playZoom() }, 2.2);
   intro.classList.add('gone');
-}
-function backToOverview() {
-  if (mode === 'overview' || mode === 'rising') return;
-  mode = 'rising';
-  flyTo('overview', overviewCam(), 2.0);
-  intro.classList.remove('gone');
 }
 const toScreen = (wx, wy) => [ (wx - cam.x) * cam.zoom + W/2, (wy - cam.y) * cam.zoom + H/2 ];
 const toWorld  = (sx, sy) => [ (sx - W/2) / cam.zoom + cam.x, (sy - H/2) / cam.zoom + cam.y ];
 
-/* --------------------------- input ------------------------------ */
+/* --------------------------- input ------------------------------- */
 const mouse = { sx: W/2, sy: H/2 };
 window.addEventListener('pointermove', e => {
   if (e.target !== canvas) return;
   mouse.sx = e.clientX; mouse.sy = e.clientY;
 });
-let thrustHeld = false;
-canvas.addEventListener('pointerdown', () => { if (mode === 'play') thrustHeld = true; });
-window.addEventListener('pointerup', () => thrustHeld = false);
-window.addEventListener('blur', () => thrustHeld = false);
+function toggleForm() {
+  if (mode !== 'play') return;
+  if (player.k === 0 && player.stam < 12) { showToast('too tired to crystallize'); return; }
+  player.k = player.k === 0 ? 1 : 0;
+}
+canvas.addEventListener('pointerdown', () => { if (mode === 'play') toggleForm(); });
 document.getElementById('dive').addEventListener('click', enterPlay);
 window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') backToOverview();
-  else if (e.key === ' ') { thrustHeld = true; e.preventDefault(); }
+  if (e.key === ' ') { toggleForm(); e.preventDefault(); }
+  else if (e.key === 'Escape') { if (mode === 'play') { mode = 'rising'; flyTo('overview', overviewCam(), 1.8); intro.classList.remove('gone'); } }
   else if (e.key === 'r' || e.key === 'R') resetGame();
   else if (e.key === '`' || e.key === 'd' || e.key === 'D') toggleDev();
   else if (e.key === 'p' || e.key === 'P') togglePause();
 });
-window.addEventListener('keyup', e => { if (e.key === ' ') thrustHeld = false; });
 function resetGame() {
-  buildWorld(); spawnHunters(); resetPlayer();
-  won = false; playT = 0; winEl.classList.remove('show');
+  buildWorld();
   anim = null; mode = 'overview';
   cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
   intro.classList.remove('gone');
-  showToast('world reset');
-}
-function resetPlayer() {
-  const gal = galaxies[0];
-  P.x = gal.x + gal.r * 0.55; P.y = gal.y;
-  P.vx = 0; P.vy = -Math.sqrt(gal.GM / (gal.r * 0.55 + 30)) * (gal.omega < 0 ? -1 : 1);
-  P.coreMass = 0; P.orbMass = 0; P.orbiters = [];
-  P.collected = 0; P.inv = 0;
+  showToast('soup reset');
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.03, 4);
+  cam.zoom = clamp(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.05, 5);
 }, { passive: false });
 
 /* --------------------------- dev panel --------------------------- */
 const PARAMS = [
-  ['#', 'flight'],
-  ['time',    'sim speed',      0,     3,      0.05],
-  ['thrust',  'thrust',         150,   700,    10  ],
-  ['drag',    'drag',           0.02,  0.4,    0.01],
-  ['gpull',   'core pull',      20000, 320000, 5000],
-  ['pickup',  'pickup radius',  0.5,   2,      0.05],
-  ['swarmG',  'swarm gravity',  500,   6000,   50  ],
-  ['lock',    'orbit lock',     0,     1,      0.05],
-  ['huntSpd', 'hunter speed',   200,   900,    10  ],
-  ['hunters', 'hunters ®',      0,     6,      1   ],
-  ['need',    'ignite % ®',     5,     40,     1   ],
-  ['#', 'squares'],
-  ['billboard','billboard',     0,   1,    1   ],
-  ['starScale','star scale',    0.4, 2.5,  0.05],
-  ['markAt',  'glow at px',     1,   12,   0.2 ],
-  ['glow',    'glow',           0,   2,    0.05],
-  ['twinkle', 'twinkle',        0,   1.5,  0.05],
-  ['shimmer', 'shimmer trail',  0,   2,    0.05],
-  ['bgStars', 'bg stars',       0,   1,    0.05],
+  ['#', 'soup'],
+  ['time',   'sim speed',    0,    3,    0.05],
+  ['speed',  'bouba speed',  0.4,  2,    0.05],
+  ['kikiSpd','kiki speed ×', 0.2,  1,    0.05],
+  ['drain',  'kiki drain',   5,    60,   1   ],
+  ['regen',  'stam regen',   4,    40,   1   ],
+  ['absorb', 'swallow ratio',1.05, 2,    0.05],
+  ['chunk',  'stab chunk',   0.04, 0.3,  0.01],
+  ['#', 'the cell'],
+  ['spikes', 'cell spikes',  3,    12,   1   ],
+  ['spin',   'spike sweep',  0,    2,    0.05],
+  ['tight',  'cell tightness',1.3, 2,    0.05],
+  ['escT',   'escape secs',  1,    6,    0.1 ],
+  ['#', 'world'],
+  ['bots',   'rivals ®',     2,    16,   1   ],
+  ['food',   'pellets ®',    40,   300,  10  ],
+  ['wobble', 'wobble',       0,    2,    0.05],
+  ['glow',   'glow',         0,    2,    0.05],
+  ['bgStars','bg stars',     0,    1,    0.05],
 ];
 const devPanel = document.getElementById('dev');
 const devRows = document.getElementById('devrows');
@@ -584,52 +456,26 @@ function togglePause() {
 }
 pauseBtn.addEventListener('click', togglePause);
 
-/* --------------------------- drawing ---------------------------- */
-// plain glowing square: color rides the sunset ramp by SIZE (small = purple,
-// big = white-gold). The glow is square too — layered low-alpha squares.
-function starMark(sx, sy, u, warm, tw, spin) {
-  u *= TUNE.starScale;
-  tw = clamp01(1 - (1 - tw) * TUNE.twinkle);
-  const c = ramp(warm);
-  if (u < TUNE.markAt) {                     // small: bare square, axis-aligned
-    const s = u * (0.8 + 0.35 * tw);
-    ctx.fillStyle = rgba(c, Math.min(1, 0.45 + 0.5 * tw));
-    ctx.fillRect(sx - s/2, sy - s/2, s, s);
-    return;
-  }
-  const rot = TUNE.billboard < 0.5;
-  if (rot) { ctx.save(); ctx.translate(sx, sy); ctx.rotate(spin); sx = 0; sy = 0; }
-  if (TUNE.glow > 0.01) {                    // square glow halo
-    const k = TUNE.glow * (0.6 + 0.4 * tw);
-    const g1 = u * (2.1 + 0.4 * tw);
-    ctx.fillStyle = rgba(c, 0.10 * k);
-    ctx.fillRect(sx - g1/2, sy - g1/2, g1, g1);
-    const g2 = u * 1.45;
-    ctx.fillStyle = rgba(c, 0.20 * k);
-    ctx.fillRect(sx - g2/2, sy - g2/2, g2, g2);
-  }
-  const s = u * (0.82 + 0.28 * tw);
-  ctx.fillStyle = rgba(c, Math.min(1, 0.6 + 0.4 * tw));
-  ctx.fillRect(sx - s/2, sy - s/2, s, s);
-  if (u > 6) {                               // hot pip on the big ones
-    ctx.fillStyle = rgba(ramp(Math.min(1, warm + 0.3)), Math.min(1, tw));
-    ctx.fillRect(sx - u*0.18, sy - u*0.18, u*0.36, u*0.36);
-  }
-  if (rot) ctx.restore();
-}
-
-/* backdrop stars: fixed in world space, same camera as everything else */
-const BG_TILE = 620;
-const bgTileStars = Array.from({ length: 14 }, () => ({
+/* --------------------------- drawing ----------------------------- */
+/* backdrop: fixed world-space squares (kept from the galaxy days) */
+const BG_TILE = 520;
+const bgTileStars = Array.from({ length: 12 }, () => ({
   ox: rand(0, BG_TILE), oy: rand(0, BG_TILE),
-  ws: rand(2.2, 4.6), warm: rand(0.15, 0.7),
-  rank: Math.random(), ph: rand(0, TAU), tws: rand(0.4, 1.4),
+  ws: rand(2, 4.4), hue: HUES[(Math.random() * HUES.length) | 0],
+  rank: Math.random(), ph: rand(0, TAU), tws: rand(0.4, 1.2),
 }));
-function drawBgStars() {
-  const fade = clamp01((cam.zoom - 0.18) / 0.4);
-  const A = TUNE.bgStars * fade;
-  if (A <= 0.005) return;
-  const keep = clamp01(cam.zoom * 0.55);
+function drawBackdrop() {
+  ctx.fillStyle = '#0a0616'; ctx.fillRect(0, 0, W, H);
+  const [pcx, pcy] = toScreen(player.x, player.y);
+  const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
+  g.addColorStop(0, 'rgba(66,24,88,0.32)');
+  g.addColorStop(0.5, 'rgba(36,12,56,0.2)');
+  g.addColorStop(1, 'rgba(10,4,20,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  const fade = clamp01((cam.zoom - 0.2) / 0.4) * TUNE.bgStars;
+  if (fade <= 0.005) return;
+  const keep = clamp01(cam.zoom * 0.6);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const [wx0, wy0] = toWorld(-20, -20);
@@ -637,212 +483,161 @@ function drawBgStars() {
   const ix0 = Math.floor(wx0 / BG_TILE), ix1 = Math.floor(wx1 / BG_TILE);
   const iy0 = Math.floor(wy0 / BG_TILE), iy1 = Math.floor(wy1 / BG_TILE);
   if ((ix1 - ix0 + 1) * (iy1 - iy0 + 1) <= 400) {
-    for (let iy = iy0; iy <= iy1; iy++) {
-      for (let ix = ix0; ix <= ix1; ix++) {
-        const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
-        for (const st of bgTileStars) {
-          if (st.rank > keep) continue;
-          const wx = ix * BG_TILE + (st.ox + j * 300) % BG_TILE;
-          const wy = iy * BG_TILE + (st.oy + j * 520) % BG_TILE;
-          const [sx, sy] = toScreen(wx, wy);
-          if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
-          const s = clamp(st.ws * cam.zoom, 3, 9);
-          const tw = 0.6 + 0.4 * Math.sin(perfNow * st.tws + st.ph + j * 6);
-          ctx.fillStyle = rgba(ramp(st.warm), A * 0.5 * tw);
-          ctx.fillRect(sx - s/2, sy - s/2, s, s);
-        }
+    for (let iy = iy0; iy <= iy1; iy++) for (let ix = ix0; ix <= ix1; ix++) {
+      const j = (((ix * 73856093) ^ (iy * 19349663)) >>> 0) % 97 / 97;
+      for (const st of bgTileStars) {
+        if (st.rank > keep) continue;
+        const wx = ix * BG_TILE + (st.ox + j * 260) % BG_TILE;
+        const wy = iy * BG_TILE + (st.oy + j * 410) % BG_TILE;
+        const [sx, sy] = toScreen(wx, wy);
+        if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
+        const s = clamp(st.ws * cam.zoom, 2.5, 7);
+        const tw = 0.6 + 0.4 * Math.sin(perfNow * st.tws + st.ph + j * 6);
+        ctx.fillStyle = rgba(st.hue, fade * 0.35 * tw);
+        ctx.fillRect(sx - s/2, sy - s/2, s, s);
       }
     }
   }
   ctx.restore();
 }
-
-function drawBackground() {
-  ctx.fillStyle = '#070311'; ctx.fillRect(0, 0, W, H);
-  const [pcx, pcy] = toScreen(P.x, P.y);
-  const g = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, MINSIDE * 0.9);
-  g.addColorStop(0, 'rgba(60,18,84,0.35)');
-  g.addColorStop(0.5, 'rgba(34,10,54,0.22)');
-  g.addColorStop(1, 'rgba(8,3,18,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  drawBgStars();
-}
-function drawGalaxies() {
+function drawPellets() {
   ctx.globalCompositeOperation = 'lighter';
-  for (const gal of galaxies) {
-    const [sx, sy] = toScreen(gal.x, gal.y);
-    const R = Math.max(6, gal.r * 0.5 * cam.zoom);
-    if (sx < -R*2 || sx > W + R*2 || sy < -R*2 || sy > H + R*2) continue;
-    // haze
-    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
-    if (gal.lit) {
-      g.addColorStop(0, 'rgba(255,240,200,0.6)');
-      g.addColorStop(0.3, 'rgba(255,214,120,0.30)');
-      g.addColorStop(1, 'rgba(255,170,90,0)');
-    } else {
-      g.addColorStop(0, 'rgba(255,244,214,0.5)');
-      g.addColorStop(0.25, 'rgba(255,196,120,0.28)');
-      g.addColorStop(0.6, 'rgba(210,80,140,0.12)');
-      g.addColorStop(1, 'rgba(120,40,120,0)');
-    }
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.fill();
-
-    // the burning core: bright heart + DANGER ring at the true kill radius
-    const kr = Math.max(gal.killR * cam.zoom, 5);
-    const heart = ctx.createRadialGradient(sx, sy, 0, sx, sy, kr * 2.2);
-    const hcol = gal.lit ? [255, 246, 220] : [255, 190, 110];
-    heart.addColorStop(0, rgba(hcol, 0.95));
-    heart.addColorStop(0.35, rgba(gal.lit ? [255, 220, 140] : [255, 120, 70], 0.55));
-    heart.addColorStop(1, rgba([200, 60, 80], 0));
-    ctx.fillStyle = heart;
-    ctx.beginPath(); ctx.arc(sx, sy, kr * 2.2, 0, TAU); ctx.fill();
-    const pulse = 0.5 + 0.5 * Math.sin(perfNow * 3 + gal.x);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = gal.lit ? rgba([255, 228, 160], 0.7) : rgba([255, 70, 70], 0.35 + 0.3 * pulse);
-    ctx.beginPath(); ctx.arc(sx, sy, kr, 0, TAU); ctx.stroke();
-
-    // ignition progress arc (only while unlit and started)
-    if (!gal.lit && gal.got > 0) {
-      const t = clamp01(gal.got / gal.need);
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = 'rgba(255,214,120,0.25)';
-      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, 0, TAU); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,224,150,0.9)';
-      ctx.beginPath(); ctx.arc(sx, sy, kr * 1.6, -Math.PI/2, -Math.PI/2 + t * TAU); ctx.stroke();
-    }
-    if (gal.igniteT > 0) gal.igniteT -= 0.016;
-  }
-}
-function streak(wx0, wy0, wx1, wy1, color, alpha, width) {
-  const [x0, y0] = toScreen(wx0, wy0), [x1, y1] = toScreen(wx1, wy1);
-  ctx.strokeStyle = rgba(color, alpha); ctx.lineWidth = width;
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-}
-function drawStars() {
-  ctx.globalCompositeOperation = 'lighter';
-  const m = 40;
-  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
-  for (const s of stars) {
-    const [sx, sy] = toScreen(s.x, s.y);
+  const m = 20;
+  for (const p of pellets) {
+    const [sx, sy] = toScreen(p.x, p.y);
     if (sx < -m || sx > W + m || sy < -m || sy > H + m) continue;
-    const u = s.size * cam.zoom;
-    if (u < 0.35) continue;
-    const tw = 0.5 + 0.5 * Math.sin(perfNow * s.tw + s.phase);
-    // visible stars shed a slow shimmer wake; fast (vacuumed) ones shed more
-    if (shimGate) {
-      const spd = Math.hypot(s.vx, s.vy);
-      if (Math.random() < frameDt * TUNE.shimmer * (0.4 + spd / 260) * Math.min(1, s.size / 5))
-        emitShimmer(s.x, s.y, s.vx, s.vy);
+    const s = clamp((5 + p.mass * 0.5) * cam.zoom, 1.5, 12);
+    if (p.sharp) {                          // a tiny kiki
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(p.wob + perfNow * 0.4);
+      ctx.fillStyle = rgba(p.hue, 0.85);
+      ctx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const a = k * TAU / 8;
+        const r = (k % 2 === 0 ? s : s * 0.42);
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {                                // a tiny bouba
+      const wob = 1 + 0.15 * Math.sin(perfNow * 2 + p.wob);
+      ctx.fillStyle = rgba(p.hue, 0.8);
+      ctx.beginPath(); ctx.arc(sx, sy, s * 0.62 * wob, 0, TAU); ctx.fill();
     }
-    starMark(sx, sy, u, s.warm, tw, s.phase);
   }
 }
-function drawPlayer() {
-  const [sx, sy] = toScreen(P.x, P.y);
-  const blink = P.inv > 0 && Math.sin(perfNow * 18) > 0;
-  ctx.globalCompositeOperation = 'lighter';
-
-  // pickup ring — the honest 'my reach' circle
-  const pr = pickupR() * cam.zoom;
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = `rgba(255,220,150,${blink ? 0.1 : 0.25})`;
-  ctx.setLineDash([4, 7]);
-  ctx.beginPath(); ctx.arc(sx, sy, pr, 0, TAU); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // orbiting swarm
-  const shimGate = TUNE.shimmer > 0.01 && cam.zoom > 0.45;
-  for (const o of P.orbiters) {
-    const [ox, oy] = toScreen(o.x, o.y);
-    const u = o.size * cam.zoom;
-    if (ox < -20 || ox > W+20 || oy < -20 || oy > H+20 || u < 0.4) continue;
-    const speed = Math.hypot(o.rvx, o.rvy);
-    if (speed > 30 && u > 0.6) streak(o.px, o.py, o.x, o.y, ramp(o.warm), 0.22, Math.max(1, u*0.45));
-    if (shimGate && Math.random() < frameDt * TUNE.shimmer * (0.5 + speed / 300))
-      emitShimmer(o.x, o.y, o.rvx + P.vx, o.rvy + P.vy);
-    const tw = 0.5 + 0.5 * Math.sin(perfNow * o.tw + o.phase);
-    starMark(ox, oy, u, o.warm, tw, Math.atan2(o.rvy, o.rvx));
+// the creature body: bouba = wobbly rounded blob, kiki = hard star polygon
+function tracePath(cx, cy, R, m, wob, spikeAng, pts) {
+  const amp = 0.075 * TUNE.wobble * (1 - m);
+  const rr = [];
+  for (let i = 0; i < pts; i++) {
+    const a = i / pts * TAU;
+    const soft = 1 + amp * Math.sin(a * 3 + wob) + amp * 0.7 * Math.sin(a * 5 - wob * 1.4);
+    const hard = (i % 2 === 0) ? 1.26 : 0.62;
+    rr.push(R * lerp(soft, hard, m));
   }
-  // and you leave a wake when moving fast
-  const pspd = Math.hypot(P.vx, P.vy);
-  if (shimGate && pspd > 130 && Math.random() < frameDt * TUNE.shimmer * pspd / 110)
-    emitShimmer(P.x, P.y, -P.vx * 0.2, -P.vy * 0.2);
-
-  // core
-  const cc = coreVis() * clamp(cam.zoom, 0.5, 1.6);
-  const bloomR = Math.max(cc * 2.4, 12);
-  const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
-  bloom.addColorStop(0, `rgba(255,252,240,${blink ? 0.4 : 0.95})`);
-  bloom.addColorStop(0.3, 'rgba(255,220,140,0.55)');
-  bloom.addColorStop(1, 'rgba(240,120,90,0)');
-  ctx.fillStyle = bloom;
-  ctx.beginPath(); ctx.arc(sx, sy, bloomR, 0, TAU); ctx.fill();
-  starMark(sx, sy, clamp(cc, 6, 26), 1, blink ? 0.4 : 0.95, Math.atan2(P.vy, P.vx));
+  const sharp = m > 0.4;
+  ctx.beginPath();
+  for (let i = 0; i <= pts; i++) {
+    const i0 = i % pts;
+    const a = i0 / pts * TAU + spikeAng * m;
+    const x = cx + Math.cos(a) * rr[i0], y = cy + Math.sin(a) * rr[i0];
+    if (i === 0) ctx.moveTo(x, y);
+    else if (sharp) ctx.lineTo(x, y);
+    else {
+      const ip = (i - 1) % pts;
+      const ap = ip / pts * TAU + spikeAng * m;
+      const px = cx + Math.cos(ap) * rr[ip], py = cy + Math.sin(ap) * rr[ip];
+      ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+    }
+  }
+  ctx.closePath();
 }
-function drawHunters() {
+function drawCreature(c) {
+  const [sx, sy] = toScreen(c.x, c.y);
+  const R = displayR(c) * cam.zoom;
+  if (sx < -R*2 || sx > W + R*2 || sy < -R*2 || sy > H + R*2) return;
+  const m = c.morph;
+  const col = lerpC(c.hue, KIKI_TINT, m * 0.55);
+  const blink = c.inv > 0 && Math.sin(perfNow * 16) > 0;
+
   ctx.globalCompositeOperation = 'lighter';
-  for (const h of hunters) {
-    const [sx, sy] = toScreen(h.x, h.y);
-    if (sx < -80 || sx > W+80 || sy < -80 || sy > H+80) continue;
-    streak(h.x - h.vx*0.06, h.y - h.vy*0.06, h.x, h.y, [255, 80, 90], 0.4, 3);
-    const R = Math.max(24 * cam.zoom, 9);
-    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * 2.4);
-    g.addColorStop(0, 'rgba(255,120,120,0.9)');
-    g.addColorStop(0.35, 'rgba(255,60,80,0.4)');
-    g.addColorStop(1, 'rgba(255,40,60,0)');
+  if (TUNE.glow > 0.01) {
+    const g = ctx.createRadialGradient(sx, sy, R * 0.4, sx, sy, R * (1.8 + m * 0.5));
+    g.addColorStop(0, rgba(col, (0.12 + 0.1 * m) * TUNE.glow));
+    g.addColorStop(1, rgba(col, 0));
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(sx, sy, R * 2.4, 0, TAU); ctx.fill();
-    // angular mark: rotated square, reads as 'sharp'
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(Math.atan2(h.vy, h.vx) + Math.PI/4);
-    const u = Math.max(10 * cam.zoom, 6);
-    ctx.fillStyle = 'rgba(255,220,220,0.95)';
-    ctx.fillRect(-u/2, -u/2, u, u);
-    ctx.strokeStyle = 'rgba(255,90,90,0.9)'; ctx.lineWidth = 1.5;
-    ctx.strokeRect(-u*0.9, -u*0.9, u*1.8, u*1.8);
-    ctx.restore();
-    if (h.chasing && P.inv <= 0) {
-      const pulse = 0.5 + 0.5 * Math.sin(perfNow * 6);
-      ctx.strokeStyle = rgba([255, 80, 80], 0.3 + 0.3 * pulse);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(sx, sy, R * 3.2, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx, sy, R * (1.8 + m * 0.5), 0, TAU); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // body
+  tracePath(sx, sy, R, m, c.wob + perfNow * c.wobSp, c.spikeAng, 26);
+  ctx.fillStyle = rgba(lerpC(col, [10, 6, 22], 0.55), blink ? 0.35 : 0.82);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, R * 0.05);
+  ctx.strokeStyle = rgba(col, blink ? 0.4 : 0.95);
+  ctx.stroke();
+
+  // the belly: chamber + captives + crystallized spikes
+  if (c.prisoners.length) {
+    const cav = cavityR(c) * cam.zoom;
+    // chamber
+    ctx.fillStyle = `rgba(8,4,18,${0.5 + 0.25 * m})`;
+    ctx.beginPath(); ctx.arc(sx, sy, cav, 0, TAU); ctx.fill();
+    ctx.lineWidth = Math.max(1, cav * 0.05);
+    ctx.strokeStyle = m > 0.4 ? rgba(lerpC(col, [255,255,255], 0.3), 0.8) : rgba(col, 0.4);
+    ctx.stroke();
+    // spikes crystallize inward as the host hardens
+    if (m > 0.03) {
+      const NS = Math.round(TUNE.spikes);
+      const tip = spikeTipR(c) * cam.zoom;
+      const baseHalf = Math.min(0.4, TAU / NS * 0.22);
+      ctx.fillStyle = rgba(lerpC(col, [255, 250, 240], 0.5), 0.95 * m);
+      for (let k = 0; k < NS; k++) {
+        const a = c.spikeAng + k * TAU / NS;
+        const ax = sx + Math.cos(a - baseHalf) * cav, ay = sy + Math.sin(a - baseHalf) * cav;
+        const bx = sx + Math.cos(a + baseHalf) * cav, by = sy + Math.sin(a + baseHalf) * cav;
+        const tx = sx + Math.cos(a) * tip, ty = sy + Math.sin(a) * tip;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(tx, ty); ctx.lineTo(bx, by); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // captives
+    for (const pr of c.prisoners) drawCreature(pr);
+    // escape meter for the player captive
+    if (player.host === c && player.escape > 0.02 && m < 0.4) {
+      const [px, py] = toScreen(player.x, player.y);
+      const rr = radiusOf(player) * cam.zoom * 1.5;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(180,240,200,0.9)';
+      ctx.beginPath(); ctx.arc(px, py, rr, -Math.PI/2, -Math.PI/2 + clamp01(player.escape) * TAU); ctx.stroke();
     }
   }
+}
+function drawBoundary() {
+  const [sx, sy] = toScreen(0, 0);
+  const R = WORLD_R * cam.zoom;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath(); ctx.rect(0, 0, W, H);
+  ctx.arc(sx, sy, R, 0, TAU, true);
+  ctx.fillStyle = 'rgba(6,3,14,0.66)'; ctx.fill('evenodd');
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,170,215,0.3)';
+  ctx.shadowColor = 'rgba(255,120,190,0.7)'; ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
+  ctx.restore();
 }
 function drawEffects(dt) {
   ctx.globalCompositeOperation = 'lighter';
-  // shimmering blue/violet wake particles
-  for (let i = shimmer.length - 1; i >= 0; i--) {
-    const p = shimmer[i];
-    p.t -= dt / p.life;
-    if (p.t <= 0) { shimmer.splice(i, 1); continue; }
-    p.x += p.vx * dt; p.y += p.vy * dt;
-    const [x, y] = toScreen(p.x, p.y);
-    if (x < -6 || x > W + 6 || y < -6 || y > H + 6) continue;
-    const flick = 0.55 + 0.45 * Math.sin(perfNow * 16 + p.ph);   // the shimmer
-    const s = clamp(p.s * cam.zoom, 1, 4);
-    ctx.fillStyle = rgba(p.hue, 0.55 * p.t * flick);
-    ctx.fillRect(x - s/2, y - s/2, s, s);
-  }
-  // engine exhaust
-  for (let i = exhaust.length - 1; i >= 0; i--) {
-    const e = exhaust[i];
-    e.t -= dt * 1.8;
-    if (e.t <= 0) { exhaust.splice(i, 1); continue; }
-    e.x += e.vx * dt; e.y += e.vy * dt;
-    const [x, y] = toScreen(e.x, e.y);
-    const s = Math.max(1.5, e.s * cam.zoom * e.t);
-    ctx.fillStyle = rgba(ramp(e.warm), 0.55 * e.t);
-    ctx.fillRect(x - s/2, y - s/2, s, s);
-  }
-  // shock rings
   for (let i = bursts.length - 1; i >= 0; i--) {
     const b = bursts[i];
-    b.t -= dt * 1.3;
+    b.t -= dt * 1.4;
     if (b.t <= 0) { bursts.splice(i, 1); continue; }
     const [x, y] = toScreen(b.x, b.y);
-    const R = (b.r0 + (1 - b.t) * b.r0 * 6) * cam.zoom;
+    const R = (b.r0 + (1 - b.t) * b.r0 * 5) * cam.zoom;
     ctx.strokeStyle = rgba(b.hue, b.t * 0.7); ctx.lineWidth = 2 * b.t + 0.5;
     ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke();
   }
@@ -863,20 +658,6 @@ function drawFloaters(dt) {
   }
   ctx.restore();
 }
-function drawBoundary() {
-  const [sx, sy] = toScreen(0, 0);
-  const R = WORLD_R * cam.zoom;
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.beginPath(); ctx.rect(0, 0, W, H);
-  ctx.arc(sx, sy, R, 0, TAU, true);
-  ctx.fillStyle = 'rgba(5,2,12,0.66)'; ctx.fill('evenodd');
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,196,110,0.32)';
-  ctx.shadowColor = 'rgba(255,170,90,0.8)'; ctx.shadowBlur = 18;
-  ctx.beginPath(); ctx.arc(sx, sy, R, 0, TAU); ctx.stroke();
-  ctx.restore();
-}
 function drawMinimap() {
   const mmR = clamp(MINSIDE * 0.11, 56, 92);
   const cxm = W - 20 - mmR, cym = 20 + mmR;
@@ -885,28 +666,18 @@ function drawMinimap() {
   ctx.globalCompositeOperation = 'source-over';
   ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU);
   ctx.fillStyle = 'rgba(10,5,20,0.5)'; ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,196,110,0.32)'; ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,170,215,0.35)'; ctx.stroke();
   ctx.save();
   ctx.beginPath(); ctx.arc(cxm, cym, mmR, 0, TAU); ctx.clip();
-  const [wx0, wy0] = toWorld(0, 0);
-  const [wx1, wy1] = toWorld(W, H);
-  ctx.fillStyle = 'rgba(226,208,255,0.07)';
-  ctx.fillRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,208,255,0.6)';
-  ctx.strokeRect(cxm + wx0*scale, cym + wy0*scale, (wx1-wx0)*scale, (wy1-wy0)*scale);
-  for (const gal of galaxies) {
-    const gx = cxm + gal.x * scale, gy = cym + gal.y * scale;
-    ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, gal.r * scale), 0, TAU);
-    if (gal.lit) { ctx.fillStyle = 'rgba(255,214,120,0.5)'; ctx.fill(); }
-    ctx.strokeStyle = gal.lit ? 'rgba(255,224,150,0.9)' : 'rgba(180,110,220,0.5)';
-    ctx.lineWidth = 1; ctx.stroke();
+  for (const c of creatures) {
+    if (c.host) continue;
+    const r = clamp(radiusOf(c) * scale * 1.6, 1.6, 6);
+    ctx.beginPath(); ctx.arc(cxm + c.x * scale, cym + c.y * scale, r, 0, TAU);
+    ctx.fillStyle = rgba(c.morph > 0.5 ? lerpC(c.hue, KIKI_TINT, 0.6) : c.hue, 0.9);
+    ctx.fill();
+    if (c.isPlayer) { ctx.lineWidth = 1.4; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+    else if (c.morph > 0.5) { ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,120,120,0.9)'; ctx.stroke(); }
   }
-  for (const h of hunters) {
-    ctx.beginPath(); ctx.arc(cxm + h.x*scale, cym + h.y*scale, 2, 0, TAU);
-    ctx.fillStyle = 'rgba(255,80,90,0.95)'; ctx.fill();
-  }
-  ctx.beginPath(); ctx.arc(cxm + P.x*scale, cym + P.y*scale, 2.4, 0, TAU);
-  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
   ctx.restore();
   ctx.restore();
 }
@@ -914,8 +685,7 @@ function drawCursor() {
   const x = mouse.sx, y = mouse.sy;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = thrustHeld ? 'rgba(255,240,190,0.85)' : 'rgba(255,225,160,0.5)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,215,240,0.55)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(x-11, y); ctx.lineTo(x-3, y); ctx.moveTo(x+3, y); ctx.lineTo(x+11, y);
@@ -926,269 +696,362 @@ function drawCursor() {
 function updateStateLine() {
   if (mode !== 'play') { stateEl.textContent = ''; return; }
   let txt = '', col = '#b795d8';
-  if (P.inv > 0) { txt = 'reforming — brief shield'; col = '#a8c8ff'; }
-  else {
-    let hunterNear = null, hd = 1e9;
-    for (const h of hunters) {
-      if (!h.chasing) continue;
-      const d = Math.hypot(h.x - P.x, h.y - P.y);
-      if (d < hd) { hd = d; hunterNear = h; }
+  if (player.host) {
+    const h = player.host;
+    if (h.morph > 0.4) { txt = '⚠ SPIKES — stay in the gaps'; col = '#ff8a8a'; }
+    else { txt = 'walls are soft — push outward to escape (' + Math.round(clamp01(player.escape) * 100) + '%)'; col = '#9cf0b0'; }
+  } else if (player.k === 1) {
+    txt = 'kiki: stab them. captives are on the spikes.'; col = '#ffe6a8';
+    if (player.stam < 25) { txt = 'stamina fading — you will soften soon'; col = '#ffb07e'; }
+  } else {
+    // nearest meaningful thing
+    let danger = null, dd = 1e9, prey = null, pd = 1e9;
+    const pr = radiusOf(player);
+    for (const c of creatures) {
+      if (c === player || c.host) continue;
+      const d = Math.hypot(c.x - player.x, c.y - player.y);
+      const cr = radiusOf(c);
+      if ((cr > pr * TUNE.absorb && c.morph < 0.5 || c.morph > 0.5) && d < dd && d < 900) { danger = c; dd = d; }
+      if (pr > cr * TUNE.absorb && c.morph < 0.5 && d < pd && d < 900) { prey = c; pd = d; }
     }
-    const gi = nearestGalaxy(P.x, P.y);
-    const gal = galaxies[gi];
-    const dCore = Math.hypot(gal.x - P.x, gal.y - P.y);
-    const closing = ((gal.x - P.x) * P.vx + (gal.y - P.y) * P.vy) > 0;
-    if (hunterNear && hd < 700) { txt = '⚠ hunter locked on — slingshot it off'; col = '#ff8a8a'; }
-    else if (dCore < gal.killR * 4 && closing) { txt = '⚠ core ahead — swing around it, never through'; col = '#ffb07e'; }
-    else if (!gal.lit && dCore < gal.r * 1.2) {
-      txt = 'ignite this galaxy — ' + gal.got + ' / ' + gal.need + ' stars'; col = '#ffd98a';
-    }
+    if (danger && dd < 500) { txt = danger.morph > 0.5 ? '⚠ kiki nearby — keep distance or go kiki' : '⚠ a bigger bouba is near — it can swallow you'; col = '#ff9a8a'; }
+    else if (prey && pd < 600) { txt = 'smaller bouba nearby — touch it to swallow'; col = '#9cf0b0'; }
   }
   stateEl.textContent = txt;
   stateEl.style.color = col;
 }
 
-/* ------------------------- simulation --------------------------- */
-function updatePlayer(dt) {
-  if (P.inv > 0) P.inv -= dt;
-  // thrust toward the cursor
-  P.thrusting = thrustHeld && mode === 'play';
-  if (P.thrusting) {
-    const [tx, ty] = toWorld(mouse.sx, mouse.sy);
-    const dx = tx - P.x, dy = ty - P.y;
-    const d = Math.hypot(dx, dy) + 1e-4;
-    const ax = dx / d, ay = dy / d;
-    // heavier well, softer engine
-    const acc = TUNE.thrust * Math.pow(20 / (10 + pmass()), 0.18);
-    P.vx += ax * acc * dt; P.vy += ay * acc * dt;
-    // exhaust juice
-    for (let k = 0; k < 2; k++) {
-      exhaust.push({
-        x: P.x - ax * coreVis() * 1.6, y: P.y - ay * coreVis() * 1.6,
-        vx: -ax * rand(180, 330) + P.vx * 0.5 + gauss() * 60,
-        vy: -ay * rand(180, 330) + P.vy * 0.5 + gauss() * 60,
-        s: rand(3, 6), warm: rand(0.65, 0.95), t: 1,
-      });
-    }
-    if (exhaust.length > 240) exhaust.splice(0, exhaust.length - 240);
-  }
-  // gravity: every galaxy core pulls you (flat rotation-curve field ~1/d)
-  for (const gal of galaxies) {
-    const dx = gal.x - P.x, dy = gal.y - P.y;
-    const d = Math.hypot(dx, dy) + 1e-4;
-    if (d > gal.r * 1.6) continue;
-    const f = clamp01(1.6 - d / gal.r);
-    const gp = TUNE.gpull * (gal.r / 700);
-    const a = gp / (d + 20) * f;
-    P.vx += (dx / d) * a * dt;
-    P.vy += (dy / d) * a * dt;
-    // the core burns: shed your whole swarm and get thrown clear
-    if (d < gal.killR + coreVis() * 0.4 && P.inv <= 0) {
-      scatterSwarm(1);
-      P.inv = 2.2; shake = 1;
-      P.vx = -(dx / d) * 760 + gauss() * 80;
-      P.vy = -(dy / d) * 760 + gauss() * 80;
-      showToast('shredded by the core');
-      bursts.push({ x: P.x, y: P.y, r0: 60, t: 1, hue: [255, 140, 80] });
-    }
-  }
-  // drag: linear + a soft quadratic ceiling
-  const v = Math.hypot(P.vx, P.vy);
-  const dragA = TUNE.drag * v + 0.0006 * v * v;
-  if (v > 1) { P.vx -= (P.vx / v) * dragA * dt; P.vy -= (P.vy / v) * dragA * dt; }
-  P.x += P.vx * dt; P.y += P.vy * dt;
-  // world edge
-  const pr = Math.hypot(P.x, P.y);
-  if (pr > WORLD_R - 20) {
-    P.x *= (WORLD_R - 20) / pr; P.y *= (WORLD_R - 20) / pr;
-    const out = (P.x * P.vx + P.y * P.vy) / (WORLD_R - 20);
-    if (out > 0) { P.vx -= P.x / (WORLD_R - 20) * out * 1.6; P.vy -= P.y / (WORLD_R - 20) * out * 1.6; }
-  }
+/* ------------------------- simulation ---------------------------- */
+function speedOf(c) {
+  const base = 300 * TUNE.speed * Math.pow(46 / radiusOf(c), 0.35);
+  return c.morph > 0.5 ? base * TUNE.kikiSpd : base;
 }
-function updateStars(dt, live) {
-  const pr = pickupR(), suckR = pr * 2.8;
-  for (let si = stars.length - 1; si >= 0; si--) {
-    const s = stars[si];
-    if (s.heldT > 0) s.heldT -= dt;
-    // home galaxy orbit
-    const dxg = s.gx - s.x, dyg = s.gy - s.y;
-    const rg = Math.hypot(dxg, dyg) + 1e-4;
-    const ag = s.GM / (rg * rg + 900);
-    let ax = (dxg / rg) * ag, ay = (dyg / rg) * ag;
-    let vacuum = false;
-    if (live && !(s.heldT > 0)) {
-      const dx = P.x - s.x, dy = P.y - s.y;
-      if (dx < suckR && dx > -suckR && dy < suckR && dy > -suckR) {
-        const d = Math.hypot(dx, dy);
-        if (d < pr) {                        // swept up!
-          admitStar(s);
-          P.collected++; gainAcc++;
-          const gal = galaxies[s.gi];
-          if (!gal.lit) {
-            gal.got++;
-            if (gal.got >= gal.need) {
-              gal.lit = true; gal.igniteT = 1; litCount++;
-              bursts.push({ x: gal.x, y: gal.y, r0: gal.killR * 2, t: 1, hue: [255, 224, 150] });
-              showToast('galaxy ignited — ' + litCount + ' / ' + galaxies.length);
-              shake = Math.max(shake, 0.5);
-              if (litCount >= galaxies.length && !won) {
-                won = true;
-                const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
-                winTag.textContent = 'all eight cores burn for you · ' + mm + ':' + String(ss).padStart(2, '0') + ' · press R to run it again';
-                winEl.classList.add('show');
-              }
-            }
+function moveToward(c, tx, ty, dt) {
+  const dx = tx - c.x, dy = ty - c.y;
+  const d = Math.hypot(dx, dy) + 1e-4;
+  const sMax = speedOf(c);
+  const spd = Math.min(sMax, d * 3.4);
+  const k = Math.min(1, dt * 5);
+  c.vx += ((dx / d) * spd - c.vx) * k;
+  c.vy += ((dy / d) * spd - c.vy) * k;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  const rr = Math.hypot(c.x, c.y), lim = WORLD_R - radiusOf(c) * 0.6;
+  if (rr > lim) { c.x *= lim / rr; c.y *= lim / rr; }
+}
+function updateForm(c, dt) {
+  // stamina gates kiki
+  if (c.k === 1) {
+    c.stam -= TUNE.drain * dt;
+    if (c.stam <= 0) { c.stam = 0; c.k = 0; if (c.isPlayer) showToast('exhausted — soft again'); }
+  } else {
+    c.stam = Math.min(100, c.stam + TUNE.regen * dt);
+  }
+  const target = c.k;
+  c.morph += clamp(target - c.morph, -dt / 0.35, dt / 0.35);
+  c.spikeAng += TUNE.spin * dt * (0.3 + 0.7 * c.morph);
+  if (c.inv > 0) c.inv -= dt;
+  if (c.hitInv > 0) c.hitInv -= dt;
+}
+function absorb(host, prey) {
+  prey.host = host;
+  host.prisoners.push(prey);
+  prey.hp = 3; prey.escape = 0;
+  const cav = cavityR(host);
+  const a = rand(0, TAU), d = rand(0, Math.max(1, cav - radiusOf(prey) * 1.1));
+  prey.lx = Math.cos(a) * d; prey.ly = Math.sin(a) * d;
+  prey.lvx = prey.lvy = 0;
+  prey.k = 0; prey.morph = 0;      // you soften inside — no stabbing your way out
+  if (prey.isPlayer) { showToast('swallowed — survive the belly'); shake = 0.7; }
+  else if (host.isPlayer) { showToast('swallowed one — go kiki to digest'); }
+  bursts.push({ x: host.x, y: host.y, r0: radiusOf(host) * 0.6, t: 1, hue: host.hue });
+}
+function release(host, pr, burst) {
+  const i = host.prisoners.indexOf(pr);
+  if (i >= 0) host.prisoners.splice(i, 1);
+  pr.host = null;
+  const a = Math.atan2(pr.lx, -pr.ly) + rand(-0.4, 0.4);   // out roughly where you pushed
+  const rr = displayR(host) + radiusOf(pr) + 6;
+  pr.x = host.x + Math.cos(a) * rr; pr.y = host.y + Math.sin(a) * rr;
+  pr.vx = Math.cos(a) * 380 + host.vx; pr.vy = Math.sin(a) * 380 + host.vy;
+  pr.inv = 1.6; pr.escape = 0;
+  if (burst) bursts.push({ x: pr.x, y: pr.y, r0: radiusOf(pr), t: 1, hue: pr.hue });
+}
+function digest(host, pr) {
+  const i = host.prisoners.indexOf(pr);
+  if (i >= 0) host.prisoners.splice(i, 1);
+  host.mass += pr.mass * 0.8;
+  host.digested++;
+  bursts.push({ x: host.x, y: host.y, r0: radiusOf(host) * 0.5, t: 1, hue: lerpC(host.hue, [255,255,255], 0.4) });
+  if (host.isPlayer) { addFloater(host.x, host.y - radiusOf(host), '+' + Math.round(pr.mass * 0.8), [255, 216, 130]); }
+  if (pr.isPlayer) { showToast('digested. reborn small.'); shake = 1; }
+  // reborn
+  pr.host = null; pr.mass = pr.isPlayer ? 55 : rand(35, 80);
+  pr.k = 0; pr.morph = 0; pr.stam = 100; pr.hp = 3; pr.inv = 2;
+  spawnAt(pr);
+}
+function pop(c, by) {                       // stabbed apart in the open
+  spill(c.x, c.y, c.hue, 7, c.mass * 0.55);
+  for (const pr of [...c.prisoners]) release(c, pr, true);
+  bursts.push({ x: c.x, y: c.y, r0: radiusOf(c), t: 1, hue: c.hue });
+  if (c.isPlayer) { showToast('popped! reborn small.'); shake = 1; }
+  else if (by && by.isPlayer) showToast('popped a rival');
+  c.mass = c.isPlayer ? 55 : rand(35, 80);
+  c.k = 0; c.morph = 0; c.stam = 100; c.inv = 2;
+  spawnAt(c);
+}
+
+function updatePrisoner(pr, dt) {
+  const host = pr.host;
+  const cav = cavityR(host);
+  const myR = radiusOf(pr);
+  // steer: player uses the mouse (relative to the chamber), bots dodge/push
+  let ax = 0, ay = 0;
+  if (pr.isPlayer && mode === 'play') {
+    const [mx, my] = toWorld(mouse.sx, mouse.sy);
+    const dx = mx - (host.x + pr.lx), dy = my - (host.y + pr.ly);
+    const d = Math.hypot(dx, dy) + 1e-4;
+    ax = dx / d * 620; ay = dy / d * 620;
+  } else if (!pr.isPlayer) {
+    if (host.morph > 0.3) {
+      // dodge: aim for the bisector between the nearest spikes, mid-radius
+      const NS = Math.round(TUNE.spikes);
+      const myA = Math.atan2(pr.ly, pr.lx);
+      const rel = ((myA - host.spikeAng) % (TAU/NS) + TAU/NS) % (TAU/NS);
+      const gapA = host.spikeAng + Math.floor((myA - host.spikeAng) / (TAU/NS)) * (TAU/NS) + (TAU/NS) / 2;
+      const wantR = Math.max(0, cav * 0.45 - myR * 0.4);
+      const wx = Math.cos(gapA) * wantR, wy = Math.sin(gapA) * wantR;
+      ax = (wx - pr.lx) * 8; ay = (wy - pr.ly) * 8;
+    } else {
+      // push outward to escape
+      const d = Math.hypot(pr.lx, pr.ly) + 1e-4;
+      ax = pr.lx / d * 520; ay = pr.ly / d * 520;
+    }
+  }
+  pr.lvx += ax * dt; pr.lvy += ay * dt;
+  pr.lvx *= Math.pow(0.02, dt); pr.lvy *= Math.pow(0.02, dt);   // syrupy inside
+  pr.lx += pr.lvx * dt; pr.ly += pr.lvy * dt;
+  // wall
+  const d = Math.hypot(pr.lx, pr.ly) + 1e-4;
+  const wall = Math.max(1, cav - myR * 0.95);
+  let pushing = false;
+  if (d > wall) {
+    pushing = true;
+    pr.lx *= wall / d; pr.ly *= wall / d;
+    const out = (pr.lx * pr.lvx + pr.ly * pr.lvy) / wall;
+    if (out > 0) { pr.lvx -= pr.lx / wall * out; pr.lvy -= pr.ly / wall * out; }
+  }
+  // soft walls: pushing builds escape; hard walls: never
+  if (host.morph < 0.35 && pushing) pr.escape += dt / TUNE.escT;
+  else pr.escape = Math.max(0, pr.escape - dt * 0.35);
+  if (pr.escape >= 1) {
+    release(host, pr, true);
+    if (pr.isPlayer) { showToast('squeezed out!'); }
+    else if (host.isPlayer) showToast('one squeezed out of you');
+    return;
+  }
+  // spikes
+  if (host.morph > 0.35 && pr.inv <= 0) {
+    const NS = Math.round(TUNE.spikes);
+    const tip = spikeTipR(host);
+    if (d + myR * 0.85 > tip) {
+      const myA = Math.atan2(pr.ly, pr.lx);
+      let rel = (myA - host.spikeAng) % (TAU / NS);
+      if (rel < 0) rel += TAU / NS;
+      const near = Math.min(rel, TAU / NS - rel);
+      if (near < 0.22) {
+        pr.hp--; pr.inv = 0.8;
+        // knock toward center
+        pr.lvx -= pr.lx / d * 300; pr.lvy -= pr.ly / d * 300;
+        bursts.push({ x: host.x + pr.lx, y: host.y + pr.ly, r0: myR * 0.8, t: 1, hue: [255, 120, 120] });
+        if (pr.isPlayer) { shake = 0.6; showToast(pr.hp > 0 ? 'spiked! ' + pr.hp + ' left' : 'spiked!'); }
+        if (pr.hp <= 0) { digest(host, pr); return; }
+      }
+    }
+  }
+  // world position mirrors the chamber
+  pr.x = host.x + pr.lx; pr.y = host.y + pr.ly;
+  pr.vx = host.vx; pr.vy = host.vy;
+}
+
+function botThink(c, dt) {
+  c.think -= dt;
+  if (c.think > 0) return;
+  c.think = rand(0.25, 0.4);
+  const myR = radiusOf(c);
+  // digest captives when possible
+  if (c.prisoners.length && c.stam > 35 && c.k === 0) c.k = 1;
+  if (!c.prisoners.length && c.k === 1 && c.stam < 60) c.k = 0;
+  // scan
+  let danger = null, dd = 1e9, prey = null, pd = 1e9;
+  for (const o of creatures) {
+    if (o === c || o.host) continue;
+    const d = Math.hypot(o.x - c.x, o.y - c.y);
+    const or_ = radiusOf(o);
+    const threat = (o.morph > 0.5 && or_ > myR * 0.6) || (o.morph <= 0.5 && or_ > myR * TUNE.absorb);
+    if (threat && d < 700 && d < dd) { danger = o; dd = d; }
+    if (o.morph <= 0.5 && myR > or_ * TUNE.absorb && d < 800 && d < pd) { prey = o; pd = d; }
+  }
+  if (danger && dd < 460) {
+    c.tx = c.x + (c.x - danger.x) * 3; c.ty = c.y + (c.y - danger.y) * 3;
+    // cornered and rested? crystallize so you can't be swallowed
+    if (dd < 220 && c.stam > 40 && danger.morph <= 0.5 && !c.prisoners.length) c.k = 1;
+    return;
+  }
+  if (prey && pd < 700) { c.tx = prey.x; c.ty = prey.y; return; }
+  // graze
+  let bx = c.x, by = c.y, bd = 1e9;
+  for (let k = 0; k < 24; k++) {
+    const p = pellets[(Math.random() * pellets.length) | 0];
+    if (!p) break;
+    const d = Math.hypot(p.x - c.x, p.y - c.y);
+    if (d < bd) { bd = d; bx = p.x; by = p.y; }
+  }
+  c.tx = bx; c.ty = by;
+}
+
+function collide(dt) {
+  for (let i = 0; i < creatures.length; i++) {
+    const A = creatures[i];
+    if (A.host) continue;
+    for (let j = i + 1; j < creatures.length; j++) {
+      const B = creatures[j];
+      if (B.host) continue;
+      const rA = radiusOf(A), rB = radiusOf(B);
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const d = Math.hypot(dx, dy) + 1e-4;
+      if (d > (rA + rB) * 0.98) continue;
+      const kA = A.morph > 0.5, kB = B.morph > 0.5;
+      if (kA || kB) {
+        // stabbing contact
+        const stab = (att, vic) => {
+          if (vic.hitInv > 0 || vic.inv > 0) return;
+          vic.hitInv = 0.85;
+          const chunk = vic.mass * TUNE.chunk;
+          vic.mass = Math.max(14, vic.mass - chunk);
+          spill((att.x + vic.x)/2, (att.y + vic.y)/2, vic.hue, 4, chunk * 0.8);
+          const ux = (vic.x - att.x) / d, uy = (vic.y - att.y) / d;
+          vic.vx += ux * 420; vic.vy += uy * 420;
+          att.vx -= ux * 140; att.vy -= uy * 140;
+          if (vic.isPlayer || att.isPlayer) shake = Math.max(shake, 0.5);
+          if (vic.isPlayer) showToast('stabbed! −' + Math.round(chunk));
+          bursts.push({ x: (att.x+vic.x)/2, y: (att.y+vic.y)/2, r0: 14, t: 1, hue: [255, 140, 140] });
+          if (vic.mass <= 16 && vic.morph <= 0.5) pop(vic, att);
+        };
+        if (kA && !kB) stab(A, B);
+        else if (kB && !kA) stab(B, A);
+        else { // kiki clash: both chip, hard bounce
+          if (A.hitInv <= 0 && B.hitInv <= 0) {
+            A.hitInv = B.hitInv = 0.7;
+            const ux = dx / d, uy = dy / d;
+            A.vx -= ux * 380; A.vy -= uy * 380;
+            B.vx += ux * 380; B.vy += uy * 380;
+            bursts.push({ x: (A.x+B.x)/2, y: (A.y+B.y)/2, r0: 16, t: 1, hue: [255, 240, 200] });
           }
-          if (s.transient && stars.length > baseStarCount) stars.splice(si, 1);
-          else respawnStar(s);
-          continue;
         }
-        if (d < suckR) {                     // short-range vacuum
-          vacuum = true;
-          const f = 1 - d / suckR;
-          const a = 2600 * f * f;
-          ax += (dx / d) * a; ay += (dy / d) * a;
-          s.vx *= 0.985; s.vy *= 0.985;
+      } else {
+        // soft on soft: swallow or squish apart
+        if (rA > rB * TUNE.absorb && B.inv <= 0 && A.prisoners.length < 3 && cavOK(A, B)) absorb(A, B);
+        else if (rB > rA * TUNE.absorb && A.inv <= 0 && B.prisoners.length < 3 && cavOK(B, A)) absorb(B, A);
+        else {
+          const overlap = (rA + rB) * 0.98 - d;
+          const ux = dx / d, uy = dy / d;
+          A.x -= ux * overlap * 0.4; A.y -= uy * overlap * 0.4;
+          B.x += ux * overlap * 0.4; B.y += uy * overlap * 0.4;
         }
       }
-    }
-    if (!vacuum) {
-      // galaxy lock keeps arms coherent
-      const ox = -dxg/rg, oy = -dyg/rg;
-      const vC = Math.sqrt(s.GM / (rg + 30));
-      const cvx = -oy * vC * s.gspin, cvy = ox * vC * s.gspin;
-      const k = Math.min(1, dt * 0.5);
-      s.vx += (cvx - s.vx) * k; s.vy += (cvy - s.vy) * k;
-    }
-    s.vx += ax * dt; s.vy += ay * dt;
-    const cap = vacuum ? 1600 : 340;
-    const v = Math.hypot(s.vx, s.vy);
-    if (v > cap) { s.vx *= cap/v; s.vy *= cap/v; }
-    s.x += s.vx * dt; s.y += s.vy * dt;
-    const rw2 = s.x*s.x + s.y*s.y;
-    if (rw2 > WORLD_R * WORLD_R) {
-      const rw = Math.sqrt(rw2);
-      s.x *= WORLD_R/rw; s.y *= WORLD_R/rw;
-      const out = (s.x*s.vx + s.y*s.vy) / WORLD_R;
-      if (out > 0) { s.vx -= (s.x/WORLD_R)*out; s.vy -= (s.y/WORLD_R)*out; }
     }
   }
 }
-function updateOrbiters(simDt) {
-  if (simDt <= 0) return;
-  const n = clamp(Math.ceil(simDt / 0.02), 1, 4), h = simDt / n;
-  const M = pmass();
-  const soft = 12, soft2 = soft * soft;
-  const mergeR2 = 64;
-  const RR = orbitR() * 1.25;
-  const vCap = Math.sqrt(TUNE.swarmG * M / soft) * 1.7;
-  for (let i = P.orbiters.length - 1; i >= 0; i--) {
-    const o = P.orbiters[i];
-    o.px = o.x; o.py = o.y;
-    let merged = false;
-    for (let k = 0; k < n; k++) {
-      const r2 = o.rx*o.rx + o.ry*o.ry, r = Math.sqrt(r2) + 1e-4;
-      const a = TUNE.swarmG * M / (r2 + soft2);
-      o.rvx -= (o.rx / r) * a * h;
-      o.rvy -= (o.ry / r) * a * h;
-      const vC = Math.sqrt(TUNE.swarmG * M / (r + soft));
-      const tx = -o.ry/r * P.spin, ty = o.rx/r * P.spin;
-      const kl = Math.min(1, TUNE.lock * h * 3);
-      o.rvx += (tx * vC - o.rvx) * kl;
-      o.rvy += (ty * vC - o.rvy) * kl;
-      const out = (o.rx*o.rvx + o.ry*o.rvy) / r;
-      if (r > RR * 0.92 && out > 0) {
-        const kw = Math.min(1, h * 8);
-        o.rvx -= (o.rx/r) * out * kw;
-        o.rvy -= (o.ry/r) * out * kw;
-      }
-      const v = Math.hypot(o.rvx, o.rvy);
-      if (v > vCap) { o.rvx *= vCap/v; o.rvy *= vCap/v; }
-      o.rx += o.rvx * h; o.ry += o.rvy * h;
-      if (o.rx*o.rx + o.ry*o.ry < mergeR2) { merged = true; break; }
-    }
-    o.x = P.x + o.rx; o.y = P.y + o.ry;
-    if (merged) {
-      P.coreMass += o.mass; P.orbMass -= o.mass;
-      P.orbiters.splice(i, 1);
+// can the host actually hold this captive? (the crystallized cell must fit
+// inside the host's bulged body)
+function cavOK(host, prey) {
+  return radiusOf(prey) * TUNE.tight < radiusOf(host) * 1.22;
+}
+
+function eatPellets(c) {
+  const r = radiusOf(c);
+  for (let i = pellets.length - 1; i >= 0; i--) {
+    const p = pellets[i];
+    const dx = p.x - c.x, dy = p.y - c.y;
+    if (dx > r || dx < -r || dy > r || dy < -r) continue;
+    if (dx*dx + dy*dy < r*r) {
+      c.mass += p.mass * (c.morph > 0.5 ? 0.4 : 1);   // kiki is a bad eater
+      if (pellets.length <= TUNE.food) Object.assign(p, makePellet());
+      else pellets.splice(i, 1);
     }
   }
 }
 
-/* ----------------------------- loop ----------------------------- */
+/* ----------------------------- loop ------------------------------ */
 buildWorld();
-spawnHunters();
-resetPlayer();
 cam.x = 0; cam.y = 0; cam.zoom = overviewCam().zoom;
 
-let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0, frameDt = 0.016;
+let perfNow = 0, last = performance.now(), fpsE = 60, fpsT = 0;
 function frame(now) {
-  const dt = Math.min(0.045, (now - last) / 1000);
-  last = now; perfNow = now / 1000; frameDt = dt;
+  const dt0 = Math.min(0.045, (now - last) / 1000);
+  last = now; perfNow = now / 1000;
   const live = (mode === 'play');
-  const simDt = TUNE.paused ? 0 : dt * TUNE.time;
+  const dt = TUNE.paused ? 0 : dt0 * TUNE.time;
 
-  if (simDt > 0) {
-    if (live) {
-      playT += simDt;
-      updatePlayer(simDt);
-      updateHunters(simDt);
+  if (dt > 0) {
+    // pellets drift
+    for (const p of pellets) {
+      if (p.vx) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; }
     }
-    updateStars(simDt, live);
-    updateOrbiters(simDt);
-    if (live) {
-      floatT -= dt;
-      if (floatT <= 0) {
-        const fy = P.y - orbitR() * 1.2;
-        if (gainAcc > 0) addFloater(P.x + rand(-8, 8), fy, '+' + gainAcc + '★', [255, 216, 130]);
-        if (lossAcc > 0) addFloater(P.x + rand(-8, 8), fy, '−' + lossAcc + '★', [255, 110, 110]);
-        gainAcc = 0; lossAcc = 0; floatT = 0.4;
+    for (const c of creatures) {
+      updateForm(c, dt);
+      if (c.host) continue;
+      if (c.isPlayer) {
+        if (live) {
+          const [tx, ty] = toWorld(mouse.sx, mouse.sy);
+          moveToward(c, tx, ty, dt);
+        }
+      } else {
+        botThink(c, dt);
+        moveToward(c, c.tx, c.ty, dt);
       }
+      eatPellets(c);
     }
+    collide(dt);
+    for (const c of creatures) if (c.host) updatePrisoner(c, dt);
   }
 
   // camera
   if (anim) {
-    anim.t += dt;
+    anim.t += dt0;
     const k = clamp01(anim.t / anim.dur), e = easeInOut(k);
-    cam.x = lerp(anim.from.x, mode === 'diving' ? P.x : anim.to.x, e);
-    cam.y = lerp(anim.from.y, mode === 'diving' ? P.y : anim.to.y, e);
+    cam.x = lerp(anim.from.x, mode === 'diving' ? player.x : anim.to.x, e);
+    cam.y = lerp(anim.from.y, mode === 'diving' ? player.y : anim.to.y, e);
     cam.zoom = lerp(anim.from.zoom, anim.to.zoom, e);
     if (k >= 1) { mode = anim.target; anim = null; }
   } else if (mode === 'play') {
-    // look slightly ahead of the velocity — flying feel
-    const lx = P.x + P.vx * 0.3, ly = P.y + P.vy * 0.3;
-    cam.x += (lx - cam.x) * Math.min(1, dt * 4.5);
-    cam.y += (ly - cam.y) * Math.min(1, dt * 4.5);
-    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt * 1.6);
+    const fx = player.host ? player.host.x + player.lx * 0.5 : player.x + player.vx * 0.25;
+    const fy = player.host ? player.host.y + player.ly * 0.5 : player.y + player.vy * 0.25;
+    cam.x += (fx - cam.x) * Math.min(1, dt0 * 5);
+    cam.y += (fy - cam.y) * Math.min(1, dt0 * 5);
+    cam.zoom += (playZoom() - cam.zoom) * Math.min(1, dt0 * 2.5);
   } else if (mode === 'overview') {
-    cam.x += (0 - cam.x) * Math.min(1, dt * 2);
-    cam.y += (0 - cam.y) * Math.min(1, dt * 2);
+    cam.x += (0 - cam.x) * Math.min(1, dt0 * 2);
+    cam.y += (0 - cam.y) * Math.min(1, dt0 * 2);
   }
 
-  // fps meter
-  fpsE += (1 / Math.max(dt, 1e-3) - fpsE) * 0.06;
-  fpsT -= dt;
+  fpsE += (1 / Math.max(dt0, 1e-3) - fpsE) * 0.06;
+  fpsT -= dt0;
   if (devOpen && fpsT <= 0) { fpsEl.textContent = Math.round(fpsE) + ' fps'; fpsT = 0.25; }
 
-  // screen shake
   let jx = 0, jy = 0;
   if (shake > 0) {
     const j = shake * shake * 7 / cam.zoom;
     jx = gauss() * j; jy = gauss() * j;
-    shake = Math.max(0, shake - dt * 1.6);
+    shake = Math.max(0, shake - dt0 * 1.6);
   }
   cam.x += jx; cam.y += jy;
 
-  drawBackground();
-  drawGalaxies();
-  drawStars();
-  if (mode !== 'overview') {
-    drawPlayer();
-    drawHunters();
-    drawEffects(dt);
-    drawFloaters(dt);
-  }
+  drawBackdrop();
+  drawPellets();
+  for (const c of creatures) if (!c.host) drawCreature(c);   // captives drawn by hosts
+  drawEffects(dt0);
+  drawFloaters(dt0);
   drawBoundary();
   ctx.globalCompositeOperation = 'source-over';
   const wantCursor = mode === 'play' ? 'none' : 'default';
@@ -1198,15 +1061,16 @@ function frame(now) {
 
   cam.x -= jx; cam.y -= jy;
 
-  // toast fade
-  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('show'); }
+  if (toastT > 0) { toastT -= dt0; if (toastT <= 0) toastEl.classList.remove('show'); }
 
   // hud
-  litEl.textContent = litCount + '/' + galaxies.length;
-  swarmEl.textContent = P.orbiters.length;
-  massEl.textContent = Math.round(pmass()).toLocaleString();
-  const mm = Math.floor(playT / 60), ss = Math.floor(playT % 60);
-  timeEl.textContent = mm + ':' + String(ss).padStart(2, '0');
+  const kiki = player.morph > 0.5;
+  formEl.textContent = kiki ? 'KIKI ^' : 'BOUBA ~';
+  formEl.className = kiki ? 'kiki' : '';
+  stamEl.style.width = clamp(player.stam, 0, 100) + '%';
+  massEl.textContent = Math.round(player.mass);
+  bellyEl.textContent = player.prisoners.length;
+  eatenEl.textContent = player.digested;
   updateStateLine();
 
   requestAnimationFrame(frame);
