@@ -588,6 +588,7 @@ function interact(A, B, h) {
   }
 }
 function driveNucleus(c, dt) {
+  const px = c.x, py = c.y;
   const dxT = c.tx - c.x, dyT = c.ty - c.y;
   const d = Math.hypot(dxT, dyT) + 1e-4;
   const sMax = speedOf(c);
@@ -598,6 +599,10 @@ function driveNucleus(c, dt) {
   c.x += c.vx * dt; c.y += c.vy * dt;
   const rr = Math.hypot(c.x, c.y), lim = WORLD_R - nucR(c);
   if (rr > lim) { c.x *= lim / rr; c.y *= lim / rr; }
+  // the membrane rides the body frame: nodes inherit the nucleus's
+  // translation, springs only resolve DEFORMATION — no more lag-crumple
+  const mx = c.x - px, my = c.y - py;
+  for (const n of c.nodes) { n.x += mx; n.y += my; }
 }
 function eatPellets(c, dt) {
   const r = restR(c) * 0.82;
