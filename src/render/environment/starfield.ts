@@ -1,26 +1,49 @@
 /**
  * Deep star field.
  *
- * Rendered as instanced camera-facing quads rather than GL points. `THREE.Points`
- * on a WebGPU backend is limited to one-pixel primitives with no `gl_PointCoord`,
- * so a `Points` object would be a field of hard single pixels there and soft
- * glowing discs on WebGL2 — two completely different games. three's documented
- * cross-backend answer is to drive a `PointsNodeMaterial` from a `Sprite` with an
- * instance `count`, which is what this does: one draw call, per-instance
- * attributes, identical output on both backends.
+ * Rendered as instanced camera-facing quads, one draw call per parallax layer.
+ * Not `THREE.Points`: on a WebGPU backend point primitives are locked to a
+ * single pixel and `gl_PointCoord` does not exist, so a `Points` object would be
+ * a field of hard one-pixel dots there and soft glowing discs on WebGL2 — two
+ * different games. `PointsNodeMaterial` driven from a `Sprite` is three's
+ * documented workaround for that, but it leaves the instance plumbing implicit;
+ * an `InstancedBufferGeometry` with named per-star attributes and a hand-written
+ * vertex node does the same job with nothing hidden, and the sizing maths is
+ * lifted straight from `PointsNodeMaterial` so sizes stay in screen pixels.
  *
- * Stars are distributed on nested shells so the layers slide against each other
- * as the ship moves, which is the only cue at this distance that sells depth.
+ * Stars sit on nested shells that lag behind the camera by different amounts.
+ * At this distance relative motion between layers is the only depth cue there
+ * is, and without it the sky reads as a painted dome.
  */
 
 import {
   AdditiveBlending,
+  Float32BufferAttribute,
   Group,
-  PointsNodeMaterial,
-  Sprite,
+  InstancedBufferAttribute,
+  InstancedBufferGeometry,
+  Mesh,
+  MeshBasicNodeMaterial,
+  Sphere,
   Vector3,
 } from 'three/webgpu';
-import { float, instancedBufferAttribute, saturate, sin, time, uv, varying, vec4 } from 'three/tsl';
+import {
+  attribute,
+  cameraProjectionMatrix,
+  cameraViewMatrix,
+  float,
+  fract,
+  modelWorldMatrix,
+  positionGeometry,
+  saturate,
+  screenDPR,
+  sin,
+  time,
+  uv,
+  vec2,
+  vec4,
+  viewportSize,
+} from 'three/tsl';
 import { Rng } from '../../core/rng';
 import type { EnvironmentArchetype, TrackPalette } from '../../track/types';
 import { hexToLinear, luminance, mixRGB, type RGB } from './sky';
@@ -67,23 +90,23 @@ interface ArchetypeTuning {
 
 const TUNING: Record<EnvironmentArchetype, ArchetypeTuning> = {
   // Gas washes the field out: many stars, but small and dim.
-  nebula: { density: 1.0, size: 1.5, brightness: 0.75, temperature: 1.0, tint: 0.18, heroFraction: 0.006, twinkle: 0.3 },
+  nebula: { density: 1.0, size: 1.9, brightness: 0.8, temperature: 1.0, tint: 0.18, heroFraction: 0.006, twinkle: 0.3 },
   // Cold and clinical. Few, hard, blue-white.
-  megastructure: { density: 0.55, size: 1.5, brightness: 0.9, temperature: 1.35, tint: 0.05, heroFraction: 0.004, twinkle: 0.2 },
+  megastructure: { density: 0.55, size: 1.9, brightness: 1.0, temperature: 1.35, tint: 0.05, heroFraction: 0.004, twinkle: 0.2 },
   // Candy sky — stars read as sparkle, tinted hard toward the palette.
-  prismatic: { density: 0.7, size: 1.8, brightness: 0.85, temperature: 1.1, tint: 0.5, heroFraction: 0.012, twinkle: 0.45 },
+  prismatic: { density: 0.7, size: 2.2, brightness: 0.95, temperature: 1.1, tint: 0.5, heroFraction: 0.012, twinkle: 0.45 },
   // The hero case: brilliant, deep, wide magnitude range.
-  starfield: { density: 1.25, size: 2.1, brightness: 1.35, temperature: 1.0, tint: 0.05, heroFraction: 0.02, twinkle: 0.35 },
+  starfield: { density: 1.25, size: 2.5, brightness: 1.5, temperature: 1.0, tint: 0.05, heroFraction: 0.02, twinkle: 0.35 },
   // Warm neighbourhood of a gas giant.
-  ringworld: { density: 0.85, size: 1.7, brightness: 0.9, temperature: 0.85, tint: 0.2, heroFraction: 0.008, twinkle: 0.3 },
+  ringworld: { density: 0.85, size: 2.1, brightness: 1.0, temperature: 0.85, tint: 0.2, heroFraction: 0.008, twinkle: 0.3 },
   // Sparse, cold, unnerving.
-  void: { density: 0.4, size: 1.4, brightness: 0.6, temperature: 0.8, tint: 0.12, heroFraction: 0.002, twinkle: 0.5 },
+  void: { density: 0.4, size: 1.8, brightness: 0.7, temperature: 0.8, tint: 0.12, heroFraction: 0.002, twinkle: 0.5 },
 };
 
 const LAYERS: LayerTuning[] = [
   { share: 0.55, depth: 1.0, parallax: 0.0, sizeScale: 0.85, brightnessScale: 0.8 },
   { share: 0.3, depth: 0.94, parallax: 0.05, sizeScale: 1.0, brightnessScale: 1.0 },
-  { share: 0.15, depth: 0.86, parallax: 0.13, sizeScale: 1.25, brightnessScale: 1.25 },
+  { share: 0.15, depth: 0.86, parallax: 0.13, sizeScale: 1.3, brightnessScale: 1.3 },
 ];
 
 /**
@@ -142,6 +165,18 @@ export interface Starfield {
   dispose(): void;
 }
 
+/** The unit quad every star instance is drawn from. */
+function starQuad(): InstancedBufferGeometry {
+  const g = new InstancedBufferGeometry();
+  g.setAttribute(
+    'position',
+    new Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3),
+  );
+  g.setAttribute('uv', new Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  return g;
+}
+
 export function createStarfield(options: StarfieldOptions): Starfield {
   const tuning = TUNING[options.archetype];
   const rng = new Rng(`${options.seed}:stars`);
@@ -159,8 +194,9 @@ export function createStarfield(options: StarfieldOptions): Starfield {
   const group = new Group();
   group.name = 'Starfield';
 
-  const sprites: Sprite[] = [];
-  const materials: PointsNodeMaterial[] = [];
+  const meshes: Mesh[] = [];
+  const geometries: InstancedBufferGeometry[] = [];
+  const materials: MeshBasicNodeMaterial[] = [];
   const offsets: number[] = [];
   let created = 0;
 
@@ -174,14 +210,13 @@ export function createStarfield(options: StarfieldOptions): Starfield {
     const shell = options.radius * layer.depth;
 
     for (let i = 0; i < n; i++) {
-      // Uniform on the sphere: acos-distributed z, not uniform z-angle, or the
+      // Uniform on the sphere: pick z uniformly, not the polar angle, or the
       // poles end up visibly denser.
       const z = rng.range(-1, 1);
       const a = rng.range(0, Math.PI * 2);
       const s = Math.sqrt(Math.max(0, 1 - z * z));
-      // A little radial jitter stops the layers looking like painted shells if
-      // the camera ever gets a wide field of view.
-      const r = shell * rng.range(0.97, 1.0);
+      // Radial jitter stops a layer reading as a painted shell.
+      const r = shell * rng.range(0.96, 1.0);
       positions[i * 3] = Math.cos(a) * s * r;
       positions[i * 3 + 1] = z * r;
       positions[i * 3 + 2] = Math.sin(a) * s * r;
@@ -191,15 +226,18 @@ export function createStarfield(options: StarfieldOptions): Starfield {
       const mag = Math.pow(rng.next(), 3);
       const temperature = sampleTemperature(rng.next(), tuning.temperature);
       const bb = blackbodyLinear(temperature);
-      const col = tuning.tint > 0 ? mixRGB(bb, [bb[0] * tint[0], bb[1] * tint[1], bb[2] * tint[2]], tuning.tint) : bb;
+      const col =
+        tuning.tint > 0
+          ? mixRGB(bb, [bb[0] * tint[0], bb[1] * tint[1], bb[2] * tint[2]], tuning.tint)
+          : bb;
 
       const brightness =
-        (0.1 + mag * 1.35) * tuning.brightness * layer.brightnessScale * (0.75 + rng.next() * 0.5);
+        (0.12 + mag * 1.5) * tuning.brightness * layer.brightnessScale * (0.75 + rng.next() * 0.5);
       colors[i * 3] = col[0] * brightness;
       colors[i * 3 + 1] = col[1] * brightness;
       colors[i * 3 + 2] = col[2] * brightness;
 
-      const size = tuning.size * layer.sizeScale * (0.62 + mag * 2.3) * rng.range(0.85, 1.15);
+      const size = tuning.size * layer.sizeScale * (0.7 + mag * 2.4) * rng.range(0.85, 1.15);
       const hero = mag > 0.5 && rng.next() < tuning.heroFraction / 0.5;
       params[i * 4] = size;
       params[i * 4 + 1] = rng.range(0, Math.PI * 2);
@@ -208,52 +246,67 @@ export function createStarfield(options: StarfieldOptions): Starfield {
       params[i * 4 + 3] = hero ? rng.range(0.35, 0.9) : 0;
     }
 
-    const aPos: N = instancedBufferAttribute(positions, 'vec3');
-    const aCol: N = instancedBufferAttribute(colors, 'vec3');
-    const aPar: N = instancedBufferAttribute(params, 'vec4');
+    const geometry = starQuad();
+    geometry.setAttribute('aStar', new InstancedBufferAttribute(positions, 3));
+    geometry.setAttribute('aColor', new InstancedBufferAttribute(colors, 3));
+    geometry.setAttribute('aParams', new InstancedBufferAttribute(params, 4));
+    geometry.instanceCount = n;
+    geometry.boundingSphere = new Sphere(new Vector3(), shell * 1.1);
 
-    // sin() is cheaper than any noise here and, with a per-star phase and rate,
-    // the field never reads as synchronised.
-    const rate: N = aPar.y.mul(0.31).fract().mul(2.2).add(0.6);
-    const wobble: N = sin(time.mul(rate).add(aPar.y));
-    const twinkle: N = varying(float(1).add(wobble.mul(aPar.z)), 'vTwinkle');
+    const aStar: N = attribute('aStar', 'vec3');
+    const aColor: N = attribute('aColor', 'vec3');
+    const aParams: N = attribute('aParams', 'vec4');
 
-    const material = new PointsNodeMaterial();
-    material.positionNode = aPos;
-    material.sizeNode = aPar.x.mul(float(1).add(wobble.mul(aPar.z).mul(0.18)));
-    material.sizeAttenuation = false;
+    // sin() is cheaper than any noise, and with a per-star phase and rate the
+    // field never reads as synchronised.
+    const rate: N = fract(aParams.y.mul(0.31)).mul(2.2).add(0.6);
+    const wobble: N = sin(time.mul(rate).add(aParams.y));
+    const twinkle: N = float(1).add(wobble.mul(aParams.z));
+
+    const material = new MeshBasicNodeMaterial();
     material.transparent = true;
     material.blending = AdditiveBlending;
     material.depthWrite = false;
     material.depthTest = true;
     material.fog = false;
 
-    const vColor: N = varying(aCol, 'vStarColor');
-    const vSpike: N = varying(aPar.w, 'vStarSpike');
+    // Camera-facing quad sized in screen pixels: project the star's centre,
+    // then push the corners out in clip space by the pixel radius. Same maths
+    // as PointsNodeMaterial's sprite path, written out.
+    const centreView: N = cameraViewMatrix
+      .mul(modelWorldMatrix)
+      .mul(vec4(aStar.x, aStar.y, aStar.z, 1));
+    const clip: N = cameraProjectionMatrix.mul(centreView);
+    const pixels: N = aParams.x.mul(float(1).add(wobble.mul(aParams.z).mul(0.2))).mul(screenDPR);
+    const corner: N = positionGeometry;
+    const offset: N = vec2(corner.x, corner.y)
+      .mul(pixels)
+      .div(viewportSize.mul(0.5))
+      .mul(clip.w);
+    material.vertexNode = clip.add(vec4(offset.x, offset.y, 0, 0));
 
     const p: N = uv().sub(0.5).mul(2);
-    const dist = p.length();
-    const fall = saturate(float(1).sub(dist));
+    const dist: N = p.length();
+    const fall: N = saturate(float(1).sub(dist));
     // Two lobes: a tight core that survives bloom thresholding as a point, and
-    // a wide skirt that stops the quad edge from being visible.
-    const core = fall.pow(7).mul(1.7);
-    const halo = fall.pow(2).mul(0.28);
-    const ax = p.x.abs();
-    const ay = p.y.abs();
-    const spikeH = saturate(float(1).sub(ay.mul(11))).pow(2).mul(saturate(float(1).sub(ax)).pow(1.6));
-    const spikeV = saturate(float(1).sub(ax.mul(11))).pow(2).mul(saturate(float(1).sub(ay)).pow(1.6));
-    const spikes = spikeH.add(spikeV).mul(vSpike).mul(0.55);
+    // a wide skirt so the quad's edge is never visible.
+    const core: N = fall.pow(7).mul(1.7);
+    const halo: N = fall.pow(2).mul(0.3);
+    const ax: N = p.x.abs();
+    const ay: N = p.y.abs();
+    const spikeH: N = saturate(float(1).sub(ay.mul(11))).pow(2).mul(saturate(float(1).sub(ax)).pow(1.6));
+    const spikeV: N = saturate(float(1).sub(ax.mul(11))).pow(2).mul(saturate(float(1).sub(ay)).pow(1.6));
+    const spikes: N = spikeH.add(spikeV).mul(aParams.w).mul(0.55);
 
-    material.colorNode = vec4(vColor, core.add(halo).add(spikes).mul(twinkle).mul(0.85));
+    material.colorNode = vec4(aColor, core.add(halo).add(spikes).mul(twinkle).mul(0.9));
 
-    const sprite = new Sprite(material);
-    sprite.count = n;
-    sprite.frustumCulled = false;
-    sprite.renderOrder = -40;
-    sprite.matrixAutoUpdate = true;
-    group.add(sprite);
+    const mesh = new Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -40;
+    group.add(mesh);
 
-    sprites.push(sprite);
+    meshes.push(mesh);
+    geometries.push(geometry);
     materials.push(material);
     offsets.push(layer.parallax);
     created += n;
@@ -265,19 +318,22 @@ export function createStarfield(options: StarfieldOptions): Starfield {
     object: group,
     starCount: created,
     update(camera: Vector3, centre: Vector3, invScale: number): void {
-      // The whole sky group already rides the camera, so a layer sitting still
-      // in world space has to be pushed back by the camera's own displacement.
+      // The whole sky group already rides the camera, so a layer that is meant
+      // to sit still in world space has to be pushed back by the camera's own
+      // displacement — scaled into the group's local units.
       tmp.subVectors(camera, centre).multiplyScalar(-invScale);
-      for (let i = 0; i < sprites.length; i++) {
+      for (let i = 0; i < meshes.length; i++) {
         const k = offsets[i];
         if (k === 0) continue;
-        sprites[i].position.set(tmp.x * k, tmp.y * k, tmp.z * k);
+        meshes[i].position.set(tmp.x * k, tmp.y * k, tmp.z * k);
       }
     },
     dispose(): void {
-      for (const s of sprites) group.remove(s);
+      for (const m of meshes) group.remove(m);
+      for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
-      sprites.length = 0;
+      meshes.length = 0;
+      geometries.length = 0;
       materials.length = 0;
     },
   };

@@ -24,6 +24,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** A 0xRRGGBB colour from the ship or track data as a CSS string. */
+export function cssHex(value: number): string {
+  return `#${(value >>> 0).toString(16).padStart(6, '0').slice(-6)}`;
+}
+
 export function clear(node: Element): void {
   while (node.firstChild) node.removeChild(node.firstChild);
 }

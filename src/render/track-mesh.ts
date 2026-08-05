@@ -39,7 +39,7 @@ const RAIL_WIDTH = 2.2;
 /** How far the rail sits above the driving surface. */
 const RAIL_LIFT = 0.18;
 /** Height of a full-strength containment barrier, in metres. */
-const BARRIER_HEIGHT = 9;
+const BARRIER_HEIGHT = 7;
 
 /**
  * Live shader inputs, written every frame by the render loop.
@@ -443,10 +443,11 @@ function createSurfaceMaterial(
   // 0 at the centre line, 1 at either barrier.
   const side = across.sub(0.5).mul(2).abs();
 
-  // Fine lateral grid, dense enough to read as texture at speed but not to
-  // shimmer when the surface is far away.
-  const grid = along.mul(0.25).fract();
-  const rungs = smoothstep(0.94, 1.0, grid).mul(0.5);
+  // Lateral rungs every few metres. These are the main cue for how fast the
+  // surface is passing underneath, so they need to be legible without being
+  // bright enough to compete with the rails.
+  const grid = along.mul(0.14).fract();
+  const rungs = smoothstep(0.955, 1.0, grid).mul(0.3);
 
   // Lane guides either side of the racing line.
   const lane = smoothstep(0.02, 0.0, side.sub(0.34).abs()).mul(0.35);
@@ -520,20 +521,24 @@ function createBarrierMaterial(palette: TrackPalette, uBeat: UniformNode): THREE
   const up = uv().x;
   const along = uv().y;
 
-  // Hex-ish lattice: two interfering stripe fields read as a mesh without the
-  // cost or aliasing of an actual texture.
-  const a = smoothstep(0.86, 1.0, along.mul(0.35).add(up.mul(2)).fract());
-  const b = smoothstep(0.86, 1.0, along.mul(0.35).sub(up.mul(2)).fract());
+  // Two interfering diagonal stripe fields read as a lattice without the cost
+  // or the aliasing of an actual texture. Kept coarse: a fine mesh at this
+  // scale shimmers badly once the craft is moving.
+  const a = smoothstep(0.9, 1.0, along.mul(0.13).add(up.mul(1.1)).fract());
+  const b = smoothstep(0.9, 1.0, along.mul(0.13).sub(up.mul(1.1)).fract());
   const lattice = a.add(b).clamp(0, 1);
 
-  // Solid at the base, dissolving toward the top so barriers never box the
-  // player in visually.
-  const fade = smoothstep(1.0, 0.05, up);
-  const scan = smoothstep(0.9, 1.0, along.mul(0.02).sub(time.mul(0.35)).fract()).mul(0.6);
+  // A barrier's job is to say "the track ends here", not to wall the player
+  // into a corridor. It is brightest in the first metre or so above the rail
+  // and has largely dissolved by the top, so corner exits stay readable and
+  // the eye is never pulled off the racing line.
+  const fade = smoothstep(0.75, 0.0, up);
+  const base = smoothstep(0.18, 0.0, up).mul(0.5);
+  const scan = smoothstep(0.93, 1.0, along.mul(0.02).sub(time.mul(0.35)).fract()).mul(0.35);
 
-  const alpha = lattice.mul(0.5).add(scan).add(0.12).mul(fade).mul(0.85);
-  const tint = mix(color(palette.secondary), color(palette.glow), lattice);
-  mat.colorNode = vec4(tint.mul(uBeat.mul(0.5).add(1.1)), alpha);
+  const alpha = lattice.mul(0.16).add(scan).add(base).add(0.05).mul(fade).mul(0.9);
+  const tint = mix(color(palette.secondary), color(palette.glow), lattice.mul(0.6));
+  mat.colorNode = vec4(tint.mul(uBeat.mul(0.35).add(1)), alpha);
   mat.side = THREE.DoubleSide;
   return mat;
 }

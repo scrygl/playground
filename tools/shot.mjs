@@ -73,6 +73,8 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || undefined,
   args: [
     '--enable-unsafe-webgpu',
+    // Chromium now refuses the silent software-WebGL fallback without this.
+    '--enable-unsafe-swiftshader',
     '--enable-features=Vulkan,UseSkiaRenderer',
     '--use-angle=swiftshader',
     '--use-gl=angle',
@@ -108,9 +110,13 @@ if (args.steps && existsSync(resolve(process.cwd(), args.steps))) {
   steps = JSON.parse(await readFile(resolve(process.cwd(), args.steps), 'utf8'));
 }
 
+// Software rendering is slow enough that the default 30 s screenshot timeout
+// can expire while the page is mid-frame; give it real headroom.
+const SHOT_TIMEOUT = Number(args.shotTimeout ?? 120_000);
+
 if (steps.length === 0) {
   await page.waitForTimeout(WAIT);
-  await page.screenshot({ path: join(OUT, 'shot.png') });
+  await page.screenshot({ path: join(OUT, 'shot.png'), timeout: SHOT_TIMEOUT, animations: 'disabled' });
 } else {
   let n = 0;
   for (const step of steps) {
@@ -123,7 +129,11 @@ if (steps.length === 0) {
       if (step.keyUp) await page.keyboard.up(step.keyUp);
       if (step.eval) logs.push(`[eval] ${JSON.stringify(await page.evaluate(step.eval))}`);
       if (step.shot) {
-        await page.screenshot({ path: join(OUT, `${String(++n).padStart(2, '0')}-${step.shot}.png`) });
+        await page.screenshot({
+          path: join(OUT, `${String(++n).padStart(2, '0')}-${step.shot}.png`),
+          timeout: SHOT_TIMEOUT,
+          animations: 'disabled',
+        });
         logs.push(`[shot] ${step.shot}`);
       }
     } catch (e) {

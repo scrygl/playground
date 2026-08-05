@@ -21,6 +21,8 @@ declare global {
       set(archetype: string): void;
       look(yawDeg: number, pitchDeg?: number): void;
       relativeToSun(yawDeg: number, pitchDeg?: number): void;
+      only(which: string): void;
+      bloom(on: boolean): void;
       error?: string;
     };
   }
@@ -56,6 +58,8 @@ window.__ENV_TEST__ = {
   set: () => {},
   look: () => {},
   relativeToSun: () => {},
+  only: () => {},
+  bloom: () => {},
 };
 
 async function boot(): Promise<void> {
@@ -101,6 +105,11 @@ async function boot(): Promise<void> {
   scene.add(key);
   const ambient = new THREE.AmbientLight(0xffffff, 1);
   scene.add(ambient);
+
+  const post = new THREE.PostProcessing(renderer);
+  const scenePass = pass(scene, camera);
+  const bloomPass = bloom(scenePass.getTextureNode(), quality.bloomStrength, 0.45, 0.72);
+  post.outputNode = scenePass.add(bloomPass);
 
   let env: (BuiltEnvironment & { diagnostics: Any }) | null = null;
   let sunYaw = 0;
@@ -173,14 +182,26 @@ async function boot(): Promise<void> {
     pitch = p;
     aim();
   };
+  window.__ENV_TEST__.only = (which: string): void => {
+    const want = which.split(',');
+    const on = (name: string): boolean => want.includes('all') || want.includes(name);
+    trackMesh.visible = on('track');
+    rail.visible = on('track');
+    if (!env) return;
+    env.root.traverse((o: Any) => {
+      if (o.name === 'Celestial') o.visible = on('celestial');
+      if (o.name === 'Starfield') o.visible = on('stars');
+      if (o.name === 'Scenery') o.visible = on('scenery');
+    });
+    scene.background = on('sky') ? env.background : null;
+  };
+  window.__ENV_TEST__.bloom = (b: boolean): void => {
+    post.outputNode = b ? scenePass.add(bloomPass) : scenePass;
+    post.needsUpdate = true;
+  };
 
   build((params.get('arch') as EnvironmentArchetype) ?? 'nebula');
   aim();
-
-  const post = new THREE.PostProcessing(renderer);
-  const scenePass = pass(scene, camera);
-  const bloomPass = bloom(scenePass.getTextureNode(), quality.bloomStrength, 0.45, 0.72);
-  post.outputNode = scenePass.add(bloomPass);
 
   // A slow vignette-ish grade is the lead's job; nothing here beyond bloom.
   addEventListener('resize', () => {

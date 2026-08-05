@@ -670,7 +670,7 @@ export class SkyField {
       G += r.sunGlow[1] * g;
       B += r.sunGlow[2] * g;
     }
-    const wash = Math.pow(sd * 0.5 + 0.5, 6) * r.washStrength;
+    const wash = Math.pow(sd * 0.5 + 0.5, 13) * r.washStrength * 1.5;
     R += r.sunGlow[0] * wash;
     G += r.sunGlow[1] * wash;
     B += r.sunGlow[2] * wash;

@@ -111,12 +111,12 @@ export interface FamilyPlan {
 type DensityMix = Record<PropKind, number>;
 
 const MIX: Record<EnvironmentArchetype, DensityMix> = {
-  nebula: { pylon: 34, monolith: 10, arch: 6, debris: 90, traffic: 26 },
-  megastructure: { pylon: 46, monolith: 22, arch: 4, debris: 130, traffic: 40 },
-  prismatic: { pylon: 30, monolith: 4, arch: 14, debris: 70, traffic: 34 },
-  starfield: { pylon: 16, monolith: 6, arch: 3, debris: 40, traffic: 10 },
-  ringworld: { pylon: 28, monolith: 12, arch: 7, debris: 80, traffic: 22 },
-  void: { pylon: 12, monolith: 20, arch: 2, debris: 34, traffic: 4 },
+  nebula: { pylon: 20, monolith: 9, arch: 5, debris: 90, traffic: 26 },
+  megastructure: { pylon: 26, monolith: 18, arch: 3, debris: 130, traffic: 40 },
+  prismatic: { pylon: 17, monolith: 4, arch: 11, debris: 70, traffic: 34 },
+  starfield: { pylon: 8, monolith: 5, arch: 2, debris: 40, traffic: 10 },
+  ringworld: { pylon: 16, monolith: 10, arch: 6, debris: 80, traffic: 22 },
+  void: { pylon: 6, monolith: 14, arch: 2, debris: 34, traffic: 4 },
 };
 
 export function planScenery(
@@ -154,10 +154,10 @@ export function planScenery(
   // Pylons: a colonnade standing just off the racing line, close enough that
   // they strobe past at speed.
   {
-    const placements = ring(n(weights.pylon), 1.15, 2.1, -0.5, 0.15);
+    const placements = ring(n(weights.pylon), 1.25, 3.2, -0.34, -0.06);
     for (const p of placements) {
-      const h = R * (0.18 + p.variant * 0.42);
-      const w = R * (0.012 + p.variant * 0.016);
+      const h = R * (0.1 + p.variant * 0.26);
+      const w = R * (0.02 + p.variant * 0.028);
       p.scale.set(w, h, w);
       p.rotation.set(rng.range(-0.05, 0.05), rng.range(0, Math.PI * 2), rng.range(-0.05, 0.05));
     }
@@ -248,32 +248,32 @@ export function structureColors(archetype: EnvironmentArchetype, p: Palette): St
       return {
         body: toLuminance(saturateRGB(mixRGB(p.deep, p.haze, 0.5), 0.35), 0.05),
         bodyLit: toLuminance(saturateRGB(p.haze, 0.4), 0.16),
-        emissive: toLuminance(saturateRGB(p.primary, 1.05), 1.5),
-        emissiveAlt: toLuminance(saturateRGB(p.sun, 0.8), 1.1),
+        emissive: toLuminance(saturateRGB(p.primary, 1.05), 0.7),
+        emissiveAlt: toLuminance(saturateRGB(p.sun, 0.8), 0.5),
         rim: toLuminance(saturateRGB(p.secondary, 1.1), 0.55),
       };
     case 'prismatic':
       return {
         body: toLuminance(saturateRGB(mixRGB(p.deep, p.secondary, 0.45), 1.1), 0.05),
         bodyLit: toLuminance(saturateRGB(mixRGB(p.primary, p.glow, 0.4), 1.2), 0.22),
-        emissive: toLuminance(saturateRGB(p.glow, 1.25), 2.6),
-        emissiveAlt: toLuminance(saturateRGB(p.primary, 1.3), 2.2),
+        emissive: toLuminance(saturateRGB(p.glow, 1.25), 1.25),
+        emissiveAlt: toLuminance(saturateRGB(p.primary, 1.3), 1.05),
         rim: toLuminance(saturateRGB(p.secondary, 1.35), 1.1),
       };
     case 'void':
       return {
         body: toLuminance(saturateRGB(p.deep, 0.6), 0.012),
         bodyLit: toLuminance(saturateRGB(p.deep, 0.7), 0.045),
-        emissive: toLuminance(saturateRGB(p.primary, 1.1), 0.9),
-        emissiveAlt: toLuminance(saturateRGB(p.secondary, 0.9), 0.6),
+        emissive: toLuminance(saturateRGB(p.primary, 1.1), 0.45),
+        emissiveAlt: toLuminance(saturateRGB(p.secondary, 0.9), 0.32),
         rim: toLuminance(saturateRGB(p.primary, 1.2), 0.45),
       };
     default:
       return {
         body: toLuminance(saturateRGB(mixRGB(p.deep, p.haze, 0.35), 0.8), 0.035),
         bodyLit: toLuminance(saturateRGB(mixRGB(p.haze, p.primary, 0.3), 0.9), 0.14),
-        emissive: toLuminance(saturateRGB(p.primary, 1.15), 2.0),
-        emissiveAlt: toLuminance(saturateRGB(p.glow, 1.1), 1.6),
+        emissive: toLuminance(saturateRGB(p.primary, 1.15), 0.9),
+        emissiveAlt: toLuminance(saturateRGB(p.glow, 1.1), 0.75),
         rim: toLuminance(saturateRGB(p.secondary, 1.15), 0.7),
       };
   }
@@ -395,12 +395,12 @@ export function createScenery(options: SceneryOptions): Scenery | null {
   const pylons = byKind('pylon');
   if (pylons.length > 0) {
     // Origin at the base, so a beat swells the pylon upward out of the ground.
-    const geometry = new CylinderGeometry(0.34, 1, 1, 7, 1, false);
+    const geometry = new CylinderGeometry(0.45, 1, 1, 6, 1, false);
     geometry.translate(0, 0.5, 0);
 
     const material = new MeshStandardNodeMaterial();
-    material.roughness = 0.5;
-    material.metalness = 0.7;
+    material.roughness = 0.62;
+    material.metalness = 0.35;
 
     const { origin, data } = packInstances(pylons);
     const hit: N = laneResponse(data.x, uLane).mul(uPulse);
@@ -415,7 +415,7 @@ export function createScenery(options: SceneryOptions): Scenery | null {
 
     material.colorNode = mix(rgbNode(colors.body), rgbNode(colors.bodyLit), height.pow(1.6));
     material.emissiveNode = rgbNode(colors.emissive)
-      .mul(strip.mul(0.5).add(capGlow.mul(1.5)))
+      .mul(strip.mul(0.3).add(capGlow.mul(1.1)))
       .mul(swell);
     // Anisotropic swell about the base: taller and slightly narrower on the
     // beat, so it reads as an intake of breath rather than a bounce.

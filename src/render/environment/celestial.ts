@@ -188,7 +188,8 @@ function billboardVertex(): N {
   const centreView: N = cameraViewMatrix.mul(world).mul(vec4(0, 0, 0, 1));
   const sx: N = world[0].xyz.length();
   const sy: N = world[1].xyz.length();
-  const offset: N = vec4(positionGeometry.x.mul(sx), positionGeometry.y.mul(sy), 0, 0);
+  const local: N = positionGeometry;
+  const offset: N = vec4(local.x.mul(sx), local.y.mul(sy), 0, 0);
   return cameraProjectionMatrix.mul(centreView.add(offset));
 }
 
@@ -421,7 +422,8 @@ function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
     const shellBand = saturate(float(1).sub(qd.sub(edge).abs().div(1 - edge).mul(3.4)));
     const profile = outward.pow(2.6).mul(0.75).add(shellBand.pow(2.2).mul(0.9));
     // Project the sun into screen space so the crescent tracks the terminator.
-    const sunView: N = cameraViewMatrix.mul(vec4(sunDirUniform, 0)).xy;
+    const sunVec: N = sunDirUniform;
+    const sunView: N = cameraViewMatrix.mul(vec4(sunVec.x, sunVec.y, sunVec.z, 0)).xy;
     const crescent = saturate(safeNormalize(q).dot(safeNormalize(sunView)).mul(0.78).add(0.30));
     haloMat.colorNode = vec4(
       atmo.mul(1.6),
