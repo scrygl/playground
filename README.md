@@ -4,13 +4,38 @@ An anti-gravity racing game for the browser. WebGPU with a WebGL2 fallback, no
 external assets of any kind — every circuit, sky, craft, sound effect and note
 of music is generated at runtime from a seed.
 
+## Running it
+
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # production bundle in dist/
-npm test           # the whole test suite
+npm run dev        # http://localhost:5173 — open it and press any key
+```
+
+That's the whole setup. There is no backend and no asset pipeline; everything
+is generated in the browser and progress lives in `localStorage`.
+
+```bash
+npm run build      # static bundle in dist/
+npm run preview    # serve that bundle at http://localhost:4173
+npm test           # 9 suites, ~13.8k assertions, no browser needed
 npm run typecheck
 ```
+
+### Putting it online
+
+The build is entirely static with relative asset paths, so it works from any
+subdirectory of any static host — GitHub Pages, Netlify, Cloudflare Pages, or
+`python3 -m http.server` inside `dist/`.
+
+A GitHub Pages workflow is included at `.github/workflows/deploy.yml`. To use it:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. Push to `main` (or run the workflow manually from the Actions tab).
+
+It typechecks, runs the tests, builds, and publishes to
+`https://<user>.github.io/<repo>/`. One caveat worth knowing: Pages serves over
+HTTPS, which WebGPU requires — so a plain `file://` open of `dist/index.html`
+will fall back to WebGL2 or fail outright. Serve it over HTTP(S).
 
 ---
 
