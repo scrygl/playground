@@ -84,7 +84,8 @@ export function createGarageScreen(ctx: UiContext): Screen {
   frame.footer.appendChild(
     hintBar([
       { keys: ['↑', '↓'], label: 'Browse roster' },
-      { keys: ['Enter'], label: 'Select' },
+      { keys: ['Enter'], label: 'View craft' },
+      { keys: ['S'], label: 'Select and return' },
       { keys: ['C'], label: 'Pin for comparison' },
       { keys: ['Esc'], label: 'Back' },
     ]),
@@ -132,9 +133,17 @@ export function createGarageScreen(ctx: UiContext): Screen {
   };
 
   const onKey = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyC' && !event.repeat) {
+    if (event.repeat) return;
+    if (event.code === 'KeyC') {
       event.preventDefault();
       toggleCompare();
+      return;
+    }
+    // Keyboard and gamepad players need a way to commit without hunting for
+    // the button, since Enter on a roster row only previews.
+    if (event.code === 'KeyS') {
+      event.preventDefault();
+      choose();
     }
   };
 
@@ -185,8 +194,14 @@ export function createGarageScreen(ctx: UiContext): Screen {
       }
       row.appendChild(tag);
 
-      row.addEventListener('click', () => {
-        if (entry.id === viewing) choose();
+      row.addEventListener('click', (event) => {
+        // Clicking the craft you are already looking at confirms it — but only
+        // from a real pointer. Keyboard and gamepad focus already previews the
+        // craft, so treating their Enter as that same second click would make
+        // the first press leave the garage before you had seen anything.
+        // A click synthesised from a key press reports `detail === 0`.
+        const fromPointer = event.detail > 0;
+        if (entry.id === viewing && fromPointer) choose();
         else setViewing(entry.id);
       });
       row.addEventListener('focus', () => {

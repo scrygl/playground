@@ -12,6 +12,7 @@ import { Driver } from './game/driver';
 import { neutralControls } from './game/vehicle';
 import { SHIPS_BY_ID } from './game/ships';
 import {
+  STORAGE_KEY,
   betterMedal,
   creditsForFinish,
   loadProfile,
@@ -162,8 +163,11 @@ export class App implements UiHost {
     // still image over a black canvas.
     await this.loadMenuBackdrop();
 
-    this.ui.show('title');
-    this.screen = 'title';
+    // Start on the boot gate, not the menu. Browsers refuse to create an
+    // AudioContext without a user gesture, and that gate's keypress is the
+    // only thing that calls unlockAudio() — skipping it left the game silent.
+    this.ui.show('boot');
+    this.screen = 'boot';
     this.lastFrame = performance.now();
     this.renderer.renderer.setAnimationLoop(() => void this.frame());
   }
@@ -250,7 +254,9 @@ export class App implements UiHost {
     const debug = window.__GAME_DEBUG__;
     debug.frames = ((debug.frames as number) ?? 0) + 1;
     debug.fps = Math.round(this.governor.fps);
-    debug.screen = this.screen;
+    // Report where the interface actually is; `this.screen` only tracks the
+    // transitions the app drives, not menu navigation the UI does itself.
+    debug.screen = this.ui.current;
     debug.backend = this.renderer.backend;
     debug.sceneChildren = this.renderer.scene.children.length;
     debug.hasBackground = this.renderer.scene.background !== null;
@@ -698,7 +704,7 @@ export class App implements UiHost {
   }
 
   resetProfile(): void {
-    localStorage.removeItem('velocity-horizon.profile.v1');
+    localStorage.removeItem(STORAGE_KEY);
     this.profile = loadProfile();
     this.ui.profileChanged();
     this.ui.toast('Profile reset', 'info');

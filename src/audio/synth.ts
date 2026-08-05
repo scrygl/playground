@@ -210,7 +210,7 @@ export function createAudioGraph(ctx: AudioContext): AudioGraph {
     seconds: 2.8,
     decay: 2.7,
     damping: 0.6,
-    seed: 'velocity-horizon-hall',
+    seed: 'pulsar-circuit-hall',
   });
   const reverbReturn = ctx.createGain();
   reverbReturn.gain.value = 0.5;
@@ -241,7 +241,7 @@ export function createAudioGraph(ctx: AudioContext): AudioGraph {
   delayReturn.connect(reverbIn);
   delayReturn.connect(compressor);
 
-  const noise = createNoiseBuffer(ctx, 2.5, 'velocity-horizon-noise');
+  const noise = createNoiseBuffer(ctx, 2.5, 'pulsar-circuit-noise');
 
   let disposed = false;
   return {

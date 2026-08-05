@@ -1,5 +1,5 @@
 /**
- * VELOCITY HORIZON — the interface.
+ * PULSAR CIRCUIT — the interface.
  *
  * One object implements {@link GameUi}: it owns a screen registry, the
  * transition between screens, the navigation controller, and the three global
@@ -79,7 +79,7 @@ const NAVIGABLE: Record<ScreenName, boolean> = {
 
 const TRANSITION_MS = 260;
 
-export class VelocityHorizonUi implements GameUi {
+export class PulsarCircuitUi implements GameUi {
   private root: HTMLElement | null = null;
   private host!: UiHost;
   private nav!: NavController;
@@ -466,7 +466,7 @@ function buildBackdrop(): HTMLElement {
 
 /** Convenience factory; the app can also construct the class directly. */
 export function createUi(options?: Partial<UiOptions>): GameUi {
-  return new VelocityHorizonUi(options);
+  return new PulsarCircuitUi(options);
 }
 
 export type { GameUi, UiHost, ScreenName, UiOptions } from './types';

@@ -70,7 +70,14 @@ export interface Profile {
   totalRaces: number;
 }
 
-const STORAGE_KEY = 'velocity-horizon.profile.v1';
+export const STORAGE_KEY = 'pulsar-circuit.profile.v1';
+/**
+ * The key this game shipped under before it was renamed.
+ *
+ * Read once so anyone who had already played keeps their records, medals and
+ * credits across the rename instead of silently starting over.
+ */
+const LEGACY_STORAGE_KEYS = ['velocity-horizon.profile.v1'];
 const PROFILE_VERSION = 1;
 
 export const DEFAULT_BINDINGS: ControlBindings = {
@@ -178,7 +185,19 @@ function repair(raw: unknown): Profile {
 
 export function loadProfile(): Profile {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      for (const legacy of LEGACY_STORAGE_KEYS) {
+        const found = localStorage.getItem(legacy);
+        if (found) {
+          raw = found;
+          // Migrate on read so the next save lands under the current key.
+          localStorage.setItem(STORAGE_KEY, found);
+          localStorage.removeItem(legacy);
+          break;
+        }
+      }
+    }
     if (!raw) return defaultProfile();
     return repair(JSON.parse(raw));
   } catch {

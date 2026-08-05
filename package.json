@@ -1,9 +1,9 @@
 {
-  "name": "nova-drift-racer",
+  "name": "pulsar-circuit",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "VELOCITY HORIZON \u2014 a WebGPU anti-gravity space racing game",
+  "description": "PULSAR CIRCUIT \u2014 a WebGPU anti-gravity space racing game",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

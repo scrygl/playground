@@ -19,15 +19,15 @@ function wordmark(size: 'hero' | 'compact'): HTMLElement {
   const wrap = el('div', 'vh-title__mark');
   wrap.appendChild(monogram(size === 'hero' ? 88 : 54));
   const word = el('div', 'vh-title__word');
-  word.appendChild(el('div', 'vh-title__line1', 'Velocity'));
-  word.appendChild(el('div', 'vh-title__line2', 'Horizon'));
+  word.appendChild(el('div', 'vh-title__line1', 'Pulsar'));
+  word.appendChild(el('div', 'vh-title__line2', 'Circuit'));
   wrap.appendChild(word);
   return wrap;
 }
 
 export function createBootScreen(ctx: UiContext): Screen {
   const root = el('div', 'vh-screen vh-title');
-  root.setAttribute('aria-label', 'Velocity Horizon');
+  root.setAttribute('aria-label', 'Pulsar Circuit');
 
   root.appendChild(wordmark('hero'));
   root.appendChild(el('div', 'vh-title__rule'));
@@ -64,6 +64,11 @@ export function createBootScreen(ctx: UiContext): Screen {
     // Modifier-only presses are not an answer to "press any key".
     if (event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta') return;
     event.preventDefault();
+    // The menu navigator listens in the capture phase, so without stopping the
+    // event here the same Enter that dismisses this gate also activates
+    // whatever menu item is focused behind it — dropping the player straight
+    // into mode select without ever seeing the title.
+    event.stopImmediatePropagation();
     enter();
   };
   const onPointer = (): void => enter();
@@ -72,16 +77,18 @@ export function createBootScreen(ctx: UiContext): Screen {
     root,
     enter() {
       armed = true;
-      window.addEventListener('keydown', onKey);
+      // Capture on `window` runs before the navigator's capture listener on
+      // `document`, which is what lets the gate consume the key.
+      window.addEventListener('keydown', onKey, true);
       root.addEventListener('pointerdown', onPointer);
     },
     leave() {
       armed = false;
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       root.removeEventListener('pointerdown', onPointer);
     },
     dispose() {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     },
   };
 }

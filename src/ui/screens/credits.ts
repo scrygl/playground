@@ -18,7 +18,7 @@ interface Block {
 }
 
 export function createCreditsScreen(_ctx: UiContext): Screen {
-  const frame = screenFrame({ title: 'Credits', kicker: 'Velocity Horizon' });
+  const frame = screenFrame({ title: 'Credits', kicker: 'Pulsar Circuit' });
   const root = el('div', 'vh-screen');
   root.appendChild(frame.root);
 

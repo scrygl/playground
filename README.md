@@ -1,4 +1,4 @@
-# Velocity Horizon
+# Pulsar Circuit
 
 An anti-gravity racing game for the browser. WebGPU with a WebGL2 fallback, no
 external assets of any kind — every circuit, sky, craft, sound effect and note

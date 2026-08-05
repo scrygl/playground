@@ -4,14 +4,14 @@ import { clamp, damp, deadzone, formatTime, loopDelta, mod, wrapAngle } from '..
 import { check, describe, near, range, report } from './harness';
 
 describe('seeded randomness', () => {
-  const a = new Rng('velocity-horizon');
-  const b = new Rng('velocity-horizon');
+  const a = new Rng('pulsar-circuit');
+  const b = new Rng('pulsar-circuit');
   const values = Array.from({ length: 200 }, () => a.next());
   check('same seed gives the same stream', values.every((v, i) => v === b.next()));
   check('values stay in range', values.every((v) => v >= 0 && v < 1));
 
   const c = new Rng('different');
-  check('different seeds diverge', c.next() !== new Rng('velocity-horizon').next());
+  check('different seeds diverge', c.next() !== new Rng('pulsar-circuit').next());
 
   // A coarse uniformity check: ten buckets over ten thousand draws should all
   // be populated within a reasonable band. This is not a rigorous randomness

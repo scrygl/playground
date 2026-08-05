@@ -1,5 +1,5 @@
 /**
- * Pure music theory for Velocity Horizon.
+ * Pure music theory for Pulsar Circuit.
  *
  * Deliberately free of every browser API — no `AudioContext`, no `window`, no
  * `performance`. The composer (`music.ts`) and the unit tests both import this

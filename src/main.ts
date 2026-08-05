@@ -55,7 +55,7 @@ main().catch((error: unknown) => {
   window.__GAME_DEBUG__.error = detail;
   console.error(error);
   fail(
-    'Velocity Horizon could not start',
+    'Pulsar Circuit could not start',
     'This game needs a browser with WebGPU or WebGL2. Recent Chrome, Edge, Firefox and Safari all qualify; if you are on one of those, hardware acceleration may be switched off.',
     detail,
   );
