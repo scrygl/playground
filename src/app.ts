@@ -74,6 +74,8 @@ export class App implements UiHost {
    * is the same code path a demo/attract mode would use.
    */
   private autopilot: Driver | null = null;
+  /** Latch so a finished race is committed to the profile exactly once. */
+  private resultApplied = false;
   private damageFlash = 0;
   private readonly cameraPosition = new Vector3();
 
@@ -404,6 +406,7 @@ export class App implements UiHost {
 
   private async loadRace(config: RaceConfig): Promise<void> {
     this.pendingConfig = config;
+    this.syncChampionship(config);
     this.setScreen('loading');
     this.ui.setLoading(0.05, 'Plotting circuit');
     await nextFrame();
@@ -457,8 +460,38 @@ export class App implements UiHost {
 
     this.paused = false;
     this.damageFlash = 0;
+    this.resultApplied = false;
     this.lastFrame = performance.now();
     this.setScreen('race');
+  }
+
+  /**
+   * Opens a championship when the interface starts one, and leaves an existing
+   * series alone.
+   *
+   * The interface signals a series by putting a `championshipId` on the race
+   * config rather than calling a separate entry point, so this is where a cup
+   * actually begins. Without it every round would be scored as round one and
+   * the series could never advance.
+   */
+  private syncChampionship(config: RaceConfig): void {
+    if (!config.championshipId) {
+      this.championship = null;
+      return;
+    }
+    if (this.championship?.id === config.championshipId && !this.championship.finished) return;
+    const cup = CHAMPIONSHIPS.find((c) => c.id === config.championshipId);
+    if (!cup) {
+      this.championship = null;
+      return;
+    }
+    this.championship = {
+      id: cup.id,
+      round: config.round ?? 0,
+      tracks: [...cup.tracks],
+      standings: [],
+      finished: false,
+    };
   }
 
   private resolveTrack(config: RaceConfig): TrackDefinition {
@@ -498,9 +531,12 @@ export class App implements UiHost {
 
   private finishRace(): void {
     const race = this.race;
-    if (!race) return;
+    // Committing a result twice would double the credits and the completion
+    // count, so this is latched rather than relying on the caller stopping.
+    if (!race || this.resultApplied) return;
     const result = race.getResult();
     if (!result) return;
+    this.resultApplied = true;
 
     this.audio.engine.stop();
     this.applyResultToProfile(race, result);
@@ -581,9 +617,28 @@ export class App implements UiHost {
 
   advanceChampionship(): void {
     const state = this.championship;
-    if (!state || state.finished) {
-      this.championship = null;
+    if (!state) {
       this.abandonRace();
+      return;
+    }
+    if (state.finished) {
+      // Series over: record the player's placing, show the final table, and
+      // let the standings screen return to the menus.
+      const placing = state.standings.findIndex((s) => s.isPlayer) + 1;
+      if (placing > 0) {
+        const best = this.profile.championships[state.id];
+        this.profile.championships[state.id] = best ? Math.min(best, placing) : placing;
+        saveProfile(this.profile);
+        this.ui.profileChanged();
+      }
+      this.race = null;
+      this.audio.engine.stop();
+      this.audio.stopMusic(0.8);
+      this.disposeWorld();
+      void this.loadMenuBackdrop();
+      this.ui.showChampionship(state);
+      this.screen = 'championshipStandings';
+      this.championship = null;
       return;
     }
     const trackId = state.tracks[state.round];
@@ -599,32 +654,6 @@ export class App implements UiHost {
       championshipId: state.id,
       round: state.round,
     });
-  }
-
-  /** Begins a championship series from its first round. */
-  startChampionship(id: string, shipId: string, rivals: number): void {
-    const cup = CHAMPIONSHIPS.find((c) => c.id === id);
-    if (!cup) return;
-    this.championship = {
-      id: cup.id,
-      round: 0,
-      tracks: [...cup.tracks],
-      standings: [],
-      finished: false,
-    };
-    this.pendingConfig = {
-      mode: 'championship',
-      trackId: cup.tracks[0],
-      shipId,
-      rivals,
-      laps: TRACKS_BY_ID.get(cup.tracks[0])?.laps ?? 3,
-      difficulty: this.profile.settings.aiDifficulty,
-      seed: `${cup.id}-0`,
-      useGhost: false,
-      championshipId: cup.id,
-      round: 0,
-    };
-    this.advanceChampionship();
   }
 
   applySettings(settings: GameSettings): void {
