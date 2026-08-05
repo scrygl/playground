@@ -1281,6 +1281,9 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   }
 
   function dispose(): void {
+    // InstancedMesh owns its instance attribute, so it needs disposing too.
+    vanes.dispose();
+    shards.dispose();
     for (const d of disposables) d.dispose();
     root.clear();
     body.clear();

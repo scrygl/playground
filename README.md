@@ -43,8 +43,10 @@ and Rainbow Road's conviction that a guardrail is optional.
 | Airbrake left / right | `Q` / `E` | `L1` / `R1` |
 | Boost | `Space` | `✕` |
 | Pitch (airborne) | `I` / `K` | Left stick Y |
-| Look back | `C` | `○` |
-| Restart / Pause | `R` / `Esc` | — |
+| Look back | `C` | Right stick click |
+| Change camera view | `V` | `▢` |
+| Restart | `R` | Back / Share |
+| Pause | `Esc` | Start / Options |
 
 Everything is rebindable in Controls. Menus are fully navigable by keyboard,
 gamepad, mouse and touch.

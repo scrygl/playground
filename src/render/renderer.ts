@@ -101,7 +101,11 @@ export class GameRenderer {
     // every effect that displaces UVs — radial blur, chromatic aberration —
     // has to read from this, before anything is added on top of it.
     const sceneTexture = scenePass.getTextureNode();
-    const bloomNode = this.quality.bloom ? bloom(sceneTexture, this.quality.bloomStrength, 0.42, 0.62) : null;
+    // Threshold sits well above mid-grey. Lower and the whole image hazes: the
+    // key light, the nebula's image-based lighting and ACES together already
+    // push ordinary surfaces bright, and blooming those makes the neon stop
+    // standing out — which is the only thing bloom is here to do.
+    const bloomNode = this.quality.bloom ? bloom(sceneTexture, this.quality.bloomStrength, 0.5, 0.82) : null;
 
     const wantsBlur = this.quality.motionBlur;
     const wantsAberration = this.quality.chromaticAberration;
