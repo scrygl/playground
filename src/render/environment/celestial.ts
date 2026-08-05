@@ -154,6 +154,12 @@ export interface CelestialOptions {
 
 export interface Celestial {
   object: Group;
+  /**
+   * Direction of the archetype'shero subject — the gas giant, the derelict ring,
+   * the crystal world. Useful for framing an establishing shot or pointing the
+   * start-line camera somewhere worth looking.
+   */
+  heroDirection: Vector3;
   update(dt: number): void;
   dispose(): void;
 }
@@ -286,7 +292,7 @@ interface PlanetConfig {
   emissive: number;
 }
 
-function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; glow: N } {
+function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; emission: N } {
   const off = vec3(config.noiseSeed * 1.7, config.noiseSeed * 0.9, config.noiseSeed * 2.3);
   // Normalised local position: the sphere is built at unit radius and scaled by
   // the mesh transform, so this is stable regardless of the body's size.
@@ -301,7 +307,7 @@ function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; glow: N } 
     const lat = n.y.add(turb).toVar();
     const coarse = sin(lat.mul(9.5)).mul(0.5).add(0.5);
     const fine = sin(lat.mul(27.0).add(turb.mul(6))).mul(0.5).add(0.5);
-    const t = saturate(coarse.mul(0.72).add(fine.mul(0.28)));
+    const t = saturate(coarse.mul(0.78).add(fine.mul(0.34)).sub(0.06).mul(1.18));
     let albedo: N = mix(low, high, t);
     albedo = mix(albedo, accent, t.pow(4).mul(0.85));
     // Polar hoods, and a limb-darkened equator.
@@ -313,17 +319,29 @@ function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; glow: N } 
     const dist = vec3(rel.x, rel.y.mul(2.1), rel.z).length().add(fbm(n.mul(7).add(off), 3).mul(0.06));
     const storm = float(1).sub(smoothstep(0.12, 0.34, dist));
     albedo = mix(albedo, accent.mul(1.35), storm.mul(0.8));
-    return { albedo, glow: float(0) };
+    // A second, much finer band set keeps the giant from looking airbrushed
+    // when it fills half the sky.
+    const filigree = sin(lat.mul(64).add(turb.mul(14))).mul(0.5).add(0.5);
+    albedo = albedo.mul(filigree.mul(0.1).add(0.95));
+    return { albedo, emission: vec3(0, 0, 0) };
   }
 
   if (config.kind === 'crystal') {
     const facets = ridged(n.mul(5.5).add(off), 4);
     const veins = ridged(n.mul(13).add(off.mul(1.7)), 3).pow(4);
     const iri = fbm(n.mul(3.1).add(off), 3).mul(0.5).add(0.5);
+    // Iridescence: a three-stop cyclic gradient through the palette, driven by
+    // a low-frequency field, so the hue drifts across the surface instead of
+    // the whole world being one colour.
+    const t3: N = fract(iri.mul(0.7).add(facets.mul(0.45))).mul(3);
+    const stop1: N = mix(low, high, saturate(t3));
+    const stop2: N = mix(stop1, accent, saturate(t3.sub(1)));
+    const spectrum3: N = mix(stop2, low, saturate(t3.sub(2)));
+
     let albedo: N = mix(low, high, facets);
-    albedo = mix(albedo, accent, iri.pow(2));
-    const glow = veins.mul(config.emissive);
-    return { albedo, glow };
+    albedo = mix(albedo, spectrum3.mul(1.4), iri.pow(1.6).mul(0.85));
+    const emission = spectrum3.mul(veins.mul(config.emissive).mul(1.6));
+    return { albedo, emission };
   }
 
   if (config.kind === 'ice') {
@@ -331,7 +349,7 @@ function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; glow: N } 
     const cracks = float(1).sub(smoothstep(0, 0.055, fbm(n.mul(6.2).add(off), 4).abs()));
     let albedo: N = mix(low, high, relief.pow(0.7));
     albedo = mix(albedo, accent.mul(0.4), cracks.mul(0.7));
-    return { albedo, glow: float(0) };
+    return { albedo, emission: vec3(0, 0, 0) };
   }
 
   // rock / dead: continents plus crater fields.
@@ -346,8 +364,8 @@ function surfaceAlbedo(config: PlanetConfig, sunDir: N): { albedo: N; glow: N } 
   // Night-side settlement glow clustered on the "land".
   const cities = smoothstep(0.55, 0.85, vnoise(n.mul(18).add(off))).mul(land);
   const night = saturate(sunDir.dot(normalWorld).negate().mul(2.2));
-  const glow = cities.mul(night).mul(config.emissive);
-  return { albedo, glow };
+  const emission = accent.mul(cities.mul(night).mul(config.emissive));
+  return { albedo, emission };
 }
 
 function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
@@ -360,7 +378,7 @@ function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
   const material = new MeshBasicNodeMaterial();
   material.fog = false;
 
-  const { albedo, glow } = surfaceAlbedo(config, sunDirUniform);
+  const { albedo, emission } = surfaceAlbedo(config, sunDirUniform);
 
   const nrm = normalWorld;
   const ndl = nrm.dot(sunDirUniform);
@@ -381,7 +399,7 @@ function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
 
   const lit = albedo.mul(sunColor).mul(lambert);
   const fill = albedo.mul(ambient);
-  const color = lit.add(fill).add(atmo.mul(limb.mul(1.6).add(haze))).add(rgbNode(config.accent).mul(glow));
+  const color = lit.add(fill).add(atmo.mul(limb.mul(1.5).add(haze))).add(emission);
   material.colorNode = vec4(color, 1);
 
   const mesh = new Mesh(geometry, material);
@@ -423,11 +441,15 @@ function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
     const profile = outward.pow(2.6).mul(0.75).add(shellBand.pow(2.2).mul(0.9));
     // Project the sun into screen space so the crescent tracks the terminator.
     const sunVec: N = sunDirUniform;
-    const sunView: N = cameraViewMatrix.mul(vec4(sunVec.x, sunVec.y, sunVec.z, 0)).xy;
-    const crescent = saturate(safeNormalize(q).dot(safeNormalize(sunView)).mul(0.78).add(0.30));
+    const sunViewFull: N = cameraViewMatrix.mul(vec4(sunVec.x, sunVec.y, sunVec.z, 0)).xyz;
+    // View space looks down -z, so a positive z means the sun is behind the
+    // camera and the whole limb is lit — no crescent at all in that case.
+    const axial: N = saturate(sunViewFull.z);
+    const side: N = saturate(safeNormalize(q).dot(safeNormalize(sunViewFull.xy)).mul(0.95).add(0.16));
+    const crescent = mix(side, float(1), axial);
     haloMat.colorNode = vec4(
       atmo.mul(1.6),
-      profile.mul(crescent).mul(config.air).mul(saturate(float(1).sub(smoothstep(0.97, 1, qd)))),
+      profile.mul(crescent).mul(config.air * 0.85).mul(saturate(float(1).sub(smoothstep(0.97, 1, qd)))),
     );
 
     const halo = new Mesh(haloGeo, haloMat);
@@ -506,8 +528,14 @@ function buildRings(config: RingConfig, sunLocal: N): { mesh: Mesh; geometry: N;
     behind,
   );
 
+  // A zero-thickness disc seen edge-on aliases into a hard flat band across the
+  // sky. Real rings do brighten at grazing incidence and then vanish; fading
+  // the last few degrees keeps the physics and loses the artefact.
+  const facing = normalWorld.dot(view).abs();
+  const grazing = smoothstep(0.015, 0.16, facing);
+
   const lit = dusty.mul(rgbNode(config.sunColor)).mul(forward).mul(shadow.mul(0.9).add(0.1));
-  material.colorNode = vec4(lit, density.mul(config.opacity));
+  material.colorNode = vec4(lit, density.mul(config.opacity).mul(grazing));
 
   const mesh = new Mesh(geometry, material);
   mesh.renderOrder = -15;
@@ -595,6 +623,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
 
   const sunDir = options.sunDirection.clone().normalize();
   const sunUniform = uniform(sunDir.clone());
+  const heroDirection = sunDir.clone();
 
   const detail = quality.tier === 'potato' ? 0 : quality.tier === 'low' ? 1 : quality.tier === 'medium' ? 2 : 3;
   const sphereSegments = [24, 32, 48, 64][detail];
@@ -642,6 +671,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
       );
 
       const dir = directionAwayFrom(rng, sunDir, 0.25);
+      heroDirection.copy(dir);
       addPlanet(
         {
           kind: 'rock',
@@ -701,6 +731,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
       );
 
       const hullDir = directionAwayFrom(rng, sunDir, 0.1);
+      heroDirection.copy(hullDir);
       const hull: HullConfig = {
         radius: radius * 0.62,
         width: radius * 0.17,
@@ -807,6 +838,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
       );
 
       const dir = directionAwayFrom(rng, sunDir, 0.15);
+      heroDirection.copy(dir);
       const planet = addPlanet(
         {
           kind: 'crystal',
@@ -871,6 +903,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
       );
 
       const dir = directionAwayFrom(rng, sunDir, -0.1);
+      heroDirection.copy(dir);
       addPlanet(
         {
           kind: 'dead',
@@ -909,6 +942,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
 
       // The hero: a banded giant, close enough to fill a third of the sky.
       const dir = directionAwayFrom(rng, sunDir, 0.05);
+      heroDirection.copy(dir);
       const giant = addPlanet(
         {
           kind: 'gas',
@@ -1030,6 +1064,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
 
       // One nearly-invisible dark world, betrayed only by the stars it eats.
       const dir = directionAwayFrom(rng, sunDir, 0.2);
+      heroDirection.copy(dir);
       addPlanet(
         {
           kind: 'dead',
@@ -1082,6 +1117,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
 
   return {
     object: group,
+    heroDirection,
     update(dt: number): void {
       for (let i = 0; i < spinners.length; i++) {
         spinners[i].mesh.rotation.y += spinners[i].rate * dt;

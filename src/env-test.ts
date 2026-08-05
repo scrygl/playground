@@ -21,6 +21,7 @@ declare global {
       set(archetype: string): void;
       look(yawDeg: number, pitchDeg?: number): void;
       relativeToSun(yawDeg: number, pitchDeg?: number): void;
+      hero(yawOffset?: number, pitchDeg?: number): void;
       only(which: string): void;
       bloom(on: boolean): void;
       error?: string;
@@ -58,6 +59,7 @@ window.__ENV_TEST__ = {
   set: () => {},
   look: () => {},
   relativeToSun: () => {},
+  hero: () => {},
   only: () => {},
   bloom: () => {},
 };
@@ -82,18 +84,18 @@ async function boot(): Promise<void> {
   const trackMat = new THREE.MeshBasicNodeMaterial();
   const bands = sin(uv().x.mul(420).add(time.mul(2))).mul(0.5).add(0.5);
   trackMat.colorNode = vec4(
-    mix(color(0x0a1030), color(0x9ff4ff), bands.pow(2).mul(0.85).add(0.15)).mul(3.2),
+    mix(color(0x0a1030), color(0x9ff4ff), bands.pow(2).mul(0.85).add(0.15)).mul(2.1),
     1,
   );
   trackMat.side = THREE.DoubleSide;
-  const trackGeo = new THREE.TorusGeometry(TRACK_RADIUS * 0.85, 14, 3, 420);
+  const trackGeo = new THREE.TorusGeometry(TRACK_RADIUS * 0.85, 9, 3, 420);
   const trackMesh = new THREE.Mesh(trackGeo, trackMat);
   trackMesh.rotation.x = Math.PI / 2;
   trackMesh.position.y = -18;
   scene.add(trackMesh);
 
   const railMat = new THREE.MeshBasicNodeMaterial();
-  railMat.colorNode = vec4(color(0xff2f7a).mul(float(4.5)), 1);
+  railMat.colorNode = vec4(color(0xff2f7a).mul(float(2.8)), 1);
   railMat.positionNode = positionLocal;
   const railGeo = new THREE.TorusGeometry(TRACK_RADIUS * 0.85 + 16, 1.6, 3, 420);
   const rail = new THREE.Mesh(railGeo, railMat);
@@ -180,6 +182,13 @@ async function boot(): Promise<void> {
   window.__ENV_TEST__.relativeToSun = (y: number, p = 6): void => {
     yaw = sunYaw + y;
     pitch = p;
+    aim();
+  };
+  window.__ENV_TEST__.hero = (off = 0, p = 4): void => {
+    if (!env) return;
+    const h = env.diagnostics.heroDirection as THREE.Vector3;
+    yaw = (Math.atan2(h.x, h.z) * 180) / Math.PI + off;
+    pitch = (Math.asin(Math.max(-1, Math.min(1, h.y))) * 180) / Math.PI * 0.55 + p;
     aim();
   };
   window.__ENV_TEST__.only = (which: string): void => {

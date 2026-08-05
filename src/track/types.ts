@@ -119,6 +119,13 @@ export interface TrackDefinition {
   /** Base half-width in metres; segments scale from this. */
   halfWidth: number;
   /**
+   * Cycles the surface and rails through the spectrum along the circuit.
+   *
+   * A palette with a white primary has nothing to say on its own; this is what
+   * turns one into an actual rainbow road rather than a pale grey ribbon.
+   */
+  iridescent?: boolean;
+  /**
    * Optional per-track nudge to the medal thresholds.
    *
    * Medal times are derived at load from the track's own computed speed

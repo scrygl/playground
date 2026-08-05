@@ -56,7 +56,7 @@ export function moveToward(current: number, target: number, maxDelta: number): n
   return current + Math.sign(d) * maxDelta;
 }
 
-/** Wrap an angle into (-PI, PI]. */
+/** Wrap an angle into [-PI, PI). */
 export function wrapAngle(a: number): number {
   a = (a + Math.PI) % TAU;
   if (a < 0) a += TAU;

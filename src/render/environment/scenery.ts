@@ -410,8 +410,8 @@ export function createScenery(options: SceneryOptions): Scenery | null {
     const height: N = uv().y;
     // Light strips climbing the shaft, plus a bright cap.
     const strip = saturate(float(1).sub(fract(height.mul(7).add(vVar)).sub(0.5).abs().mul(9)));
-    const capGlow = smoothstep(0.72, 1.0, height);
-    const swell = vHit.mul(0.8).add(uIntensity.mul(0.25)).add(0.14);
+    const capGlow = smoothstep(0.82, 1.0, height);
+    const swell = vHit.mul(0.75).add(uIntensity.mul(0.2)).add(0.13);
 
     material.colorNode = mix(rgbNode(colors.body), rgbNode(colors.bodyLit), height.pow(1.6));
     material.emissiveNode = rgbNode(colors.emissive)

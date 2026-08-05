@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   color,
+  cos,
   float,
   mix,
   positionWorld,
@@ -9,6 +10,7 @@ import {
   time,
   uniform,
   uv,
+  vec3,
   vec4,
 } from 'three/tsl';
 import { Vector3 } from 'three';
@@ -120,10 +122,28 @@ function solidSpans(rings: RingData[]): [number, number][] {
   return spans;
 }
 
+/**
+ * A smooth spectral sweep, as a cosine palette.
+ *
+ * Three offset cosines are a cheaper and far better-behaved way to get a
+ * rainbow than converting HSV in a shader: no branching, no discontinuity as
+ * the hue wraps, and the result is already gamma-friendly.
+ */
+function spectrum(input: Parameters<typeof float>[0]) {
+  const TAU = Math.PI * 2;
+  const t = float(input).mul(TAU);
+  return vec3(
+    cos(t).mul(0.5).add(0.5),
+    cos(t.add(2.0944)).mul(0.5).add(0.5),
+    cos(t.add(4.1888)).mul(0.5).add(0.5),
+  );
+}
+
 export function buildTrackMesh(
   track: Track,
   palette: TrackPalette,
   quality: QualitySettings,
+  iridescent = false,
 ): BuiltTrackMesh {
   const rings = sampleRings(track, quality.trackSegmentLength);
   const spans = solidSpans(rings);
@@ -146,7 +166,7 @@ export function buildTrackMesh(
 
   // --- Surface ----------------------------------------------------------
   const surfaceGeo = buildSurfaceGeometry(rings, spans, n);
-  const surfaceMat = createSurfaceMaterial(palette, uBeat, uIntensity, uBoost);
+  const surfaceMat = createSurfaceMaterial(palette, uBeat, uIntensity, uBoost, iridescent);
   const surface = new THREE.Mesh(surfaceGeo, surfaceMat);
   surface.name = 'track-surface';
   surface.frustumCulled = false;
@@ -164,7 +184,7 @@ export function buildTrackMesh(
 
   // --- Edge rails --------------------------------------------------------
   const railGeo = buildRailGeometry(rings, spans, n);
-  const railMat = createRailMaterial(palette, uBeat, uPlayer);
+  const railMat = createRailMaterial(palette, uBeat, uPlayer, iridescent);
   const rails = new THREE.Mesh(railGeo, railMat);
   rails.name = 'track-rails';
   rails.frustumCulled = false;
@@ -436,6 +456,7 @@ function createSurfaceMaterial(
   uBeat: UniformNode,
   uIntensity: UniformNode,
   uBoost: UniformNode,
+  iridescent: boolean,
 ): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial();
   const across = uv().x;
@@ -465,7 +486,12 @@ function createSurfaceMaterial(
   const emissiveAmount = rungs.add(lane).add(centre).add(pulse).add(shoulder.mul(1.4));
   const beatBoost = uBeat.mul(0.55).add(1);
 
-  const tint = mix(color(palette.primary), color(palette.secondary), side.mul(0.7));
+  // On an iridescent circuit the hue is a function of distance along the lap,
+  // so the colour under the craft is always changing and the track ahead reads
+  // as a ribbon of spectrum rather than a flat strip.
+  const tint = iridescent
+    ? mix(spectrum(along.mul(0.0016).add(time.mul(0.03))), color(palette.glow), 0.22)
+    : mix(color(palette.primary), color(palette.secondary), side.mul(0.7));
   mat.colorNode = mix(color(palette.deep), color(0x11151f), side.oneMinus().mul(0.4));
   mat.emissiveNode = tint.mul(emissiveAmount).mul(beatBoost).mul(uBoost.mul(0.6).add(1));
   mat.roughnessNode = float(0.34).sub(shoulder.mul(0.18));
@@ -496,6 +522,7 @@ function createRailMaterial(
   palette: TrackPalette,
   uBeat: UniformNode,
   uPlayer: UniformNode,
+  iridescent: boolean,
 ): THREE.MeshBasicNodeMaterial {
   const mat = new THREE.MeshBasicNodeMaterial();
   const across = uv().x;
@@ -511,7 +538,10 @@ function createRailMaterial(
   const proximity = smoothstep(320, 0, along.sub(uPlayer).abs()).mul(0.5).add(0.6);
 
   const glow = chevron.mul(0.7).add(0.55).mul(profile).mul(proximity).mul(uBeat.mul(0.4).add(1));
-  mat.colorNode = vec4(mix(color(palette.primary), color(palette.glow), chevron).mul(glow.mul(2.4)), float(1));
+  const railTint = iridescent
+    ? mix(spectrum(along.mul(0.0016).add(time.mul(0.03)).add(0.08)), color(0xffffff), 0.18)
+    : mix(color(palette.primary), color(palette.glow), chevron);
+  mat.colorNode = vec4(railTint.mul(glow.mul(2.4)), float(1));
   mat.side = THREE.DoubleSide;
   return mat;
 }

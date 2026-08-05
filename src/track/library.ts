@@ -209,6 +209,7 @@ export const TRACKS: TrackDefinition[] = [
     difficulty: 4,
     laps: 3,
     halfWidth: 23,
+    iridescent: true,
     environment: 'prismatic',
     // The Rainbow Road homage. Guardrails are gone for the entire lap, so every
     // corner is a genuine risk, and two gaps force the player into the air where

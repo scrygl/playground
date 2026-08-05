@@ -40,7 +40,7 @@ async function boot() {
   const track = Track.build(definition);
   window.__GAME_DEBUG__.trackLength = Math.round(track.path.length);
 
-  const trackMesh = buildTrackMesh(track, definition.palette, quality);
+  const trackMesh = buildTrackMesh(track, definition.palette, quality, definition.iridescent);
   renderer.scene.add(trackMesh.group);
 
   const environment = createEnvironment({

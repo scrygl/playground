@@ -81,6 +81,8 @@ export interface EnvironmentDiagnostics {
   sceneryInstances: number;
   /** Mean sky luminance — kept well below the track's so the racing line wins. */
   skyLuminance: number;
+  /** Unit direction of the archetype's hero body, for establishing shots. */
+  heroDirection: Vector3;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +253,7 @@ export function createEnvironment(
     starCount: starfield.starCount,
     sceneryInstances: scenery?.instanceCount ?? 0,
     skyLuminance: luminance(sky.averageColor),
+    heroDirection: celestial.heroDirection.clone(),
   };
 
   return {

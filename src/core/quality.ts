@@ -331,13 +331,108 @@ export class AdaptiveQuality {
         this.effectReduction--;
         changed = true;
       } else if (this.scale < this.options.maxScale - 1e-3) {
-        // Climb back more slowly than we fell, so we settle instead of oscillate.
-        this.scale = Math.min(this.options.maxScale, this.scale + 0.05);
+        // Climb back in smaller steps than we fell, and only after a longer
+        // wait, so the controller settles rather than oscillating. Too timid a
+        // step is its own bug though: a player who drives through one heavy
+        // section should not be stuck at reduced resolution for a minute
+        // afterwards, so this recovers full scale in well under half a minute.
+        this.scale = Math.min(this.options.maxScale, this.scale + 0.08);
         changed = true;
       }
       this.sustainedFast = 0;
-      this.cooldown = 4;
+      this.cooldown = 3;
     }
     return changed;
+  }
+}
+
+/**
+ * Strips effects when resolution scaling alone cannot hold the frame rate.
+ *
+ * Ordered by how much they cost against how much they are missed: the film
+ * grain and chromatic aberration go first because they are the least load-
+ * bearing parts of the look, then the expensive multi-tap blur and the
+ * particle and scenery budgets. Bloom is never removed — without it the neon
+ * simply stops reading as neon, and the game would look broken rather than
+ * merely cheaper.
+ */
+export function applyEffectReduction(base: QualitySettings, level: number): QualitySettings {
+  if (level <= 0) return base;
+  const next: QualitySettings = { ...base };
+
+  next.filmGrain = false;
+  next.chromaticAberration = false;
+  next.particleBudget = Math.round(base.particleBudget * 0.5);
+  next.trailLength = Math.round(base.trailLength * 0.6);
+
+  if (level >= 2) {
+    next.motionBlur = false;
+    next.sceneryDensity = base.sceneryDensity * 0.4;
+    next.particleBudget = Math.round(base.particleBudget * 0.2);
+    next.drawDistance = base.drawDistance * 0.75;
+    next.bloomStrength = base.bloomStrength * 0.8;
+    next.trailLength = Math.round(base.trailLength * 0.3);
+  }
+  return next;
+}
+
+/**
+ * Ties detection, the chosen tier, and the adaptive scaler into one object the
+ * application drives once per frame.
+ */
+export class PerformanceGovernor {
+  readonly adaptive: AdaptiveQuality;
+  /** The tier the player (or auto-detection) selected. */
+  baseTier: QualityTierName;
+  /** The settings actually in force, after any adaptive reduction. */
+  settings: QualitySettings;
+
+  private lastReduction = 0;
+
+  constructor(
+    tier: QualityTierName,
+    options: { targetFps: number; enabled: boolean },
+  ) {
+    this.baseTier = tier;
+    this.settings = tierSettings(tier);
+    this.adaptive = new AdaptiveQuality({
+      targetFps: options.targetFps,
+      minScale: 0.5,
+      maxScale: 1,
+      enabled: options.enabled,
+    });
+  }
+
+  setTier(tier: QualityTierName): void {
+    this.baseTier = tier;
+    this.settings = applyEffectReduction(tierSettings(tier), this.adaptive.effectReduction);
+    this.adaptive.reset();
+  }
+
+  configure(options: Partial<AdaptiveOptions>): void {
+    this.adaptive.configure(options);
+  }
+
+  /**
+   * Feeds one frame. Returns true when the effect set changed and the caller
+   * needs to rebuild anything that bakes quality in (materials, post chain).
+   */
+  update(dt: number): boolean {
+    const changed = this.adaptive.update(dt);
+    if (!changed) return false;
+    if (this.adaptive.effectReduction !== this.lastReduction) {
+      this.lastReduction = this.adaptive.effectReduction;
+      this.settings = applyEffectReduction(tierSettings(this.baseTier), this.lastReduction);
+      return true;
+    }
+    return false;
+  }
+
+  get fps(): number {
+    return this.adaptive.fps;
+  }
+
+  get resolutionScale(): number {
+    return this.adaptive.scale;
   }
 }
