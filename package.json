@@ -1,0 +1,21 @@
+{
+  "name": "nova-drift-racer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "VELOCITY HORIZON — a WebGPU anti-gravity space racing game",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.71",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.5"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  }
+}
