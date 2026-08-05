@@ -45,7 +45,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `enablement` switches the repository's Pages source to GitHub Actions
+      # if it is not already. Without it this step just fails on a repo whose
+      # Pages is still set to deploy from a branch — and a branch deploy serves
+      # the repo root, where index.html is the *dev* entry point pointing at
+      # raw TypeScript. That renders as a blank white page.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
