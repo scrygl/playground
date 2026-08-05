@@ -6,7 +6,7 @@ import type { TrackSummary, UiHost } from './ui/types';
 import type { ChampionshipState, HudSnapshot, RaceConfig, RaceResult } from './game/types';
 import type { GameSettings, Profile } from './game/profile';
 import { defaultProfile } from './game/profile';
-import { TRACKS, TRACKS_BY_ID } from './track/library';
+import { TRACKS } from './track/library';
 import type { TrackDefinition } from './track/types';
 
 // --- fake outlines ---------------------------------------------------------
@@ -21,7 +21,9 @@ function outlineFor(track: TrackDefinition): P[] {
   let x = 0;
   let y = 0;
   let heading = 0;
-  const push = (): void => pts.push({ x, y });
+  const push = (): void => {
+    pts.push({ x, y });
+  };
   const advance = (dist: number, steps: number): void => {
     for (let i = 0; i < steps; i++) {
       x += Math.cos(heading) * (dist / steps);
@@ -64,6 +66,16 @@ function outlineFor(track: TrackDefinition): P[] {
       }
     }
   }
+  // Sweep the accumulated closure error back across the loop, the way the real
+  // track builder does, so the preview is a closed circuit rather than a spiral.
+  const gapX = pts[0].x - pts[pts.length - 1].x;
+  const gapY = pts[0].y - pts[pts.length - 1].y;
+  for (let i = 0; i < pts.length; i++) {
+    const t = i / (pts.length - 1);
+    pts[i].x += gapX * t;
+    pts[i].y += gapY * t;
+  }
+
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -181,7 +193,11 @@ const host: UiHost = {
   getTrackSummary: (id: string) => summaries.get(id) ?? summaries.get(TRACKS[0].id)!,
 };
 
-const ui = new VelocityHorizonUi();
+const params = new URLSearchParams(location.search);
+const ui = new VelocityHorizonUi({
+  ...(params.has('touch') ? { touch: true } : {}),
+  ...(params.has('calm') ? { reducedMotion: true } : {}),
+});
 const root = document.getElementById('ui') as HTMLElement;
 ui.mount(root, host);
 
@@ -251,7 +267,15 @@ const result: RaceResult = {
   newRecord: true,
   score: 18_400,
   unlockedTracks: ['rainbow-vector'],
-  standings: [],
+  standings: [
+    { id: 'a', name: 'AURIC', shipId: 'zenith', isPlayer: false, position: 1, lap: 3, progress: 10170, gap: 0, finished: true, eliminated: false, finishTime: 185_120, shield: 74, bestLap: 60_940 },
+    { id: 'p', name: 'You', shipId: 'kestrel', isPlayer: true, position: 2, lap: 3, progress: 10170, gap: 2.3, finished: true, eliminated: false, finishTime: 187_420, shield: 61, bestLap: 61_180 },
+    { id: 'k', name: 'KESTREL-9', shipId: 'vyper', isPlayer: false, position: 3, lap: 3, progress: 10170, gap: 4.8, finished: true, eliminated: false, finishTime: 189_940, shield: 40, bestLap: 62_010 },
+    { id: 'v', name: 'VANTA', shipId: 'wisp', isPlayer: false, position: 4, lap: 3, progress: 10170, gap: 9.1, finished: true, eliminated: false, finishTime: 194_260, shield: 22, bestLap: 63_120 },
+    { id: 's', name: 'SOLARIS', shipId: 'anvil', isPlayer: false, position: 5, lap: 3, progress: 10170, gap: 16.4, finished: true, eliminated: false, finishTime: 201_500, shield: 88, bestLap: 64_900 },
+    { id: 'r', name: 'RIPTIDE', shipId: 'halcyon', isPlayer: false, position: 6, lap: 3, progress: 10170, gap: 24.9, finished: true, eliminated: false, finishTime: 210_040, shield: 12, bestLap: 66_120 },
+    { id: 'm', name: 'MERIDIAN', shipId: 'kestrel', isPlayer: false, position: 7, lap: 2, progress: 8400, gap: 0, finished: false, eliminated: true, finishTime: 0, shield: 0, bestLap: 67_800 },
+  ],
   points: 18,
 };
 

@@ -33,7 +33,7 @@ export function createControlsScreen(ctx: UiContext): Screen {
   const root = el('div', 'vh-screen');
   root.appendChild(frame.root);
 
-  const columns = el('div', 'vh-settings');
+  const columns = el('div', 'vh-settings vh-settings--controls');
   const left = el('div');
   const right = el('div');
   columns.appendChild(left);

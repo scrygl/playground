@@ -13,10 +13,10 @@ import { MEDAL_ORDER } from '../../game/profile';
 import { MODES_BY_ID } from '../../game/types';
 import type { Screen, UiContext } from '../context';
 import type { TrackSummary } from '../types';
-import { difficultyBlocks, formatDistance, formatTime, MEDAL_LABEL } from '../format';
+import { difficultyLabel, formatDistance, formatTime, MEDAL_LABEL } from '../format';
 import { icon } from '../icons';
 import { getShipSafe } from './ship-utils';
-import { button, el, hintBar, medalBadge, screenFrame, trackPreview } from '../widgets';
+import { button, difficultyPips, el, hintBar, medalBadge, screenFrame, trackPreview } from '../widgets';
 
 function trackCard(ctx: UiContext, summary: TrackSummary, index: number, onPick: () => void): HTMLElement {
   const locked = !summary.unlocked;
@@ -40,8 +40,9 @@ function trackCard(ctx: UiContext, summary: TrackSummary, index: number, onPick:
     badge.appendChild(medalBadge(summary.medal, 26));
     art.appendChild(badge);
   }
-  const diff = el('div', 'vh-track__diff', difficultyBlocks(summary.difficulty));
-  diff.setAttribute('aria-label', `Difficulty ${summary.difficulty} of 5`);
+  const diff = el('div', 'vh-track__diff');
+  diff.appendChild(difficultyPips(summary.difficulty));
+  diff.setAttribute('aria-label', `Difficulty: ${difficultyLabel(summary.difficulty)}`);
   art.appendChild(diff);
   card.appendChild(art);
 

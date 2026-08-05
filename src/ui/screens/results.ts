@@ -11,7 +11,7 @@ import { MEDAL_ORDER, type MedalTier } from '../../game/profile';
 import type { RaceResult } from '../../game/types';
 import { TRACKS_BY_ID } from '../../track/library';
 import type { Screen, UiContext } from '../context';
-import { MEDAL_LABEL, formatCredits, formatTime, ordinal } from '../format';
+import { MEDAL_LABEL, formatCredits, formatGap, formatTime, ordinal } from '../format';
 import { icon } from '../icons';
 import { button, dataPair, el, hintBar, medalBadge, screenFrame } from '../widgets';
 
@@ -67,13 +67,23 @@ export function createResultsScreen(ctx: UiContext): ResultsScreen {
   verdict.appendChild(callouts);
 
   // --- right: lap splits --------------------------------------------------
+  const rightCol = el('div', 'vh-results__col');
   const laps = el('div', 'vh-laps vh-cut');
   laps.appendChild(el('h2', 'vh-laps__title', 'Lap splits'));
   const lapTable = el('div', 'vh-laptable');
   laps.appendChild(lapTable);
+  rightCol.appendChild(laps);
+
+  const orderPanel = el('div', 'vh-laps vh-cut');
+  orderPanel.appendChild(el('h2', 'vh-laps__title', 'Finishing order'));
+  const orderTable = el('table', 'vh-table');
+  const orderBody = el('tbody');
+  orderTable.appendChild(orderBody);
+  orderPanel.appendChild(orderTable);
+  rightCol.appendChild(orderPanel);
 
   layout.appendChild(verdict);
-  layout.appendChild(laps);
+  layout.appendChild(rightCol);
   frame.body.appendChild(layout);
 
   // --- actions ------------------------------------------------------------
@@ -177,6 +187,27 @@ export function createResultsScreen(ctx: UiContext): ResultsScreen {
     }
     if (result.laps.length === 0) {
       lapTable.appendChild(el('p', 'vh-group__note', 'No complete laps.'));
+    }
+
+    // --- finishing order -------------------------------------------------
+    const order = [...result.standings].sort((a, b) => a.position - b.position);
+    orderPanel.style.display = order.length > 1 ? '' : 'none';
+    orderBody.replaceChildren();
+    for (const racer of order) {
+      const row = el('tr');
+      if (racer.isPlayer) row.classList.add('is-player');
+      row.appendChild(el('td', '', racer.eliminated ? '—' : String(racer.position)));
+      row.appendChild(el('td', '', racer.name));
+      const gapCell = el('td');
+      gapCell.appendChild(
+        el(
+          'span',
+          'vh-table__pts',
+          racer.eliminated ? 'Out' : racer.position === 1 ? formatTime(racer.finishTime) : formatGap(racer.gap),
+        ),
+      );
+      row.appendChild(gapCell);
+      orderBody.appendChild(row);
     }
 
     // --- action visibility ----------------------------------------------

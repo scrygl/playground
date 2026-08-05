@@ -12,9 +12,9 @@
 import { SHIPS, statBars, type ShipDefinition } from '../../game/ships';
 import type { Screen, UiContext } from '../context';
 import { formatCredits } from '../format';
-import { icon } from '../icons';
+import { icon, shipSilhouette } from '../icons';
 import { getShipSafe } from './ship-utils';
-import { button, cssHex, el, hintBar, screenFrame, statBar, type StatBar } from '../widgets';
+import { button, cssHex, dataPair, el, hintBar, screenFrame, statBar, type StatBar } from '../widgets';
 
 export function createGarageScreen(ctx: UiContext): Screen {
   const frame = screenFrame({ title: 'Garage', kicker: 'Hangar bay 04' });
@@ -37,12 +37,22 @@ export function createGarageScreen(ctx: UiContext): Screen {
   const ident = el('div', 'vh-garage__ident');
   const maker = el('p', 'vh-garage__maker');
   const name = el('h2', 'vh-garage__name');
-  const silhouette = el('div', 'vh-garage__silhouette');
   const blurb = el('p', 'vh-garage__blurb');
+  const specs = el('div', 'vh-garage__specs');
+  const specTop = dataPair('Top speed', '—');
+  const specMass = dataPair('Mass', '—');
+  const specShield = dataPair('Shield', '—');
+  const specGroove = dataPair('Groove bonus', '—');
+  specs.appendChild(specTop);
+  specs.appendChild(specMass);
+  specs.appendChild(specShield);
+  specs.appendChild(specGroove);
+  const silhouette = el('div', 'vh-garage__silhouette');
   ident.appendChild(maker);
   ident.appendChild(name);
-  ident.appendChild(silhouette);
   ident.appendChild(blurb);
+  ident.appendChild(specs);
+  ident.appendChild(silhouette);
 
   const statsCol = el('div', 'vh-garage__stats');
   const compareHead = el('div', 'vh-garage__compare');
@@ -190,10 +200,12 @@ export function createGarageScreen(ctx: UiContext): Screen {
     name.textContent = ship.name;
     blurb.textContent = ship.blurb;
 
-    silhouette.replaceChildren();
-    const mark = icon('craft', 104);
-    silhouette.style.color = cssHex(ship.colors.trim);
-    silhouette.appendChild(mark);
+    silhouette.replaceChildren(shipSilhouette(ship.colors, 236));
+    silhouette.style.setProperty('--engine', cssHex(ship.colors.engine));
+    (specTop.lastElementChild as HTMLElement).textContent = `${Math.round(ship.stats.topSpeed * 3.6)} km/h`;
+    (specMass.lastElementChild as HTMLElement).textContent = `${ship.stats.mass.toFixed(2)} t`;
+    (specShield.lastElementChild as HTMLElement).textContent = String(ship.stats.shield);
+    (specGroove.lastElementChild as HTMLElement).textContent = `×${ship.stats.grooveBonus.toFixed(1)}`;
 
     compareHead.replaceChildren();
     if (compareShip && compareShip.id !== ship.id) {

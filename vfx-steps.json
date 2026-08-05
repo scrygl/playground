@@ -1,0 +1,122 @@
+[
+ {
+  "wait": 9000
+ },
+ {
+  "eval": "window.__VFX__.set({paused:true, speed:0}); window.__VFX__.look('orbit',{yaw:38,pitch:16,dist:14})"
+ },
+ {
+  "wait": 900
+ },
+ {
+  "shot": "ship-3q"
+ },
+ {
+  "eval": "window.__VFX__.look('orbit',{yaw:90,pitch:5,dist:15})"
+ },
+ {
+  "wait": 400
+ },
+ {
+  "shot": "ship-side"
+ },
+ {
+  "eval": "window.__VFX__.look('orbit',{yaw:170,pitch:12,dist:13})"
+ },
+ {
+  "wait": 400
+ },
+ {
+  "shot": "ship-front"
+ },
+ {
+  "eval": "window.__VFX__.look('orbit',{yaw:8,pitch:9,dist:13})"
+ },
+ {
+  "wait": 400
+ },
+ {
+  "shot": "ship-rear"
+ },
+ {
+  "eval": "window.__VFX__.look('orbit',{yaw:40,pitch:60,dist:14})"
+ },
+ {
+  "wait": 400
+ },
+ {
+  "shot": "ship-top"
+ },
+ {
+  "eval": "window.__VFX__.set({paused:false, speed:150, boost:1, turbo:3})"
+ },
+ {
+  "eval": "window.__VFX__.look('orbit',{yaw:145,pitch:10,dist:24})"
+ },
+ {
+  "wait": 1600
+ },
+ {
+  "shot": "ship-boost"
+ },
+ {
+  "eval": "window.__VFX__.set({boost:0,turbo:0,speed:120}); window.__VFX__.look('gate',{gate:2,dist:170,pitch:6})"
+ },
+ {
+  "wait": 1200
+ },
+ {
+  "shot": "gates-wide"
+ },
+ {
+  "eval": "window.__VFX__.look('gate',{gate:2,dist:55,pitch:1})"
+ },
+ {
+  "wait": 700
+ },
+ {
+  "shot": "gates-close"
+ },
+ {
+  "eval": "window.__VFX__.hit(true)"
+ },
+ {
+  "wait": 150
+ },
+ {
+  "shot": "gate-hit"
+ },
+ {
+  "wait": 600
+ },
+ {
+  "shot": "gate-hit-late"
+ },
+ {
+  "eval": "window.__VFX__.set({s:0}); window.__VFX__.look('chase',{dist:22,pitch:12})"
+ },
+ {
+  "wait": 2500
+ },
+ {
+  "shot": "chase"
+ },
+ {
+  "eval": "window.__VFX__.set({damage:1, shield:0.2, wall:true, invuln:true})"
+ },
+ {
+  "wait": 300
+ },
+ {
+  "shot": "damage-shield"
+ },
+ {
+  "eval": "window.__VFX__.set({damage:0, wall:false, invuln:false, ghost:0.35})"
+ },
+ {
+  "wait": 600
+ },
+ {
+  "shot": "ghost"
+ }
+]

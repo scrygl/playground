@@ -1,13 +1,71 @@
+/*
+ * Only the shell lives here: the canvas, the interface root, and the boot
+ * failure screen. Everything else the player sees is styled by src/ui/styles.css.
+ */
+
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #05060d;
   overflow: hidden;
+  background: #04050b;
+  color: #e8eefc;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overscroll-behavior: none;
 }
+
 #stage {
+  position: fixed;
+  inset: 0;
   display: block;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  /* The interface sits over the live render, so the canvas never takes input. */
+  touch-action: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  /* Children opt back in; the root itself must not eat clicks meant for nothing. */
+  pointer-events: none;
+}
+
+.boot-failure {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  padding: 32px;
+  background: #04050b;
+  text-align: center;
+}
+
+.boot-failure h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.boot-failure p {
+  margin: 0;
+  max-width: 46ch;
+  color: #93a0bd;
+  line-height: 1.55;
+}
+
+.boot-failure pre {
+  max-width: 80ch;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #0b0e18;
+  color: #ff8f9e;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: left;
+  white-space: pre-wrap;
 }

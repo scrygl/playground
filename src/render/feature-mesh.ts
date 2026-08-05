@@ -133,7 +133,7 @@ function buildGateGeometry(): THREE.BufferGeometry {
   builder.add(lip, null, 5);
   lip.dispose();
 
-  const pip = new THREE.BoxGeometry(0.075, 0.16, 0.16);
+  const pip = new THREE.BoxGeometry(0.1, 0.21, 0.15);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -142,7 +142,7 @@ function buildGateGeometry(): THREE.BufferGeometry {
   for (let i = 0; i < BAR_BEATS; i++) {
     // A crown across the top of the arch, read left to right in track order.
     const angle = Math.PI * (0.72 - i * 0.148);
-    pos.set(Math.cos(angle) * 1.1, Math.sin(angle) * 1.1, 0);
+    pos.set(Math.cos(angle) * 1.12, Math.sin(angle) * 1.12, 0);
     e.set(0, 0, angle);
     m.compose(pos, q.setFromEuler(e), one);
     builder.add(pip, m, i + 1);
@@ -370,13 +370,15 @@ function createGateMaterial(options: FeatureVisualOptions, u: FeatureUniforms): 
   const tint = mix(cool, hot, hit.max(onBeat.mul(0.8)).clamp(0, 1));
 
   const ringAmount = runner
-    .mul(0.5)
-    .add(0.35)
-    .add(onBeat.mul(2.6))
-    .add(charge.mul(0.5))
-    .add(hit.mul(5))
-    .mul(prox.mul(0.7).add(0.55));
-  const pipAmount = pipLive.mul(4).add(pipOwn.mul(1.1)).add(0.12).add(hit.mul(3));
+    .mul(0.4)
+    .add(0.3)
+    .add(onBeat.mul(1.5))
+    .add(charge.mul(0.35))
+    .add(hit.mul(2))
+    .mul(prox.mul(0.6).add(0.5));
+  // The crown is always legible; the pip for the current beat blows out, the
+  // pip this gate wants sits half-lit, the rest stay as dark markers.
+  const pipAmount = pipLive.mul(3).add(pipOwn.mul(1.2)).add(0.3).add(hit.mul(1.5));
 
   const emissive = tint.mul(
     isRing
@@ -409,20 +411,30 @@ function createMembraneMaterial(options: FeatureVisualOptions, u: FeatureUniform
   const r = uv().sub(0.5).length().mul(2);
 
   // The telegraph: an annulus closing from the rim to the centre, arriving
-  // exactly on this gate's beat. One beat of warning, no more.
-  const closing = toBeat.mul(BAR_BEATS).clamp(0, 1);
-  const telegraph = smoothstep(0.1, 0.0, r.sub(closing).abs()).mul(smoothstep(1.02, 0.96, closing));
+  // exactly on this gate's beat. Two beats of warning is enough to aim by and
+  // short enough that a run of gates never has more than two ringing at once.
+  const closing = toBeat.mul(BAR_BEATS * 0.5).clamp(0, 1);
+  const telegraph = smoothstep(0.13, 0.0, r.sub(closing).abs()).mul(smoothstep(1.02, 0.9, closing));
 
   // Hit shockwave, racing outward past the rim.
   const wave = hit.oneMinus().mul(1.7);
   const shock = smoothstep(0.16, 0.0, r.sub(wave).abs()).mul(hit);
 
-  const rim = smoothstep(0.78, 1.0, r).mul(smoothstep(1.02, 0.98, r));
-  const wash = r.oneMinus().pow(1.6).mul(onBeat.mul(0.7).add(hit.mul(1.2)));
+  // Resting state: a faint pane with a soft edge, so the arch always reads as
+  // something you pass *through* rather than an empty hoop.
+  const pane = r.pow(2.4).mul(0.16).add(0.05);
+  const rim = smoothstep(0.7, 0.99, r).mul(smoothstep(1.01, 0.97, r));
+  const wash = r.oneMinus().pow(1.6).mul(onBeat.mul(0.55).add(hit.mul(0.8)));
 
   const tint = mix(color(options.palette.primary), mix(color(0xffffff), color(0xffd76a), perfect), hit.max(onBeat.mul(0.6)));
-  const amount = telegraph.mul(1.4).add(shock.mul(2.2)).add(rim.mul(0.5)).add(wash).mul(prox.mul(0.6).add(0.45));
-  mat.colorNode = vec4(tint.mul(amount).mul(2.4), amount.clamp(0, 1).mul(0.85));
+  const amount = telegraph
+    .mul(1.1)
+    .add(shock.mul(1.2))
+    .add(rim.mul(0.35))
+    .add(pane)
+    .add(wash)
+    .mul(prox.mul(0.6).add(0.4));
+  mat.colorNode = vec4(tint.mul(amount).mul(1.5), amount.clamp(0, 1).mul(0.7));
   return mat;
 }
 

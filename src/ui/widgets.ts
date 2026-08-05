@@ -338,6 +338,18 @@ export function statBar(label: string, value: number): StatBar {
   return { root, fill, compare, set };
 }
 
+/**
+ * Difficulty as five pips. Drawn rather than typed: the geometric-shape
+ * characters that would do this job are missing from too many system fonts and
+ * render as tofu on Linux.
+ */
+export function difficultyPips(level: number): HTMLElement {
+  const filled = Math.max(0, Math.min(5, Math.round(level)));
+  const wrap = el('span', 'vh-pips');
+  for (let i = 0; i < 5; i++) wrap.appendChild(el('i', i < filled ? 'is-on' : ''));
+  return wrap;
+}
+
 export function medalBadge(tier: MedalTier, size = 30): HTMLElement {
   const wrap = el('span', `vh-medal vh-medal--${tier}`);
   wrap.appendChild(medalMark(size));

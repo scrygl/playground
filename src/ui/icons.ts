@@ -182,6 +182,71 @@ export function monogram(size = 64): SVGSVGElement {
 }
 
 /**
+ * The garage's craft portrait: a top-down racer drawn from the ship's own
+ * hull, trim and engine colours.
+ *
+ * The roster already carries three colours per craft for the procedural 3D
+ * model, so the menu uses the same three rather than inventing a palette. It
+ * makes the Vyper unmistakably red and the Zenith unmistakably black without a
+ * single image file.
+ */
+export function shipSilhouette(colors: { hull: number; trim: number; engine: number }, height = 250): SVGSVGElement {
+  const hex = (v: number): string => `#${(v >>> 0).toString(16).padStart(6, '0').slice(-6)}`;
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 120 168');
+  svg.setAttribute('height', String(height));
+  svg.setAttribute('width', String(Math.round((height * 120) / 168)));
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('vh-craft');
+
+  const add = (d: string, fill: string, cls?: string, opacity?: string): SVGPathElement => {
+    const path = document.createElementNS(SVGNS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', fill);
+    if (cls) path.setAttribute('class', cls);
+    if (opacity) path.setAttribute('opacity', opacity);
+    svg.appendChild(path);
+    return path;
+  };
+
+  // Shadow plate under the craft — the light source is above and behind.
+  const plate = document.createElementNS(SVGNS, 'ellipse');
+  plate.setAttribute('cx', '60');
+  plate.setAttribute('cy', '150');
+  plate.setAttribute('rx', '46');
+  plate.setAttribute('ry', '9');
+  plate.setAttribute('fill', hex(colors.engine));
+  plate.setAttribute('opacity', '0.1');
+  svg.appendChild(plate);
+
+  // Hull: a dart with swept wings and a squared tail. The rim stroke in the
+  // trim colour is what keeps a near-black hull (the Zenith) legible against
+  // a near-black panel.
+  const hull = add(
+    'M60 5 65 19 71 55 100 112 103 138 76 130 71 148 49 148 44 130 17 138 20 112 49 55 55 19Z',
+    hex(colors.hull),
+    'vh-craft__hull',
+  );
+  hull.setAttribute('stroke', hex(colors.trim));
+  hull.setAttribute('stroke-width', '1.6');
+  hull.setAttribute('stroke-opacity', '0.55');
+  hull.setAttribute('stroke-linejoin', 'round');
+  // Upper surface highlight, offset toward the nose.
+  add('M60 12 63 22 67 55 60 92 53 55 57 22Z', '#ffffff', undefined, '0.1');
+  // Trim: canopy and wing tips.
+  add('M60 26 66 56 60 80 54 56Z', hex(colors.trim), 'vh-craft__canopy');
+  add('M100 112 103 138 84 133 88 108Z', hex(colors.trim), undefined, '0.85');
+  add('M20 112 17 138 36 133 32 108Z', hex(colors.trim), undefined, '0.85');
+  // Engines.
+  add('M46 118h12v22H46z', hex(colors.engine), 'vh-craft__engine');
+  add('M62 118h12v22H62z', hex(colors.engine), 'vh-craft__engine');
+  // Thrust wash.
+  add('M48 140h24l-5 26h-14z', hex(colors.engine), 'vh-craft__wash', '0.42');
+
+  return svg;
+}
+
+/**
  * A medal as a chamfered hex plaque. Tier colouring is handled in CSS so the
  * same node can be recoloured during the results reveal.
  */

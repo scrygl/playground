@@ -87,20 +87,18 @@ export function formatDistance(metres: number): string {
   return `${Math.round(metres)} m`;
 }
 
-/** Credits with thin thousands separators. */
+/** Credits with thousands separators. */
 export function formatCredits(value: number): string {
-  const v = Math.max(0, Math.round(value));
-  let s = String(v);
-  if (v >= 10000) {
-    s = '';
-    const raw = String(v);
-    for (let i = 0; i < raw.length; i++) {
-      const fromEnd = raw.length - i;
-      if (i > 0 && fromEnd % 3 === 0) s += ',';
-      s += raw[i];
-    }
+  const v = Math.max(0, Math.round(Number.isFinite(value) ? value : 0));
+  const raw = String(v);
+  if (v < 1000) return raw;
+  let out = '';
+  for (let i = 0; i < raw.length; i++) {
+    const fromEnd = raw.length - i;
+    if (i > 0 && fromEnd % 3 === 0) out += ',';
+    out += raw[i];
   }
-  return s;
+  return out;
 }
 
 const ORDINALS = ['th', 'st', 'nd', 'rd'];
@@ -126,10 +124,10 @@ export function percent(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
 }
 
-/** Difficulty 1..5 rendered as filled/empty bars for the track card. */
-export function difficultyBlocks(level: number): string {
-  const filled = Math.max(0, Math.min(5, Math.round(level)));
-  let out = '';
-  for (let i = 0; i < 5; i++) out += i < filled ? '▮' : '▯';
-  return out;
+/** Difficulty as words, for screen readers and the loading strapline. */
+export const DIFFICULTY_WORD = ['', 'Gentle', 'Moderate', 'Demanding', 'Severe', 'Brutal'] as const;
+
+export function difficultyLabel(level: number): string {
+  const i = Math.max(1, Math.min(5, Math.round(level)));
+  return `${DIFFICULTY_WORD[i]} · ${i}/5`;
 }

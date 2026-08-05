@@ -21,23 +21,36 @@ interface TouchDef {
   className?: string;
 }
 
-const LEFT_PAD: TouchDef[] = [
-  { action: 'steerLeft', label: '◄' },
-  { action: 'steerRight', label: '►' },
+// Two thumbs: steering under the left, everything that changes speed under the
+// right, with the two airbrakes on the outside edges where the index fingers
+// naturally sit when the device is held in landscape.
+const LEFT_ROWS: TouchDef[][] = [
+  [{ action: 'airbrakeLeft', label: 'AB-L' }],
+  [
+    { action: 'steerLeft', label: '‹' },
+    { action: 'steerRight', label: '›' },
+  ],
 ];
-const RIGHT_PAD: TouchDef[] = [
-  { action: 'airbrakeLeft', label: 'AB-L' },
-  { action: 'brake', label: 'Brake' },
-  { action: 'boost', label: 'Boost', className: 'vh-touch__btn--boost' },
-  { action: 'throttle', label: 'Thrust', wide: true },
-  { action: 'airbrakeRight', label: 'AB-R' },
+const RIGHT_ROWS: TouchDef[][] = [
+  [
+    { action: 'boost', label: 'Boost', className: 'vh-touch__btn--boost' },
+    { action: 'airbrakeRight', label: 'AB-R' },
+  ],
+  [
+    { action: 'brake', label: 'Brake' },
+    { action: 'throttle', label: 'Thrust', wide: true },
+  ],
 ];
 
 export function createRaceScreen(ctx: UiContext, hud: Hud): Screen {
   const root = el('div', 'vh-screen vh-screen--race');
   root.appendChild(hud.root);
 
-  if (ctx.options.touch) root.appendChild(buildTouch(ctx));
+  if (ctx.options.touch) {
+    root.appendChild(buildTouch(ctx));
+    // The HUD's bottom clusters lift clear of the pads; see styles.css.
+    hud.root.classList.add('has-touch');
+  }
 
   return {
     root,
@@ -95,16 +108,18 @@ function buildTouch(ctx: UiContext): HTMLElement {
     return b;
   };
 
-  for (const def of LEFT_PAD) left.appendChild(make(def));
-  for (const def of RIGHT_PAD) right.appendChild(make(def));
+  for (const row of LEFT_ROWS) {
+    const line = el('div', 'vh-touch__row');
+    for (const def of row) line.appendChild(make(def));
+    left.appendChild(line);
+  }
+  for (const row of RIGHT_ROWS) {
+    const line = el('div', 'vh-touch__row');
+    for (const def of row) line.appendChild(make(def));
+    right.appendChild(line);
+  }
 
-  const pause = el('div', 'vh-touch__btn');
-  pause.style.position = 'absolute';
-  pause.style.top = '3vh';
-  pause.style.right = '3vw';
-  pause.style.width = '48px';
-  pause.style.height = '48px';
-  pause.style.pointerEvents = 'auto';
+  const pause = el('div', 'vh-touch__btn vh-touch__pause');
   pause.setAttribute('role', 'button');
   pause.setAttribute('aria-label', 'Pause');
   pause.appendChild(icon('pause', 18));

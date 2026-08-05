@@ -21,7 +21,7 @@ import type { QualitySettings } from '../core/quality';
  */
 
 /** Seconds between history samples at rest. Ribbon duration = this × segments. */
-const BASE_INTERVAL = 0.011;
+const BASE_INTERVAL = 0.006;
 /** Samples emitted in a single frame after a long stall, at most. */
 const MAX_CATCHUP = 4;
 /** A gap larger than this between consecutive samples is a teleport, in metres. */
@@ -172,10 +172,10 @@ function createTrailMaterial(tint: number, uStrength: ReturnType<typeof floatUni
   const fade = age.oneMinus().pow(1.7);
 
   const hot = mix(color(tint), color(0xffffff), fade.pow(2.5).mul(0.85));
-  const brightness = uBoost.mul(2.4).add(1.1);
+  const brightness = uBoost.mul(1.1).add(0.5);
   mat.colorNode = vec4(
-    hot.mul(profile.add(core.mul(1.6))).mul(brightness),
-    fade.mul(profile).mul(uStrength).clamp(0, 1).mul(0.9),
+    hot.mul(profile.add(core.mul(1.2))).mul(brightness),
+    fade.mul(profile).mul(uStrength).clamp(0, 1).mul(0.4),
   );
   return mat;
 }
@@ -195,7 +195,7 @@ export function createShipTrail(options: TrailOptions): ShipTrail {
   const segments = Math.max(0, Math.floor(options.quality.trailLength));
   const emitters = options.emitters ?? DEFAULT_EMITTERS;
   const strands = emitters.length;
-  const halfWidth = options.width ?? 0.42;
+  const halfWidth = options.width ?? 0.22;
 
   // A quality tier with no trail budget gets a real no-op: an empty group whose
   // update does nothing at all, rather than a hidden mesh still being walked.

@@ -288,7 +288,17 @@ describe('sky texture generation', () => {
   check('env map is much smaller than the background', sky.envMap.images[0].image.width < 32);
   check('cube maps do not request mipmaps', sky.background.generateMipmaps === false);
   check('generation is reported', sky.generationMs >= 0 && Number.isFinite(sky.generationMs));
-  check('shaded texel count is reported', sky.shadedTexels === 64 * 64 * 6);
+  // Shading happens at roughly half the delivered resolution and is resampled
+  // up; the count must be reported honestly and must never exceed the output.
+  check(
+    'shaded texel count is reported and below the delivered size',
+    sky.shadedTexels > 0 && sky.shadedTexels <= 64 * 64 * 6 && sky.shadedTexels % 6 === 0,
+    `${sky.shadedTexels}`,
+  );
+  const big = generateSky(recipe, 512);
+  check('shading is capped so high tiers do not stall', big.shadedTexels <= 224 * 224 * 6);
+  check('the delivered face size still honours the request', big.background.images[0].image.width === 512);
+  big.dispose();
 
   range('average sky is dark', luminance(sky.averageColor), 0, 0.12);
   near(
@@ -502,8 +512,11 @@ describe('createEnvironment / dispose', () => {
       else materials.add(obj.material);
     }
   });
-  const textures = [env.background, env.envMap].filter(Boolean) as any[];
-  for (const t of textures) for (const img of t.images) if (img?.isDataTexture) textures.push(img);
+  const cubes = [env.background, env.envMap].filter(Boolean) as any[];
+  const textures: any[] = [...cubes];
+  for (const cube of cubes) {
+    for (const img of cube.images) if (img?.isDataTexture) textures.push(img);
+  }
 
   check('the scene graph carries geometry', geometries.size > 0, `${geometries.size} geometries`);
   check('the scene graph carries materials', materials.size > 0, `${materials.size} materials`);

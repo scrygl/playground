@@ -143,11 +143,23 @@ if (steps.length === 0) {
   }
 }
 
-const state = await page.evaluate(() => ({
-  spike: window.__SPIKE__ ?? null,
-  game: window.__GAME_DEBUG__ ?? null,
-  title: document.title,
-}));
+// Only lift primitives out of the page: the debug object holds live engine
+// objects whose graphs are cyclic, and JSON.stringify would throw on them.
+const state = await page.evaluate(() => {
+  const plain = {};
+  for (const [k, v] of Object.entries(window.__GAME_DEBUG__ ?? {})) {
+    const t = typeof v;
+    if (v === null || t === 'string' || t === 'number' || t === 'boolean') plain[k] = v;
+    else if (t === 'object') {
+      try {
+        plain[k] = JSON.parse(JSON.stringify(v));
+      } catch {
+        plain[k] = `[${v.constructor?.name ?? 'object'}]`;
+      }
+    }
+  }
+  return { game: plain, title: document.title };
+});
 
 await writeFile(join(OUT, 'console.log'), logs.join('\n'), 'utf8');
 await writeFile(join(OUT, 'state.json'), JSON.stringify(state, null, 2), 'utf8');

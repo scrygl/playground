@@ -532,7 +532,7 @@ function buildRings(config: RingConfig, sunLocal: N): { mesh: Mesh; geometry: N;
   // sky. Real rings do brighten at grazing incidence and then vanish; fading
   // the last few degrees keeps the physics and loses the artefact.
   const facing = normalWorld.dot(view).abs();
-  const grazing = smoothstep(0.015, 0.16, facing);
+  const grazing = smoothstep(0.02, 0.46, facing).mul(0.85).add(smoothstep(0.0, 0.05, facing).mul(0.15));
 
   const lit = dusty.mul(rgbNode(config.sunColor)).mul(forward).mul(shadow.mul(0.9).add(0.1));
   material.colorNode = vec4(lit, density.mul(config.opacity).mul(grazing));
@@ -733,8 +733,8 @@ export function createCelestial(options: CelestialOptions): Celestial {
       const hullDir = directionAwayFrom(rng, sunDir, 0.1);
       heroDirection.copy(hullDir);
       const hull: HullConfig = {
-        radius: radius * 0.62,
-        width: radius * 0.17,
+        radius: radius * 0.3,
+        width: radius * 0.08,
         segments: ringSegments,
         hull: toLuminance(saturateRGB(mixRGB(deep, haze, 0.55), 0.35), 0.075),
         rust: toLuminance(saturateRGB(mixRGB(secondary, haze, 0.5), 0.55), 0.035),
@@ -745,10 +745,10 @@ export function createCelestial(options: CelestialOptions): Celestial {
       };
 
       const ringRoot = new Group();
-      place(ringRoot, hullDir, radius * 0.78);
-      // Seen almost edge-on: a ring you look *through* reads as far bigger than
-      // one you look at face-on.
-      ringRoot.rotation.set(rng.range(1.15, 1.42), rng.range(0, Math.PI * 2), rng.range(-0.25, 0.25));
+      // Far enough that the whole wheel fits in one glance — the structure has
+      // to read as a *ring* before any of its detail is worth having.
+      place(ringRoot, hullDir, radius * 0.88);
+      ringRoot.rotation.set(rng.range(0.55, 0.95), rng.range(0, Math.PI * 2), rng.range(-0.2, 0.2));
       group.add(ringRoot);
 
       // Three arcs with gaps between them — the structure is broken.
@@ -775,22 +775,23 @@ export function createCelestial(options: CelestialOptions): Celestial {
         theta += span + rng.range(0.18, 0.55);
       }
 
-      // Inner rim and radial spokes.
+      // Radial spokes running the full way from the rim to a central hub, so
+      // the silhouette reads as a wheel rather than as floating debris.
       const spokeGeo = new BoxGeometry(1, 1, 1);
-      const spokeMat = hullMaterial(hull, sunUniform, 6, 26);
-      const spokeCount = Math.max(6, Math.round(14 * (detail + 1) * 0.5));
+      const spokeMat = hullMaterial(hull, sunUniform, 4, 30);
+      const spokeCount = Math.max(6, 4 + detail * 3);
       const spokes = new InstancedMesh(spokeGeo, spokeMat, spokeCount);
       spokes.frustumCulled = false;
       spokes.renderOrder = -20;
       for (let i = 0; i < spokeCount; i++) {
-        const a = (i / spokeCount) * Math.PI * 2 + rng.range(-0.04, 0.04);
-        const len = hull.radius * rng.range(0.55, 1.0);
+        const a = (i / spokeCount) * Math.PI * 2 + rng.range(-0.03, 0.03);
+        const len = hull.radius * rng.range(0.94, 1.0);
         const dirV = new Vector3(Math.cos(a), 0, Math.sin(a));
         tmpQuat.setFromUnitVectors(UP, dirV);
         tmpMat.compose(
           dirV.clone().multiplyScalar(hull.radius - len * 0.5),
           tmpQuat,
-          new Vector3(hull.width * rng.range(0.06, 0.13), len, hull.width * rng.range(0.06, 0.13)),
+          new Vector3(hull.width * rng.range(0.1, 0.2), len, hull.width * rng.range(0.1, 0.2)),
         );
         spokes.setMatrixAt(i, tmpMat);
       }
@@ -798,6 +799,16 @@ export function createCelestial(options: CelestialOptions): Celestial {
       ringRoot.add(spokes);
       instanced.push(spokes);
       track(spokeGeo, spokeMat);
+
+      // Hub.
+      const hubGeo = new CylinderGeometry(hull.radius * 0.11, hull.radius * 0.14, hull.width * 2.1, 12, 1, false);
+      const hubMat = hullMaterial(hull, sunUniform, 12, 4);
+      const hub = new Mesh(hubGeo, hubMat);
+      hub.rotation.x = Math.PI / 2;
+      hub.renderOrder = -20;
+      hub.frustumCulled = false;
+      ringRoot.add(hub);
+      track(hubGeo, hubMat);
 
       // A cold dead world behind it for scale.
       const backDir = directionAwayFrom(rng, hullDir, 0.4);
@@ -867,7 +878,7 @@ export function createCelestial(options: CelestialOptions): Celestial {
       const built = buildRings(
         {
           inner: radius * 0.24,
-          outer: radius * 0.42,
+          outer: radius * 0.37,
           occluderRadius: radius * 0.17,
           colorA: toLuminance(saturateRGB(primary, 1.35), 0.5),
           colorB: toLuminance(saturateRGB(glow, 1.3), 0.75),
@@ -1069,9 +1080,9 @@ export function createCelestial(options: CelestialOptions): Celestial {
         {
           kind: 'dead',
           radius: radius * 0.16,
-          low: toLuminance(saturateRGB(deep, 0.5), 0.0018),
-          high: toLuminance(saturateRGB(deep, 0.5), 0.006),
-          accent: toLuminance(saturateRGB(primary, 0.5), 0.004),
+          low: toLuminance(saturateRGB(deep, 0.6), 0.004),
+          high: toLuminance(saturateRGB(mixRGB(deep, primary, 0.25), 0.7), 0.016),
+          accent: toLuminance(saturateRGB(primary, 0.6), 0.01),
           atmosphere: toLuminance(saturateRGB(primary, 1.1), 0.16),
           air: 0.55,
           sunColor: toLuminance(sun, 0.5),

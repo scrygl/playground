@@ -9,6 +9,7 @@
 
 import { MODES, type ModeInfo } from '../../game/types';
 import type { Screen, UiContext } from '../context';
+import { icon } from '../icons';
 import { append, dataPair, el, hintBar, menuItem, screenFrame } from '../widgets';
 
 const MODE_ICONS: Record<string, 'trophy' | 'flag' | 'clock' | 'shield' | 'bolt' | 'gauge' | 'route'> = {
@@ -39,9 +40,13 @@ export function createModeScreen(ctx: UiContext): Screen {
   const scored = dataPair('Progression', '—');
   const rounds = dataPair('Length', '—');
   append(facts, rivals, scored, rounds);
-  append(detail, tag, name, body, facts);
+  // A watermark of the mode's own mark fills the panel without inventing copy
+  // that would only repeat the description.
+  const watermark = el('div', 'vh-modes__mark');
+  append(detail, tag, name, body, watermark, facts);
 
   const setDetail = (mode: ModeInfo): void => {
+    watermark.replaceChildren(icon(MODE_ICONS[mode.id] ?? 'flag', 300));
     name.textContent = mode.name;
     tag.textContent = mode.tagline;
     body.textContent = mode.description;

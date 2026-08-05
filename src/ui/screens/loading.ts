@@ -10,7 +10,7 @@
 import { TRACKS_BY_ID } from '../../track/library';
 import { MODES_BY_ID } from '../../game/types';
 import type { Screen, UiContext } from '../context';
-import { difficultyBlocks, formatDistance } from '../format';
+import { difficultyLabel, formatDistance } from '../format';
 import { el, trackPreview } from '../widgets';
 
 const TIPS: readonly { head: string; body: string }[] = [
@@ -87,7 +87,7 @@ export function createLoadingScreen(ctx: UiContext): LoadingScreen {
 
     try {
       const summary = ctx.host.getTrackSummary(ctx.state.trackId);
-      meta.textContent = `${summary.tagline} · ${formatDistance(summary.length)} · ${summary.laps} laps · ${difficultyBlocks(summary.difficulty)}`;
+      meta.textContent = `${summary.tagline} · ${formatDistance(summary.length)} · ${summary.laps} laps · ${difficultyLabel(summary.difficulty)}`;
       art.replaceChildren(trackPreview(summary.outline, 900, 500));
       art.style.setProperty('--accent', `#${summary.palette.primary.toString(16).padStart(6, '0')}`);
     } catch {
