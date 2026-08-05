@@ -153,7 +153,6 @@ export class WebAudioGameAudio implements GameAudio {
         /* the gesture was not trusted; the caller can try again */
       }
     }
-    this.startScheduler();
     const pending = this.pendingMusic;
     if (pending && this.ctx.state === 'running') {
       this.pendingMusic = null;
@@ -269,6 +268,7 @@ export class WebAudioGameAudio implements GameAudio {
       this.synth = null;
       return;
     }
+    this.stopScheduler();
     const fade = Math.max(0, fadeSeconds);
     const now = ctx.currentTime;
     synth.fadeTo(0, now, fade);

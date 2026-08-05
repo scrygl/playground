@@ -388,7 +388,7 @@ export class MusicDirector {
   private renderKick(bar: number, eff: number, section: SectionInfo, out: NoteEvent[]): void {
     const midi = this.kickMidi;
     const slots: [number, number][] = [];
-    if (eff < 0.16) {
+    if (eff < 0.1) {
       slots.push([0, 0.95]);
     } else if (eff < 0.28) {
       slots.push([0, 0.98], [2, 0.86]);
@@ -537,7 +537,10 @@ export class MusicDirector {
   }
 
   private renderHats(bar: number, eff: number, out: NoteEvent[]): void {
-    if (eff < 0.18) return;
+    // Hats come in early and never leave: even the quietest passage keeps a
+    // pulse, so a player who has slowed to a crawl still has something to
+    // steer to. What changes is the subdivision, not the presence.
+    if (eff < 0.12) return;
     const sixteenths = eff >= 0.55;
     const openHats = eff >= 0.42;
     // Move the open hats around every four bars — always two of them, so the

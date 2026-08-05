@@ -10,7 +10,7 @@
  * lands as part of the arrangement rather than on top of it.
  */
 
-import { clamp, clamp01 } from '../core/mathx';
+import { clamp } from '../core/mathx';
 import { degreeToMidi, midiToFreq, type ScaleName } from './theory';
 import {
   EPS,
@@ -506,13 +506,4 @@ export class SfxPlayer {
       }
     };
   }
-}
-
-/** Clamp helper re-exported for callers that build their own option objects. */
-export function normaliseSfxOptions(options: SfxOptions | undefined): Required<SfxOptions> {
-  return {
-    volume: clamp(options?.volume ?? 1, 0, 4),
-    rate: clamp(options?.rate ?? 1, 0.25, 4),
-    pan: clamp01((options?.pan ?? 0) * 0.5 + 0.5) * 2 - 1,
-  };
 }

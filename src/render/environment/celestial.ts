@@ -33,14 +33,16 @@ import {
 } from 'three/webgpu';
 import {
   Fn,
-  billboarding,
   cameraPosition,
+  cameraProjectionMatrix,
   cameraViewMatrix,
   float,
   floor,
   fract,
   mix,
+  modelWorldMatrix,
   normalWorld,
+  positionGeometry,
   positionLocal,
   positionWorld,
   saturate,
@@ -69,17 +71,17 @@ type N = any;
  * Dave Hoskins' sin-free hash. Avoids the precision cliff that `sin(dot(p,k))`
  * hashes fall off on mobile GPUs, and compiles identically to WGSL and GLSL.
  */
-const hash13 = /*@__PURE__*/ Fn(([p]: N[]) => {
-  const q = fract(p.mul(0.1031)).toVar();
+const hash13 = /*@__PURE__*/ Fn(([p]: N[]): N => {
+  const q: N = fract(p.mul(0.1031)).toVar();
   q.addAssign(q.dot(q.zyx.add(31.32)));
   return fract(q.x.add(q.y).mul(q.z));
 });
 
 /** Trilinear value noise in [0, 1]. */
-const vnoise = /*@__PURE__*/ Fn(([p]: N[]) => {
-  const i = floor(p).toVar();
-  const f = fract(p).toVar();
-  const u = f.mul(f).mul(f.mul(-2).add(3)).toVar();
+const vnoise = /*@__PURE__*/ Fn(([p]: N[]): N => {
+  const i: N = floor(p).toVar();
+  const f: N = fract(p).toVar();
+  const u: N = f.mul(f).mul(f.mul(-2).add(3)).toVar();
 
   const n000 = hash13(i);
   const n100 = hash13(i.add(vec3(1, 0, 0)));
@@ -129,8 +131,8 @@ function ridged(p: N, octaves: number): N {
 }
 
 /** 2D cell hash, for hull panelling. */
-const hash12 = /*@__PURE__*/ Fn(([p]: N[]) => {
-  const q = fract(vec3(p.x, p.y, p.x).mul(0.1031)).toVar();
+const hash12 = /*@__PURE__*/ Fn(([p]: N[]): N => {
+  const q: N = fract(vec3(p.x, p.y, p.x).mul(0.1031)).toVar();
   q.addAssign(q.dot(q.yzx.add(33.33)));
   return fract(q.x.add(q.y).mul(q.z));
 });
@@ -174,6 +176,28 @@ function rgbNode(c: RGB): N {
   return vec3(c[0], c[1], c[2]);
 }
 
+/**
+ * Camera-facing quad, written out rather than using three's `billboarding()`
+ * helper: that one mutates matrix columns of a non-`Var` expression, which is
+ * fragile enough that a sky full of billboards is not the place to rely on it.
+ * Uses the object's world scale for size, so `mesh.scale` still means what it
+ * looks like it means.
+ */
+function billboardVertex(): N {
+  const world: N = modelWorldMatrix;
+  const centreView: N = cameraViewMatrix.mul(world).mul(vec4(0, 0, 0, 1));
+  const sx: N = world[0].xyz.length();
+  const sy: N = world[1].xyz.length();
+  const offset: N = vec4(positionGeometry.x.mul(sx), positionGeometry.y.mul(sy), 0, 0);
+  return cameraProjectionMatrix.mul(centreView.add(offset));
+}
+
+/** `normalize()` with a guard: a zero vector otherwise yields NaN, and one NaN
+ *  pixel poisons the entire bloom mip chain and whites out the frame. */
+function safeNormalize(v: N): N {
+  return v.div(v.length().max(1e-5));
+}
+
 /** Places an object on the sky shell in a given direction. */
 function place(obj: { position: Vector3 }, dir: Vector3, distance: number): void {
   obj.position.copy(dir).multiplyScalar(distance);
@@ -212,14 +236,14 @@ function buildSun(config: SunConfig): { mesh: Mesh; geometry: PlaneGeometry; mat
   material.blending = AdditiveBlending;
   material.depthWrite = false;
   material.fog = false;
-  material.vertexNode = billboarding({ horizontal: true, vertical: true });
+  material.vertexNode = billboardVertex();
 
-  const p = uv().sub(0.5).mul(2);
+  const p: N = uv().sub(0.5).mul(2);
   const d = p.length();
   const disc = float(1).sub(smoothstep(config.disc * 0.72, config.disc, d)).mul(config.intensity);
   // Two glow lobes; the wide one is what bloom picks up and smears.
   const inner = saturate(float(1).sub(d)).pow(6).mul(config.glow);
-  const outer = saturate(float(1).sub(d)).pow(1.7).mul(config.glow * 0.16);
+  const outer = saturate(float(1).sub(d)).pow(2.2).mul(config.glow * 0.08);
 
   const ax = p.x.abs();
   const ay = p.y.abs();
@@ -385,20 +409,20 @@ function buildPlanet(config: PlanetConfig, sunDirUniform: N): {
     haloMat.blending = AdditiveBlending;
     haloMat.depthWrite = false;
     haloMat.fog = false;
-    haloMat.vertexNode = billboarding({ horizontal: true, vertical: true });
+    haloMat.vertexNode = billboardVertex();
 
     const HALO_SPAN = 1.34; // billboard half-width in planet radii
     const edge = 1 / HALO_SPAN;
-    const q = uv().sub(0.5).mul(2);
-    const qd = q.length();
+    const q: N = uv().sub(0.5).mul(2);
+    const qd: N = q.length();
     // Ramp from the planet's limb outward, plus a tight bright band right at
     // the limb where the line of sight passes through the most air.
     const outward = saturate(float(1).sub(smoothstep(edge, 1, qd)));
     const shellBand = saturate(float(1).sub(qd.sub(edge).abs().div(1 - edge).mul(3.4)));
     const profile = outward.pow(2.6).mul(0.75).add(shellBand.pow(2.2).mul(0.9));
     // Project the sun into screen space so the crescent tracks the terminator.
-    const sunView = cameraViewMatrix.mul(vec4(sunDirUniform, 0)).xy;
-    const crescent = saturate(q.normalize().dot(sunView.normalize()).mul(0.62).add(0.38));
+    const sunView: N = cameraViewMatrix.mul(vec4(sunDirUniform, 0)).xy;
+    const crescent = saturate(safeNormalize(q).dot(safeNormalize(sunView)).mul(0.78).add(0.30));
     haloMat.colorNode = vec4(
       atmo.mul(1.6),
       profile.mul(crescent).mul(config.air).mul(saturate(float(1).sub(smoothstep(0.97, 1, qd)))),
@@ -605,11 +629,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(sun, 1.6),
-          disc: 0.055,
-          intensity: 3.2,
-          glow: 1.1,
+          disc: 0.1,
+          intensity: 4.0,
+          glow: 0.7,
           spikes: 0.5,
-          size: radius * 0.3,
+          size: radius * 0.13,
         },
         sunDir,
         radius * 0.9,
@@ -664,11 +688,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(mixRGB(sun, [1, 1, 1], 0.55), 2.2),
-          disc: 0.028,
-          intensity: 5.5,
-          glow: 0.55,
-          spikes: 0.85,
-          size: radius * 0.2,
+          disc: 0.075,
+          intensity: 6.5,
+          glow: 0.45,
+          spikes: 0.75,
+          size: radius * 0.095,
         },
         sunDir,
         radius * 0.92,
@@ -770,11 +794,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(mixRGB(sun, glow, 0.45), 1.9),
-          disc: 0.045,
-          intensity: 3.6,
-          glow: 1.35,
-          spikes: 0.9,
-          size: radius * 0.34,
+          disc: 0.09,
+          intensity: 4.4,
+          glow: 0.8,
+          spikes: 0.85,
+          size: radius * 0.15,
         },
         sunDir,
         radius * 0.9,
@@ -834,11 +858,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(mixRGB(sun, [1, 1, 1], 0.35), 2.6),
-          disc: 0.035,
-          intensity: 6.0,
-          glow: 1.5,
-          spikes: 1.15,
-          size: radius * 0.28,
+          disc: 0.08,
+          intensity: 7.5,
+          glow: 0.85,
+          spikes: 1.05,
+          size: radius * 0.13,
         },
         sunDir,
         radius * 0.9,
@@ -871,11 +895,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(sun, 1.5),
-          disc: 0.04,
-          intensity: 3.0,
-          glow: 0.95,
+          disc: 0.085,
+          intensity: 4.0,
+          glow: 0.6,
           spikes: 0.45,
-          size: radius * 0.26,
+          size: radius * 0.115,
         },
         sunDir,
         radius * 0.92,
@@ -959,11 +983,11 @@ export function createCelestial(options: CelestialOptions): Celestial {
       addSun(
         {
           color: toLuminance(mixRGB(sun, primary, 0.5), 0.7),
-          disc: 0.02,
-          intensity: 1.6,
-          glow: 0.22,
+          disc: 0.09,
+          intensity: 2.0,
+          glow: 0.2,
           spikes: 0.12,
-          size: radius * 0.13,
+          size: radius * 0.06,
         },
         sunDir,
         radius * 0.93,

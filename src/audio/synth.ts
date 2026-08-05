@@ -331,7 +331,9 @@ export function sustainEnvelope(
   release: number,
 ): number {
   const level = Math.max(EPS, peak * sustain);
-  const off = t0 + Math.max(hold, attack + 0.005);
+  // The sustain point must never land before the decay ramp finishes, or the
+  // automation events go in out of order and the envelope shape is undefined.
+  const off = t0 + Math.max(hold, attack + Math.max(0.005, decay) + 0.005);
   param.cancelScheduledValues(t0);
   param.setValueAtTime(EPS, t0);
   param.linearRampToValueAtTime(Math.max(EPS, peak), t0 + attack);
@@ -609,6 +611,7 @@ export class MusicSynth {
     const ctx = this.graph.ctx;
     const freq = midiToFreq(midi);
     const mix = gainNode(ctx, 1);
+    const end = time + duration + 0.2;
 
     for (const detune of [-9, 9]) {
       const osc = ctx.createOscillator();
@@ -617,7 +620,7 @@ export class MusicSynth {
       osc.detune.value = detune;
       osc.connect(mix);
       osc.start(time);
-      osc.stop(time + duration + 0.12);
+      osc.stop(end);
       this.track(osc);
     }
     const square = ctx.createOscillator();
@@ -627,7 +630,7 @@ export class MusicSynth {
     square.connect(squareGain);
     squareGain.connect(mix);
     square.start(time);
-    square.stop(time + duration + 0.12);
+    square.stop(end);
     this.track(square);
 
     const filter = biquad(ctx, 'lowpass', freq * 3, 7);
@@ -638,7 +641,7 @@ export class MusicSynth {
     const drive = ctx.createWaveShaper();
     drive.curve = createDriveCurve(0.22);
     const vca = gainNode(ctx);
-    const end = sustainEnvelope(vca.gain, time, 0.3 * velocity, 0.006, 0.06, 0.7, duration, 0.06);
+    sustainEnvelope(vca.gain, time, 0.3 * velocity, 0.006, 0.06, 0.7, duration, 0.06);
 
     mix.connect(filter);
     filter.connect(drive);
@@ -649,16 +652,7 @@ export class MusicSynth {
     vca.connect(send);
     send.connect(this.graph.delayIn);
 
-    square.onended = (): void => {
-      for (const n of [mix, filter, drive, vca, send, squareGain]) {
-        try {
-          n.disconnect();
-        } catch {
-          /* already gone */
-        }
-      }
-    };
-    void end;
+    reap(square, mix, filter, drive, vca, send, squareGain);
   }
 
   /** Bright plucked square — short, filtered, and sent hard to the delay. */
@@ -714,6 +708,7 @@ export class MusicSynth {
     const detunes = [-14, -7, 0, 7, 14];
     const end = time + duration + 1.6;
 
+    let last: OscillatorNode | null = null;
     for (const detune of detunes) {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
@@ -726,6 +721,7 @@ export class MusicSynth {
       osc.stop(end);
       this.track(osc);
       reap(osc, osc, g);
+      last = osc;
     }
 
     const filter = biquad(ctx, 'lowpass', lerp(700, 2600, this.brightness), 0.9);
@@ -745,6 +741,7 @@ export class MusicSynth {
     const verbSend = gainNode(ctx, 0.5);
     vca.connect(verbSend);
     verbSend.connect(this.graph.reverbIn);
+    if (last) reap(last, mix, filter, hp, vca, verbSend);
   }
 
   /** Three saws and an FM sparkle — cuts through a full arrangement. */
@@ -835,10 +832,9 @@ export class MusicSynth {
 
   /** Snare, clap and crash all live on the same voice, selected by MIDI note. */
   private percussion(time: number, midi: number, duration: number, velocity: number): void {
-    if (midi >= DRUM.crash) this.crash(time, velocity);
+    if (midi >= DRUM.crash) this.crash(time, velocity, Math.max(1.2, duration));
     else if (midi >= DRUM.clap) this.clap(time, velocity);
     else this.snare(time, velocity);
-    void duration;
   }
 
   private snare(time: number, velocity: number): void {
@@ -915,13 +911,13 @@ export class MusicSynth {
     }
   }
 
-  private crash(time: number, velocity: number): void {
+  private crash(time: number, velocity: number, decay: number): void {
     const ctx = this.graph.ctx;
-    const src = noiseSource(this.graph, time, 2.2);
+    const src = noiseSource(this.graph, time, decay + 0.3);
     const hp = biquad(ctx, 'highpass', 4200, 0.7);
     const band = biquad(ctx, 'bandpass', 8200, 0.5);
     const vca = gainNode(ctx);
-    decayEnvelope(vca.gain, time, 0.11 * velocity, 0.004, 1.9);
+    decayEnvelope(vca.gain, time, 0.11 * velocity, 0.004, decay);
     src.connect(hp);
     hp.connect(band);
     band.connect(vca);

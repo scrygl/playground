@@ -1,0 +1,13 @@
+import * as THREE from 'three/webgpu';
+import { color, uniform, float, vec4 } from 'three/tsl';
+const g = new THREE.BufferGeometry();
+g.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 1,0,0, 0,1,0], 3));
+g.computeBoundingSphere();
+console.log('geo ok', g.boundingSphere?.radius);
+const m = new THREE.MeshBasicNodeMaterial();
+m.colorNode = vec4(color(0xff0000).mul(uniform(1,'float')), float(1));
+console.log('mat ok', m.type);
+const im = new THREE.InstancedMesh(g, m, 4);
+console.log('inst ok', im.count);
+const pts = new THREE.Points(g, new THREE.SpriteNodeMaterial());
+console.log('points ok', pts.type);

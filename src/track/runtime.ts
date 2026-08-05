@@ -28,6 +28,15 @@ const REFERENCE_TOP_SPEED = 165;
  * and the lower medals open up from there.
  */
 const MEDAL_FACTORS = { author: 1.05, gold: 1.15, silver: 1.29, bronze: 1.48 };
+/**
+ * Time allowance for the standing start, in milliseconds.
+ *
+ * The grid sits behind the line, so a race clock started at lights-out includes
+ * a launch that no lap contains. Folding it into the thresholds keeps medals
+ * honest — without it every target is a couple of seconds tighter than the
+ * driving actually requires.
+ */
+const STANDING_START_MS = 3200;
 
 export interface MedalTimes {
   author: number;
@@ -76,10 +85,10 @@ export class Track {
 
     const raceMs = this.idealLapMs * definition.laps * (definition.medalScale ?? 1);
     this.medals = {
-      author: raceMs * MEDAL_FACTORS.author,
-      gold: raceMs * MEDAL_FACTORS.gold,
-      silver: raceMs * MEDAL_FACTORS.silver,
-      bronze: raceMs * MEDAL_FACTORS.bronze,
+      author: raceMs * MEDAL_FACTORS.author + STANDING_START_MS,
+      gold: raceMs * MEDAL_FACTORS.gold + STANDING_START_MS,
+      silver: raceMs * MEDAL_FACTORS.silver + STANDING_START_MS,
+      bronze: raceMs * MEDAL_FACTORS.bronze + STANDING_START_MS,
     };
 
     // Beat-gate spacing needs the pace a player will actually carry down a

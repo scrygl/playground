@@ -197,16 +197,28 @@ export function voiceLead(
   chord: readonly number[],
   center = 60,
 ): number[] {
+  const anchors =
+    previous && previous.length > 0
+      ? previous
+      : chord.map((_, i) => center + (i - (chord.length - 1) / 2) * 4);
+
   const out: number[] = [];
-  for (let i = 0; i < chord.length; i++) {
-    const anchor =
-      previous && previous.length > 0
-        ? previous[Math.min(i, previous.length - 1)]
-        : center + (i - (chord.length - 1) / 2) * 4;
-    // Nearest octave transposition of this chord tone to the anchor.
-    const raw = chord[i];
-    const shift = Math.round((anchor - raw) / 12);
-    out.push(raw + shift * 12);
+  for (const raw of chord) {
+    // Octave-transpose this chord tone to sit as close as possible to *any*
+    // voice of the previous chord, not to the voice at the same index. Matching
+    // by index forces parallel motion — Am7 to Fmaj7 would slide every voice
+    // down a third instead of holding the three common tones and moving one.
+    let best = raw;
+    let bestCost = Infinity;
+    for (const anchor of anchors) {
+      const candidate = raw + Math.round((anchor - raw) / 12) * 12;
+      const cost = Math.abs(candidate - anchor);
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = candidate;
+      }
+    }
+    out.push(best);
   }
   out.sort((a, b) => a - b);
   // De-collide unisons produced by two voices landing on the same octave.
@@ -373,10 +385,14 @@ export function generateProgression(options: ProgressionOptions): number[] {
     const choice = cadences.find((d) => d !== degrees[length - 2]) ?? cadences[0];
     degrees[length - 1] = choice;
   }
-  // Halfway point should have left home, so the loop has two halves.
+  // The halfway point should have left home, so the loop reads as two phrases
+  // rather than one plateau. Whatever we substitute has to differ from both
+  // neighbours, or the patch itself creates a repeated chord.
   const mid = length >> 1;
   if (length >= 4 && degrees[mid] === 0) {
-    degrees[mid] = scaleSize(scale) === 5 ? 3 : 5;
+    const neighbours = new Set([degrees[mid - 1], degrees[mid + 1] ?? -1]);
+    const candidates = scaleSize(scale) === 5 ? [3, 4, 2, 1] : [5, 6, 3, 2, 4];
+    degrees[mid] = candidates.find((d) => !neighbours.has(d)) ?? degrees[mid];
   }
   return degrees;
 }

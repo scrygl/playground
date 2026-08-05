@@ -93,6 +93,12 @@ export interface VehicleInit {
   stats: ShipStats;
   s: number;
   lateral: number;
+  /**
+   * Laps already completed. Craft on the starting grid sit *behind* the line
+   * and begin at -1, so their first crossing starts lap one rather than
+   * finishing it.
+   */
+  lap?: number;
 }
 
 export class Vehicle {
@@ -157,7 +163,9 @@ export class Vehicle {
     this.stats = init.stats;
     this.s = init.s;
     this.lateral = init.lateral;
+    this.lap = init.lap ?? 0;
     this.shield = init.stats.shield;
+    this.progress = this.lap * this.track.path.length + this.s;
     this.track.path.frameAt(this.s, this.frame);
   }
 
@@ -373,7 +381,9 @@ export class Vehicle {
       this.lap++;
       this.events.push({ type: 'lap', lap: this.lap });
     } else if (ds < 0 && previousS < length * 0.25 && this.s > length * 0.75) {
-      this.lap = Math.max(0, this.lap - 1);
+      // Reversing back over the line un-counts the lap. The floor is -1, not
+      // 0, because that is the legitimate pre-start state.
+      this.lap = Math.max(-1, this.lap - 1);
     }
   }
 

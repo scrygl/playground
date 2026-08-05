@@ -25,6 +25,9 @@ import { Rng } from '../../core/rng';
 import type { EnvironmentArchetype, TrackPalette } from '../../track/types';
 import { hexToLinear, luminance, mixRGB, type RGB } from './sky';
 
+/** TSL builds dynamic node graphs; the concrete node generics get in the way. */
+type N = any;
+
 export interface StarfieldOptions {
   archetype: EnvironmentArchetype;
   palette: TrackPalette;
@@ -205,15 +208,15 @@ export function createStarfield(options: StarfieldOptions): Starfield {
       params[i * 4 + 3] = hero ? rng.range(0.35, 0.9) : 0;
     }
 
-    const aPos = instancedBufferAttribute(positions, 'vec3');
-    const aCol = instancedBufferAttribute(colors, 'vec3');
-    const aPar = instancedBufferAttribute(params, 'vec4');
+    const aPos: N = instancedBufferAttribute(positions, 'vec3');
+    const aCol: N = instancedBufferAttribute(colors, 'vec3');
+    const aPar: N = instancedBufferAttribute(params, 'vec4');
 
     // sin() is cheaper than any noise here and, with a per-star phase and rate,
     // the field never reads as synchronised.
-    const rate = aPar.y.mul(0.31).fract().mul(2.2).add(0.6);
-    const wobble = sin(time.mul(rate).add(aPar.y));
-    const twinkle = varying(float(1).add(wobble.mul(aPar.z)), 'vTwinkle');
+    const rate: N = aPar.y.mul(0.31).fract().mul(2.2).add(0.6);
+    const wobble: N = sin(time.mul(rate).add(aPar.y));
+    const twinkle: N = varying(float(1).add(wobble.mul(aPar.z)), 'vTwinkle');
 
     const material = new PointsNodeMaterial();
     material.positionNode = aPos;
@@ -225,10 +228,10 @@ export function createStarfield(options: StarfieldOptions): Starfield {
     material.depthTest = true;
     material.fog = false;
 
-    const vColor = varying(aCol, 'vStarColor');
-    const vSpike = varying(aPar.w, 'vStarSpike');
+    const vColor: N = varying(aCol, 'vStarColor');
+    const vSpike: N = varying(aPar.w, 'vStarSpike');
 
-    const p = uv().sub(0.5).mul(2);
+    const p: N = uv().sub(0.5).mul(2);
     const dist = p.length();
     const fall = saturate(float(1).sub(dist));
     // Two lobes: a tight core that survives bloom thresholding as a point, and

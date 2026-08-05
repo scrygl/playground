@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/three": "^0.185.4",
     "@webgpu/types": "^0.1.71",
     "typescript": "~5.9.3",
     "vite": "^7.1.5"
