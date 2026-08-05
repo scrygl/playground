@@ -359,7 +359,7 @@ export class MusicDirector {
     this.renderBass(b, eff, out);
     this.renderArp(b, eff, out);
     this.renderLead(b, eff, section, out);
-    this.renderRiser(b, eff, section, out);
+    this.renderRiser(eff, section, out);
 
     out.sort((a, c) => a.time - c.time || VOICE_ORDER[a.voice] - VOICE_ORDER[c.voice] || a.midi - c.midi);
     return out;
@@ -540,7 +540,12 @@ export class MusicDirector {
     if (eff < 0.18) return;
     const sixteenths = eff >= 0.55;
     const openHats = eff >= 0.42;
-    const openSlots = new Set<number>(openHats ? [1.5, 3.5] : []);
+    // Move the open hats around every four bars — always two of them, so the
+    // density is unchanged, but the groove stops being a metronome.
+    const pattern = this.rngFor(Math.floor(bar / 4), 'hatShape').int(0, 2);
+    const openSlots = new Set<number>(
+      openHats ? [[1.5, 3.5], [0.5, 3.5], [1.5, 3.75]][pattern] : [],
+    );
 
     const step = sixteenths ? 0.25 : 0.5;
     for (let time = 0; time < BEATS_PER_BAR; time += step) {
@@ -569,7 +574,9 @@ export class MusicDirector {
     if (!fill) emit(out, 'snare', 3, 0.4, DRUM.clap, 0.88);
 
     if (eff >= 0.58) {
-      emit(out, 'snare', 1.75, 0.2, DRUM.snare, 0.32);
+      // Ghost notes drift around the backbeat every four bars.
+      const ghost = this.rngFor(Math.floor(bar / 4), 'ghost').int(0, 2);
+      emit(out, 'snare', [1.75, 1.25, 1.5][ghost], 0.2, DRUM.snare, 0.32);
       if (!fill) emit(out, 'snare', 3.75, 0.2, DRUM.snare, 0.34);
     }
     if (eff >= 0.8) emit(out, 'snare', 2.25, 0.2, DRUM.snare, 0.28);
@@ -582,7 +589,7 @@ export class MusicDirector {
     }
   }
 
-  private renderRiser(bar: number, eff: number, section: SectionInfo, out: NoteEvent[]): void {
+  private renderRiser(eff: number, section: SectionInfo, out: NoteEvent[]): void {
     if (section.kind !== 'build') return;
     if (section.barsRemaining > 1) return;
     const base = transposeToRange(this.profile.root, 60, 71);
