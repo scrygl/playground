@@ -356,6 +356,12 @@ export function createParticleSystem(options: ParticleSystemOptions): ParticleSy
       pool.packed[o4 + 2] = rng.range(0, Math.PI * 2);
       pool.packed[o4 + 3] = 0;
     }
+    // Publish the draw range immediately: a burst fired after this frame's
+    // update would otherwise wait a frame to appear.
+    pool.geometry.instanceCount = pool.count;
+    pool.positionAttribute.needsUpdate = true;
+    pool.tintAttribute.needsUpdate = true;
+    pool.packedAttribute.needsUpdate = true;
     return n;
   }
 

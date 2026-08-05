@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { GameRenderer } from './render/renderer';
 import { ChaseCamera, CinematicCamera } from './render/camera';
-import { World } from './game/world';
+import { World, type WorldFrameState } from './game/world';
 import { Race } from './game/race';
 import { Track } from './track/runtime';
 import { TRACKS_BY_ID, CHAMPIONSHIPS, getTrack } from './track/library';
@@ -224,8 +224,8 @@ export class App implements UiHost {
 
     this.cameraPosition.copy(camera.position);
     if (this.world) {
-      this.world.setCamera(camera);
-      this.world.update(this.race?.racers ?? [], {
+      const player = this.race?.player;
+      const frame: WorldFrameState = {
         dt,
         elapsed: this.elapsed,
         beatPulse,
@@ -233,20 +233,14 @@ export class App implements UiHost {
         beatIndex,
         intensity: clock.running ? 0.55 : 0.3,
         cameraPosition: this.cameraPosition,
-        playerDistance: this.race?.player.vehicle.s ?? 0,
-      });
-      if (this.race) {
-        this.world.updateGhost(this.race.ghostPose(), {
-          dt,
-          elapsed: this.elapsed,
-          beatPulse,
-          beatPhase,
-          beatIndex,
-          intensity: 0.5,
-          cameraPosition: this.cameraPosition,
-          playerDistance: this.race.player.vehicle.s,
-        });
-      }
+        playerDistance: player?.vehicle.s ?? 0,
+        playerIndex: player?.index ?? 0,
+        playerBoost: player?.vehicle.boostAmount ?? 0,
+        playerSpeed: player?.vehicle.normalisedSpeed ?? 0,
+      };
+      this.world.setCamera(camera);
+      this.world.update(this.race?.racers ?? [], frame);
+      if (this.race) this.world.updateGhost(this.race.ghostPose(), frame);
     }
 
     this.updatePostEffects(dt);
@@ -278,10 +272,15 @@ export class App implements UiHost {
     const race = this.race!;
     const settings = this.profile.settings;
 
-    if (this.input.consumePress('pause')) {
+    if (this.input.consumePress('pause') || this.input.padJustPressed('start')) {
       this.paused ? this.resumeRace() : this.pauseRace();
     }
     if (this.input.consumePress('restart')) this.restartRace();
+    if (this.input.consumePress('cameraMode') || this.input.padJustPressed('square')) {
+      const mode = this.chase.cycleMode();
+      this.ui.toast(CAMERA_LABELS[mode], 'info');
+      this.audio.play('uiSelect');
+    }
 
     if (this.paused) return;
 
@@ -387,7 +386,6 @@ export class App implements UiHost {
       post.aberration.value = reduced ? 0 : clamp01(vehicle.normalisedSpeed * 0.5 + vehicle.boostAmount * 0.8);
       post.boost.value = vehicle.boostAmount;
       post.damage.value = this.damageFlash;
-      this.world?.setPlayerBoost(vehicle.boostAmount);
     } else {
       post.speed.value = 0;
       post.aberration.value = 0;
@@ -775,6 +773,12 @@ export class App implements UiHost {
     this.world = null;
   }
 }
+
+const CAMERA_LABELS: Record<string, string> = {
+  chase: 'Chase camera',
+  close: 'Close camera',
+  cockpit: 'Cockpit camera',
+};
 
 /** Summary tracks are cached: building one is ~200 ms and menus revisit them. */
 const summaryCache = new Map<string, Track>();

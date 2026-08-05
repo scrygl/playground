@@ -45,6 +45,18 @@ export interface WorldFrameState {
   cameraPosition: Vector3;
   /** The player's distance along the circuit. */
   playerDistance: number;
+  /**
+   * Index of the player's craft in the racer list.
+   *
+   * The player starts at the *back* of the grid, so this is emphatically not
+   * zero — anything that wants "the player" and reaches for `racers[0]` is
+   * reading whichever rival happens to be on pole.
+   */
+  playerIndex: number;
+  /** 0..1 how hard the player is boosting. */
+  playerBoost: number;
+  /** 0..1 the player's speed against their craft's top speed. */
+  playerSpeed: number;
 }
 
 interface ShipSlot {
@@ -238,27 +250,24 @@ export class World {
     this.trackMesh.uniforms.beatPulse.value = frame.beatPulse;
     this.trackMesh.uniforms.intensity.value = frame.intensity;
     this.trackMesh.uniforms.playerDistance.value = frame.playerDistance;
-    this.trackMesh.uniforms.boostGlow.value = clamp01(racers[0]?.vehicle.boostAmount ?? 0);
+    this.trackMesh.uniforms.boostGlow.value = clamp01(frame.playerBoost);
 
-    this.environment.update({
-      dt: frame.dt,
-      camera: this.camera!,
-      intensity: frame.intensity,
-      beatPhase: frame.beatPhase,
-      beatIndex: frame.beatIndex,
-      speed: racers[0]?.vehicle.normalisedSpeed ?? 0,
-    });
+    if (this.camera) {
+      this.environment.update({
+        dt: frame.dt,
+        camera: this.camera,
+        intensity: frame.intensity,
+        beatPhase: frame.beatPhase,
+        beatIndex: frame.beatIndex,
+        speed: frame.playerSpeed,
+      });
+    }
   }
 
   /** The environment needs the live camera; the app supplies it once. */
   private camera: THREE.PerspectiveCamera | null = null;
   setCamera(camera: THREE.PerspectiveCamera): void {
     this.camera = camera;
-  }
-
-  /** Drives the player's boost glow separately, since index 0 may be an AI. */
-  setPlayerBoost(value: number): void {
-    this.trackMesh.uniforms.boostGlow.value = value;
   }
 
   /** Places the ghost replay craft, or hides it. */

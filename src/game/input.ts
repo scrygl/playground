@@ -52,6 +52,7 @@ const PAD = {
 
 export class InputManager {
   private readonly pressed = new Set<string>();
+  private readonly padPrevious = new Map<number, boolean>();
   private readonly justPressed = new Set<string>();
   private bindings: ControlBindings;
   private deadzoneAmount = 0.15;
@@ -251,6 +252,23 @@ export class InputManager {
     const pad = this.pad();
     if (!pad) return false;
     return pad.buttons[PAD[button]]?.pressed ?? false;
+  }
+
+  /**
+   * True only on the frame a pad button goes down.
+   *
+   * Gamepads report level, not edges, so anything that toggles — pausing,
+   * cycling the camera — needs the previous state remembered or it fires every
+   * frame the button is held.
+   */
+  padJustPressed(button: keyof typeof PAD): boolean {
+    const pad = this.pad();
+    if (!pad) return false;
+    const index = PAD[button];
+    const down = pad.buttons[index]?.pressed ?? false;
+    const was = this.padPrevious.get(index) ?? false;
+    this.padPrevious.set(index, down);
+    return down && !was;
   }
 
   isLookingBack(): boolean {

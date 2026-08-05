@@ -450,10 +450,15 @@ describe('particle pools', () => {
   system.update(-1);
   check('a zero or negative dt is ignored', true);
 
-  // The rate emitter has to carry its fractional remainder.
+  // The rate emitter has to carry its fractional remainder. Stepping the sim
+  // between calls keeps the pool from saturating and hiding the arithmetic.
+  system.clear();
   let spawned = 0;
-  for (let i = 0; i < 600; i++) spawned += system.emitRate('scrape', params, 60, 1 / 60);
-  range('emitRate averages out to the requested rate', spawned, 400, 620);
+  for (let i = 0; i < 600; i++) {
+    spawned += system.emitRate('scrape', { position: new Vector3(), count: 1, life: 0.05 }, 25, 1 / 60);
+    system.update(1 / 60);
+  }
+  range('emitRate averages out to the requested rate', spawned, 210, 290);
 
   system.dispose();
 });

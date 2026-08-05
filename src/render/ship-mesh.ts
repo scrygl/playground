@@ -45,6 +45,8 @@ const BELLY_STEPS = 5;
 const DECK_STEPS = 8;
 /** Points in one closed hull ring (see `hullSection`). */
 const HULL_RING = 2 * BELLY_STEPS + 2 * DECK_STEPS + 2;
+/** Radians the two coincident chine normals are splayed apart. */
+const CHINE_SPLAY = 0.55;
 
 /** Outboard offset of the engine nacelles, in metres. */
 const NACELLE_X = 1.94;
@@ -242,8 +244,9 @@ export class SweepBuilder {
   /** Single apex vertex, for nose and tail caps. */
   apex(p: readonly number[], n: readonly number[], u: number, v: number, section?: readonly number[]): number {
     const base = this.positions.length / 3;
+    const length = Math.hypot(n[0], n[1], n[2]) || 1;
     this.positions.push(p[0], p[1], p[2]);
-    this.normals.push(n[0], n[1], n[2]);
+    this.normals.push(n[0] / length, n[1] / length, n[2] / length);
     this.uvs.push(u, v);
     if (section) this.sections.push(section[0], section[1]);
     return base;
@@ -336,6 +339,25 @@ function hullSection(t: number, z: number, out: RingScratch): void {
     hny[k] = Math.pow(s, g) / deckSpan;
   }
 
+  // A superellipse is C1 at its widest point, so belly and deck arrive at the
+  // chine with the *same* horizontal normal and the crease would shade as a
+  // smooth roll. Splaying the two coincident normals apart authors the crease
+  // in — a hard edge is a normal discontinuity, and nothing else — with the
+  // immediate neighbours taking part of the splay so the flank ramps into it
+  // instead of stepping.
+  const splay = (k: number, angle: number): void => {
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const x = hnx[k];
+    const y = hny[k];
+    hnx[k] = x * c - y * s;
+    hny[k] = x * s + y * c;
+  };
+  splay(BELLY_STEPS, -CHINE_SPLAY);
+  splay(BELLY_STEPS + 1, CHINE_SPLAY);
+  splay(BELLY_STEPS - 1, -CHINE_SPLAY * 0.4);
+  splay(BELLY_STEPS + 2, CHINE_SPLAY * 0.4);
+
   const write = (idx: number, x: number, y: number, nx: number, ny: number, u: number): void => {
     const len = Math.hypot(nx, ny) || 1;
     out.p[idx * 3] = x;
@@ -419,8 +441,8 @@ export function buildCanopyGeometry(): THREE.BufferGeometry {
     p[0] = w;
     p[1] = base - 0.3;
     p[2] = z;
-    n[0] = 1;
-    n[1] = -0.2;
+    n[0] = 0.981;
+    n[1] = -0.196;
     n[2] = 0;
     u[0] = 0;
     for (let k = 0; k < dome; k++) {
@@ -445,8 +467,8 @@ export function buildCanopyGeometry(): THREE.BufferGeometry {
     p[lastIdx * 3] = -w;
     p[lastIdx * 3 + 1] = base - 0.3;
     p[lastIdx * 3 + 2] = z;
-    n[lastIdx * 3] = -1;
-    n[lastIdx * 3 + 1] = -0.2;
+    n[lastIdx * 3] = -0.981;
+    n[lastIdx * 3 + 1] = -0.196;
     n[lastIdx * 3 + 2] = 0;
     u[lastIdx] = 1;
 

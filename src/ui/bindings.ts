@@ -26,10 +26,11 @@ export const ACTIONS: readonly ActionInfo[] = [
   { id: 'airbrakeLeft', label: 'Airbrake left', group: 'Driving', pad: 'Left bumper' },
   { id: 'airbrakeRight', label: 'Airbrake right', group: 'Driving', pad: 'Right bumper' },
   { id: 'boost', label: 'Boost', group: 'Driving', pad: 'A / Cross' },
-  { id: 'useItem', label: 'Use item', group: 'Driving', pad: 'X / Square' },
+
   { id: 'pitchUp', label: 'Pitch up', group: 'In the air', pad: 'Left stick ↑' },
   { id: 'pitchDown', label: 'Pitch down', group: 'In the air', pad: 'Left stick ↓' },
   { id: 'lookBack', label: 'Look back', group: 'Camera', pad: 'Right stick click' },
+  { id: 'cameraMode', label: 'Change view', group: 'Camera', pad: 'X / Square' },
   { id: 'restart', label: 'Restart', group: 'Race', pad: 'Back / Share' },
   { id: 'pause', label: 'Pause', group: 'Race', pad: 'Start / Options' },
 ];
@@ -42,7 +43,7 @@ export const GAMEPAD_REFERENCE: readonly { button: string; action: string }[] = 
   { button: 'Bumpers', action: 'Airbrakes — hold both to slow hard' },
   { button: 'A / Cross', action: 'Boost, and confirm in menus' },
   { button: 'B / Circle', action: 'Back in menus' },
-  { button: 'X / Square', action: 'Use item' },
+  { button: 'X / Square', action: 'Change camera view' },
   { button: 'Y / Triangle', action: 'Cycle camera' },
   { button: 'D-pad', action: 'Navigate menus' },
   { button: 'Start / Options', action: 'Pause' },
