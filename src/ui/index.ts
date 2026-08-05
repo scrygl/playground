@@ -257,6 +257,10 @@ export class VelocityHorizonUi implements GameUi {
 
     this.currentScreen = screen;
     this.root.setAttribute('data-screen', screen);
+    // The decorative backdrop is a sibling of the screens, so hiding it during
+    // a race has to be driven from the root. The live 3D render is behind this
+    // DOM and must be the only thing under the HUD.
+    this.root.classList.toggle('is-racing', screen === 'race');
 
     next.root.classList.remove('is-leaving');
     next.root.classList.add('is-mounted');

@@ -672,12 +672,14 @@ function createHullMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.
   const trim = color(options.colors.trim);
 
   // Three tones off one authored colour: a near-black belly, the craft's own
-  // colour on the flanks, and a light composite deck. A single flat hull colour
-  // is the thing that makes procedural vehicles look untextured, and the
-  // gradient costs nothing.
+  // colour on the flanks, and a lifted composite deck. A single flat hull
+  // colour is the thing that makes procedural vehicles look untextured, and the
+  // gradient costs nothing. All three stay dark — the scene is lit by a bright
+  // nebula and graded through ACES with bloom on top, so a mid-tone albedo
+  // comes back as white.
   const shade = smoothstep(-0.7, 0.45, up);
-  const deck = smoothstep(0.4, 0.9, up);
-  const base = mix(mix(hull.mul(0.14), hull, shade), mix(hull, color(0xd8e4f2), float(0.5)), deck.mul(0.7));
+  const deck = smoothstep(0.35, 0.9, up);
+  const base = mix(mix(hull.mul(0.1), hull.mul(0.8), shade), hull.mul(1.7).add(0.02), deck.mul(0.45));
 
   // Panel breaks. Fine lateral seams plus a few longitudinal ones, both thin
   // enough to survive at distance without shimmering.
@@ -709,8 +711,11 @@ function createHullMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.
 
   mat.colorNode = base.mul(panels.mul(0.5).oneMinus()).mul(u.ghost.mul(0.85).oneMinus());
   mat.emissiveNode = emissive;
-  mat.roughnessNode = float(0.42).add(panels.mul(0.3)).sub(deck.mul(0.12));
-  mat.metalnessNode = float(0.35).add(deck.mul(0.2)).sub(panels.mul(0.2));
+  mat.roughnessNode = float(0.5).add(panels.mul(0.28)).sub(deck.mul(0.14));
+  mat.metalnessNode = float(0.28).add(deck.mul(0.18)).sub(panels.mul(0.18));
+  // The nebula skyboxes are extremely bright; taking the craft's share of the
+  // IBL down is what lets its livery read as paint instead of chrome.
+  mat.envMapIntensity = 0.35;
   return mat;
 }
 
@@ -726,6 +731,7 @@ function createCanopyMaterial(options: ShipVisualOptions, u: ShipUniforms): THRE
   mat.roughnessNode = float(0.05);
   mat.metalnessNode = float(0.25);
   mat.opacityNode = fresnel.mul(0.4).add(0.72).clamp(0, 1);
+  mat.envMapIntensity = 0.5;
   mat.transparent = true;
   return mat;
 }
@@ -888,8 +894,9 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   const vaneMat = new THREE.MeshStandardNodeMaterial();
   vaneMat.colorNode = color(0x0a0d14);
   vaneMat.emissiveNode = color(options.colors.trim).mul(u.speed.mul(0.4).add(u.boost.mul(0.8)).add(0.12));
-  vaneMat.metalnessNode = float(0.9);
-  vaneMat.roughnessNode = float(0.35);
+  vaneMat.metalnessNode = float(0.7);
+  vaneMat.roughnessNode = float(0.4);
+  vaneMat.envMapIntensity = 0.3;
   const vanes = new THREE.InstancedMesh(vaneGeo, vaneMat, 6);
   vanes.name = 'ship-vanes';
   {
