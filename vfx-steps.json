@@ -3,48 +3,120 @@
   "wait": 9000
  },
  {
-  "eval": "window.__VFX__.set({paused:true, speed:0}); window.__VFX__.look('orbit',{yaw:38,pitch:16,dist:14})"
+  "eval": "window.__VFX__.set({speed:130}); window.__VFX__.look('orbit',{yaw:40,pitch:15,dist:14})"
  },
  {
-  "wait": 900
+  "wait": 1500
  },
  {
   "shot": "ship-3q"
  },
  {
-  "eval": "window.__VFX__.look('orbit',{yaw:90,pitch:5,dist:15})"
+  "eval": "window.__VFX__.look('orbit',{yaw:95,pitch:6,dist:16})"
  },
  {
-  "wait": 400
+  "wait": 600
  },
  {
   "shot": "ship-side"
  },
  {
-  "eval": "window.__VFX__.look('orbit',{yaw:170,pitch:12,dist:13})"
+  "eval": "window.__VFX__.look('orbit',{yaw:150,pitch:9,dist:20}); window.__VFX__.set({boost:1,turbo:3,speed:165})"
  },
  {
-  "wait": 400
+  "wait": 1600
  },
  {
-  "shot": "ship-front"
+  "shot": "ship-boost"
  },
  {
-  "eval": "window.__VFX__.look('orbit',{yaw:8,pitch:9,dist:13})"
+  "eval": "window.__VFX__.set({boost:0,turbo:0,speed:120}); window.__VFX__.look('gate',{kind:'boost',gate:1,dist:26,pitch:1})"
  },
  {
-  "wait": 400
+  "wait": 1200
  },
  {
-  "shot": "ship-rear"
+  "shot": "boostpad"
  },
  {
-  "eval": "window.__VFX__.look('orbit',{yaw:40,pitch:58,dist:14})"
+  "eval": "window.__VFX__.look('gate',{kind:'weapon',gate:1,dist:24,pitch:1})"
  },
  {
-  "wait": 400
+  "wait": 600
  },
  {
-  "shot": "ship-top"
+  "shot": "pickups"
+ },
+ {
+  "eval": "window.__VFX__.look('gate',{kind:'checkpoint',gate:1,dist:40,pitch:2})"
+ },
+ {
+  "wait": 600
+ },
+ {
+  "shot": "checkpoint"
+ },
+ {
+  "eval": "window.__VFX__.look('gate',{kind:'beatgate',gate:2,dist:65,pitch:1})"
+ },
+ {
+  "wait": 900
+ },
+ {
+  "shot": "gates-close"
+ },
+ {
+  "eval": "window.__VFX__.hit(true)"
+ },
+ {
+  "wait": 130
+ },
+ {
+  "shot": "gate-hit"
+ },
+ {
+  "eval": "window.__VFX__.set({s:640}); window.__VFX__.look('chase',{dist:24,pitch:14})"
+ },
+ {
+  "wait": 2200
+ },
+ {
+  "shot": "chase"
+ },
+ {
+  "eval": "window.__VFX__.set({damage:1, shield:0.15, wall:true})"
+ },
+ {
+  "wait": 250
+ },
+ {
+  "shot": "damage-shield"
+ },
+ {
+  "eval": "window.__VFX__.set({damage:0, wall:false, invuln:true})"
+ },
+ {
+  "wait": 500
+ },
+ {
+  "shot": "invuln"
+ },
+ {
+  "eval": "window.__VFX__.set({invuln:false, ghost:0.35})"
+ },
+ {
+  "wait": 500
+ },
+ {
+  "shot": "ghost"
+ },
+ {
+  "eval": "window.__VFX__.set({ghost:1}); window.__VFX__.boom()"
+ },
+ {
+  "wait": 250
+ },
+ {
+  "shot": "explode"
  }
 ]

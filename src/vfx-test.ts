@@ -56,6 +56,7 @@ async function boot(): Promise<void> {
   const track = Track.build(getTrack('neon-meridian'));
   const palette = track.definition.palette;
 
+  const plain = params.get('plain') === '1';
   const env = createEnvironment({
     archetype: track.definition.environment,
     palette,
@@ -64,18 +65,20 @@ async function boot(): Promise<void> {
     trackRadius: track.radius,
     trackCentre: track.centre,
   });
-  scene.add(env.root);
-  scene.background = env.background;
-  scene.environment = env.envMap;
-  scene.fog = new THREE.FogExp2(env.fog.color, env.fog.density);
+  if (!plain) {
+    scene.add(env.root);
+    scene.background = env.background;
+    scene.environment = env.envMap;
+    scene.fog = new THREE.FogExp2(env.fog.color, env.fog.density);
+  }
 
-  const key = new THREE.DirectionalLight(env.keyLight.color, env.keyLight.intensity);
+  const key = new THREE.DirectionalLight(env.keyLight.color, plain ? 1.6 : env.keyLight.intensity);
   key.position.copy(env.keyLight.direction).multiplyScalar(1400);
   scene.add(key);
-  scene.add(new THREE.AmbientLight(env.ambient.color, env.ambient.intensity));
+  scene.add(new THREE.AmbientLight(env.ambient.color, plain ? 0.35 : env.ambient.intensity));
 
   const trackMesh = buildTrackMesh(track, palette, quality);
-  scene.add(trackMesh.group);
+  if (!plain) scene.add(trackMesh.group);
 
   const features = createFeatureVisuals(track, { palette, quality });
   scene.add(features.object);
@@ -152,9 +155,10 @@ async function boot(): Promise<void> {
   const camTarget = new THREE.Vector3();
   const camOffset = new THREE.Vector3();
 
+  let lookKind = 'beatgate';
   function gateFeatureIndex(n: number): number {
     const gates: number[] = [];
-    for (let i = 0; i < track.features.length; i++) if (track.features[i].kind === 'beatgate') gates.push(i);
+    for (let i = 0; i < track.features.length; i++) if (track.features[i].kind === lookKind) gates.push(i);
     return gates.length ? gates[Math.min(n, gates.length - 1)] : -1;
   }
 
@@ -177,7 +181,7 @@ async function boot(): Promise<void> {
       const f = idx >= 0 ? track.features[idx] : null;
       const s = f ? f.s - cam.dist : drive.s;
       track.path.toWorld(s, 0, 6 + cam.pitch, camera.position);
-      track.path.toWorld(s + 90, 0, 8, camTarget);
+      track.path.toWorld(s + (cam.dist > 30 ? 90 : cam.dist + 10), 0, cam.pitch > 3 ? 8 : 1.5, camTarget);
       camera.lookAt(camTarget);
       camera.fov = 62;
     } else {
@@ -197,6 +201,7 @@ async function boot(): Promise<void> {
     if (opts.pitch !== undefined) cam.pitch = opts.pitch;
     if (opts.dist !== undefined) cam.dist = opts.dist;
     if (opts.gate !== undefined) cam.gateIndex = opts.gate;
+    if (opts.kind !== undefined) lookKind = opts.kind;
     updateCamera();
   };
   window.__VFX__.set = (patch: Any): void => {
@@ -221,7 +226,9 @@ async function boot(): Promise<void> {
 
   const post = new THREE.PostProcessing(renderer);
   const scenePass = pass(scene, camera);
-  post.outputNode = scenePass.add(bloom(scenePass.getTextureNode(), quality.bloomStrength * 0.9, 0.5, 0.7));
+  post.outputNode = plain
+    ? scenePass
+    : scenePass.add(bloom(scenePass.getTextureNode(), quality.bloomStrength * 0.9, 0.5, 0.7));
 
   addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);

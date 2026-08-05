@@ -164,11 +164,15 @@ function buildPickupGeometry(kind: 'shield' | 'weapon' | 'hazard'): THREE.Buffer
   const m = new THREE.Matrix4();
 
   if (kind === 'weapon') {
-    // Two interpenetrating tetrahedra — a star, so it reads as aggressive.
-    const tetra = new THREE.TetrahedronGeometry(1, 0);
-    builder.add(tetra, m.identity(), 0);
-    builder.add(tetra, m.makeRotationY(Math.PI).premultiply(new THREE.Matrix4().makeRotationZ(Math.PI)), 0);
-    tetra.dispose();
+    // An eight-pointed star: two octahedra out of phase. Reads as aggressive
+    // from any angle, unlike a tetrahedron, which shows one flat face and
+    // stops looking like an object at all.
+    const gem = new THREE.OctahedronGeometry(1, 0);
+    m.makeScale(0.85, 1.15, 0.85);
+    builder.add(gem, m, 0);
+    m.makeRotationY(Math.PI * 0.25).multiply(new THREE.Matrix4().makeScale(0.72, 0.72, 0.72));
+    builder.add(gem, m, 0);
+    gem.dispose();
   } else if (kind === 'hazard') {
     const core = new THREE.IcosahedronGeometry(0.9, 0);
     builder.add(core, null, 0);
@@ -186,7 +190,8 @@ function buildPickupGeometry(kind: 'shield' | 'weapon' | 'hazard'): THREE.Buffer
     spike.dispose();
   } else {
     const gem = new THREE.OctahedronGeometry(1, 0);
-    builder.add(gem, null, 0);
+    m.makeScale(0.9, 1.3, 0.9);
+    builder.add(gem, m, 0);
     gem.dispose();
   }
 
@@ -312,9 +317,9 @@ function createBoostMaterial(options: FeatureVisualOptions, u: FeatureUniforms):
 
   // Offsetting the band phase by the distance from the centre line is what
   // turns stripes into chevrons; the scroll direction is the way you drive.
-  const bend = across.sub(0.5).abs().mul(1.1);
-  const band = along.mul(3).add(bend).sub(time.mul(1.6)).fract();
-  const chevron = smoothstep(0.52, 0.86, band).mul(smoothstep(1.0, 0.9, band));
+  const bend = across.sub(0.5).abs().mul(2.4);
+  const band = along.mul(4).add(bend).sub(time.mul(1.9)).fract();
+  const chevron = smoothstep(0.55, 0.88, band).mul(smoothstep(1.0, 0.92, band));
 
   // Feather every edge so the pad melts into the surface instead of sitting
   // on it as a rectangle.
@@ -327,9 +332,9 @@ function createBoostMaterial(options: FeatureVisualOptions, u: FeatureUniforms):
   const pulse = smoothstep(0.25, 0.0, beat).mul(0.5).add(1);
   const prox = proximity(u, st.x, 20, 420).mul(0.4).add(0.7);
 
-  const tint = mix(color(options.palette.glow), color(0xffffff), chevron.pow(2));
-  const amount = chevron.mul(1.6).add(0.18).mul(edge).mul(pulse).mul(prox);
-  mat.colorNode = vec4(tint.mul(amount).mul(2.2), amount.clamp(0, 1).mul(0.95));
+  const tint = mix(color(options.palette.primary), color(options.palette.glow), chevron.pow(2));
+  const amount = chevron.mul(1.1).add(0.12).mul(edge).mul(pulse).mul(prox);
+  mat.colorNode = vec4(tint.mul(amount).mul(1.1), amount.clamp(0, 1).mul(0.8));
   return mat;
 }
 
@@ -454,10 +459,11 @@ function createPickupMaterial(
   const prox = proximity(u, st.x, 12, 320).mul(0.5).add(0.7);
 
   const tint = mix(color(gemColor), color(options.palette.glow), isRing);
-  mat.colorNode = color(0x0b0f18);
-  mat.emissiveNode = tint.mul(isRing.mul(1.6).add(0.9)).mul(pulse).mul(prox).mul(fade.pow(0.6));
-  mat.metalnessNode = float(0.6);
-  mat.roughnessNode = float(0.25);
+  mat.colorNode = mix(color(gemColor).mul(0.35), color(0x0b0f18), isRing);
+  mat.emissiveNode = tint.mul(isRing.mul(0.35).add(0.4)).mul(pulse).mul(prox).mul(fade.pow(0.6));
+  mat.metalnessNode = float(0.55);
+  mat.roughnessNode = float(0.3);
+  mat.envMapIntensity = 0.25;
   mat.opacityNode = fade.clamp(0, 1);
   return mat;
 }

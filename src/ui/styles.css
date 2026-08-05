@@ -39,7 +39,7 @@
 
   --ink: #e9f2fb;
   --ink-2: #9db1c7;
-  --ink-3: #64798f;
+  --ink-3: #7288a0;
 
   --bronze: #d08a4c;
   --silver: #cbd6e2;
@@ -141,11 +141,11 @@
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(4, 6, 15, 0.86) 0%,
-    rgba(4, 6, 15, 0.62) 26%,
-    rgba(4, 6, 15, 0.34) 50%,
-    rgba(4, 6, 15, 0.68) 78%,
-    rgba(4, 6, 15, 0.9) 100%
+    rgba(4, 6, 15, 0.9) 0%,
+    rgba(4, 6, 15, 0.72) 26%,
+    rgba(4, 6, 15, 0.5) 50%,
+    rgba(4, 6, 15, 0.76) 78%,
+    rgba(4, 6, 15, 0.93) 100%
   );
   transition: opacity var(--speed) var(--ease);
 }
@@ -1134,6 +1134,8 @@
   transform: translateX(-50%);
   bottom: clamp(14px, 2.6vh, 30px);
   justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .vh-title__version {
   position: absolute;
@@ -1485,6 +1487,7 @@
 .vh-garage__silhouette {
   position: relative;
   flex: 1;
+  min-height: 0;
   margin-top: clamp(10px, 2vh, 22px);
   display: flex;
   align-items: center;
@@ -1503,6 +1506,8 @@
 }
 .vh-craft {
   position: relative;
+  max-height: 100%;
+  width: auto;
   filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.55));
 }
 .vh-craft__engine {
@@ -2276,6 +2281,22 @@
   pointer-events: none;
   --pad: clamp(14px, 2.4vw, 38px);
 }
+/* Instrument bands. A racing HUD has to stay readable against a white
+   guardrail and a black tunnel in the same second, so the readouts sit on a
+   shallow gradient at the top and bottom edges only — the driving line through
+   the middle of the frame is never covered. */
+.vh-hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(2, 4, 10, 0.55) 0%, rgba(2, 4, 10, 0) 16%),
+    linear-gradient(0deg, rgba(2, 4, 10, 0.62) 0%, rgba(2, 4, 10, 0) 20%);
+}
+.vh-hud > * {
+  position: relative;
+}
 .vh-hud__corner {
   position: absolute;
   display: flex;
@@ -2784,10 +2805,10 @@
     gap: 12px;
   }
   .vh-track__art {
-    aspect-ratio: 2 / 1;
+    aspect-ratio: 2.5 / 1;
   }
   .vh-track__info {
-    padding: 10px 13px 12px;
+    padding: 9px 13px 11px;
   }
   .vh-track__name {
     font-size: 16.5px;
@@ -2801,11 +2822,53 @@
     gap: 14px;
   }
   .vh-track__lock {
-    padding: 8px 13px 10px;
+    padding: 7px 13px 9px;
     font-size: 12px;
   }
   .vh-frame__title {
     font-size: clamp(26px, 3vw, 38px);
+  }
+
+  /* The garage detail is the tallest panel in the game; it loses the portrait
+     before it loses the buy button. */
+  .vh-garage__silhouette {
+    min-height: 96px;
+  }
+  .vh-garage__specs {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .vh-garage__blurb {
+    margin-top: 10px;
+  }
+  .vh-garage__actions {
+    padding-top: 14px;
+  }
+  .vh-garage__detail {
+    padding: 18px 20px;
+  }
+  .vh-garage,
+  .vh-modes,
+  .vh-standings {
+    min-height: 0;
+  }
+}
+
+/* 720p exactly: the last row of circuits has to clear the hint bar. */
+@media (max-height: 764px) and (min-width: 700px) {
+  .vh-frame {
+    padding-top: 16px;
+    padding-bottom: 8px;
+    gap: 10px;
+  }
+  .vh-frame__head {
+    padding-bottom: 8px;
+  }
+  .vh-track__art {
+    aspect-ratio: 3 / 1;
+  }
+  .vh-track__facts {
+    padding-top: 7px;
   }
 }
 
@@ -2907,6 +2970,9 @@
   .vh-title__stats {
     flex-wrap: wrap;
     gap: 14px 26px;
+  }
+  .vh-title__hints {
+    gap: 12px;
   }
 }
 

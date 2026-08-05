@@ -48,7 +48,7 @@ const HULL_RING = 2 * BELLY_STEPS + 2 * DECK_STEPS + 2;
 
 /** Outboard offset of the engine nacelles, in metres. */
 const NACELLE_X = 1.94;
-const NACELLE_Y = -0.2;
+const NACELLE_Y = -0.26;
 const NACELLE_Z0 = -0.95;
 const NACELLE_Z1 = 4.25;
 /** Where the exhaust plane sits, in local Z. */
@@ -78,25 +78,28 @@ type Curve = readonly (readonly [number, number])[];
 /** Half-width of the hull. Slow at the nose, hard shoulder line, clipped tail. */
 const HULL_HALF_WIDTH: Curve = [
   [0, 0.03],
-  [0.08, 0.2],
-  [0.2, 0.47],
-  [0.36, 0.95],
-  [0.52, 1.5],
-  [0.68, 2.02],
-  [0.82, 2.34],
-  [0.92, 2.32],
-  [1, 2.04],
+  [0.1, 0.2],
+  [0.26, 0.44],
+  [0.42, 0.66],
+  [0.52, 0.82],
+  // The knee: the flanks step out over a short run rather than swelling
+  // smoothly. That break is what stops the plan view reading as a wedge.
+  [0.58, 1.34],
+  [0.66, 1.88],
+  [0.76, 2.16],
+  [0.88, 2.26],
+  [1, 1.88],
 ];
 /** Deck height above the section centre. */
 const HULL_DECK: Curve = [
   [0, 0.04],
-  [0.08, 0.16],
-  [0.22, 0.36],
-  [0.38, 0.57],
-  [0.52, 0.71],
-  [0.66, 0.73],
-  [0.82, 0.62],
-  [1, 0.5],
+  [0.08, 0.15],
+  [0.22, 0.33],
+  [0.38, 0.5],
+  [0.52, 0.62],
+  [0.66, 0.66],
+  [0.82, 0.58],
+  [1, 0.46],
 ];
 /** Belly depth below the section centre. Shallower than the deck: flat-bottomed. */
 const HULL_BELLY: Curve = [
@@ -134,21 +137,21 @@ const HULL_BELLY_EXP: Curve = [
   [1, 2.5],
 ];
 
-const CANOPY_T0 = 0.22;
-const CANOPY_T1 = 0.63;
+const CANOPY_T0 = 0.33;
+const CANOPY_T1 = 0.74;
 const CANOPY_WIDTH: Curve = [
-  [0, 0.1],
-  [0.2, 0.44],
-  [0.5, 0.62],
-  [0.8, 0.54],
-  [1, 0.2],
+  [0, 0.14],
+  [0.22, 0.55],
+  [0.5, 0.72],
+  [0.78, 0.6],
+  [1, 0.18],
 ];
 const CANOPY_HEIGHT: Curve = [
   [0, 0.05],
-  [0.25, 0.37],
-  [0.5, 0.47],
-  [0.8, 0.38],
-  [1, 0.09],
+  [0.25, 0.34],
+  [0.5, 0.44],
+  [0.78, 0.34],
+  [1, 0.07],
 ];
 
 const NACELLE_RX: Curve = [
@@ -159,11 +162,11 @@ const NACELLE_RX: Curve = [
   [1, 0.4],
 ];
 const NACELLE_RY: Curve = [
-  [0, 0.28],
-  [0.18, 0.4],
-  [0.45, 0.44],
-  [0.72, 0.43],
-  [1, 0.37],
+  [0, 0.25],
+  [0.18, 0.35],
+  [0.45, 0.38],
+  [0.72, 0.37],
+  [1, 0.32],
 ];
 /** The pods splay outward toward the tail, widening the stance. */
 const NACELLE_SPLAY: Curve = [
@@ -406,7 +409,9 @@ export function buildCanopyGeometry(): THREE.BufferGeometry {
     const t = CANOPY_T0 + q * (CANOPY_T1 - CANOPY_T0);
     const z = NOSE_Z + t * (TAIL_Z - NOSE_Z);
     const base = curveAt(HULL_SPINE, t) + curveAt(HULL_DECK, t) * 0.42;
-    const w = curveAt(CANOPY_WIDTH, q) * curveAt(HULL_HALF_WIDTH, t) * 0.86 + 0.12;
+    // Sized in metres rather than as a fraction of the hull: the forebody is
+              // deliberately narrow, and a cockpit does not shrink to match it.
+    const w = curveAt(CANOPY_WIDTH, q) * 1.15 + 0.06;
     const h = curveAt(CANOPY_HEIGHT, q);
     const e = 2 / 2.7;
 
@@ -679,20 +684,28 @@ function createHullMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.
   // comes back as white.
   const shade = smoothstep(-0.7, 0.45, up);
   const deck = smoothstep(0.35, 0.9, up);
-  const base = mix(mix(hull.mul(0.1), hull.mul(0.8), shade), hull.mul(1.7).add(0.02), deck.mul(0.45));
+  const base = mix(mix(hull.mul(0.08), hull.mul(0.55), shade), hull.mul(1.1).add(0.012), deck.mul(0.3));
 
   // Panel breaks. Fine lateral seams plus a few longitudinal ones, both thin
   // enough to survive at distance without shimmering.
-  const seamAlong = smoothstep(0.965, 1.0, t.mul(7).fract());
-  const seamAcross = smoothstep(0.955, 1.0, across.abs().mul(3.2).fract());
+  const seamAlong = smoothstep(0.955, 1.0, t.mul(6).fract());
+  const seamAcross = smoothstep(0.94, 1.0, across.abs().mul(2.6).fract());
   const panels = seamAlong.add(seamAcross).clamp(0, 1);
 
-  // Livery. A spine stripe, a hot chine line, and a nose flash: three marks is
-  // all it takes to read as a liveried racing craft rather than a shape.
-  const spine = smoothstep(0.2, 0.02, across.abs()).mul(smoothstep(0.15, 0.55, up)).mul(smoothstep(0.06, 0.2, t));
-  const chine = smoothstep(0.86, 1.0, across.abs()).mul(smoothstep(0.18, 0.45, t));
-  const flash = smoothstep(0.3, 0.08, t).mul(smoothstep(-0.35, 0.2, up));
-  const livery = spine.mul(0.9).add(chine.mul(1.25)).add(flash.mul(0.7));
+  // Two louvred vents on the aft deck. A handful of hard lines in the right
+  // place does more for "engineered" than another thousand triangles.
+  const ventBand = smoothstep(0.62, 0.68, t).mul(smoothstep(0.86, 0.8, t));
+  const ventSide = smoothstep(0.2, 0.3, across.abs()).mul(smoothstep(0.62, 0.52, across.abs()));
+  const louvre = smoothstep(0.45, 0.75, t.mul(46).fract());
+  const vents = ventBand.mul(ventSide).mul(smoothstep(0.25, 0.6, up));
+
+  // Livery: three marks, and only three. A stripe down the spine, a hot line
+  // along the chine crease, and a flash on the nose. Every extra glowing region
+  // costs some of the craft's readable silhouette, which is why the widths are
+  // narrow and the weights are low — the paint has to survive bloom.
+  const spine = smoothstep(0.13, 0.02, across.abs()).mul(smoothstep(0.35, 0.7, up)).mul(smoothstep(0.1, 0.24, t));
+  const chine = smoothstep(0.93, 1.0, across.abs()).mul(smoothstep(0.2, 0.45, t));
+  const flash = smoothstep(0.22, 0.07, t).mul(smoothstep(-0.2, 0.3, up));
 
   // View-space fresnel: cheap, backend-agnostic, and it is what gives the hull
   // its wet carbon edge definition. Kept tight — a broad fresnel on a bright
@@ -700,22 +713,59 @@ function createHullMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.
   const fresnel = normalView.z.abs().oneMinus().pow(6);
 
   // Engine wash: the tail glows with whatever the nacelles are doing.
-  const wash = smoothstep(0.66, 1.0, t).mul(u.boost.mul(1.6).add(u.speed.mul(0.35)).add(0.15));
+  const wash = smoothstep(0.78, 1.0, t).mul(u.boost.mul(1.3).add(u.speed.mul(0.25)).add(0.08));
 
   const beatLift = u.beat.mul(0.45).add(1);
+  // The stripes are painted into the albedo and only lightly lit on top. A
+  // livery made purely of emissive reads as a light strip stuck to the hull.
+  const paint = spine.max(chine).max(flash).clamp(0, 1);
   const emissive = trim
-    .mul(livery.mul(beatLift).mul(0.5).add(fresnel.mul(0.35)))
-    .add(turboColour(u).mul(wash).mul(0.4))
+    .mul(paint.mul(beatLift).mul(0.22).add(fresnel.mul(0.16)).add(vents.mul(louvre).mul(0.5)))
+    .add(turboColour(u).mul(wash).mul(0.3))
     .add(color(0xffffff).mul(u.damage.mul(1.7)))
     .add(trim.mul(u.ghost.mul(1.6)));
 
-  mat.colorNode = base.mul(panels.mul(0.5).oneMinus()).mul(u.ghost.mul(0.85).oneMinus());
+  mat.colorNode = mix(base, trim.mul(0.3), paint.mul(0.9))
+    .mul(panels.mul(0.6).oneMinus())
+    .mul(vents.mul(louvre.oneMinus()).mul(0.8).oneMinus())
+    .mul(u.ghost.mul(0.85).oneMinus());
   mat.emissiveNode = emissive;
-  mat.roughnessNode = float(0.5).add(panels.mul(0.28)).sub(deck.mul(0.14));
+  mat.roughnessNode = float(0.5).add(panels.mul(0.28)).add(vents.mul(0.15)).sub(deck.mul(0.14));
   mat.metalnessNode = float(0.28).add(deck.mul(0.18)).sub(panels.mul(0.18));
   // The nebula skyboxes are extremely bright; taking the craft's share of the
   // IBL down is what lets its livery read as paint instead of chrome.
-  mat.envMapIntensity = 0.35;
+  mat.envMapIntensity = 0.16;
+  return mat;
+}
+
+/**
+ * Nacelles, fins and intake blades.
+ *
+ * These share the hull's swept-section attribute but not its livery: a stripe
+ * scheme authored for a wide painted body reads as a light show when it is
+ * applied to a thin aerofoil. Structure is dark machined metal with a single
+ * accent line down whatever the part's thickest ridge happens to be.
+ */
+function createStructureMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.MeshStandardNodeMaterial {
+  const mat = new THREE.MeshStandardNodeMaterial();
+  const t = uv().y;
+  const section = vec2Attribute('aSection');
+  const ridge = smoothstep(0.9, 1.0, section.x.abs());
+  const trim = color(options.colors.trim);
+
+  // Front of a nacelle is its intake; front of a fin is its root, buried.
+  const lip = smoothstep(0.09, 0.0, t);
+  const tail = smoothstep(0.88, 1.0, t);
+
+  mat.colorNode = color(0x0b0e14).mul(smoothstep(-1.2, 0.8, section.y).mul(0.7).add(0.45));
+  mat.emissiveNode = trim
+    .mul(ridge.mul(0.22).add(lip.mul(0.45)))
+    .add(turboColour(u).mul(tail).mul(u.boost.mul(1.1).add(u.speed.mul(0.3)).add(0.12)))
+    .add(color(0xffffff).mul(u.damage.mul(1.4)))
+    .add(trim.mul(u.ghost.mul(1.2)));
+  mat.roughnessNode = float(0.33);
+  mat.metalnessNode = float(0.8);
+  mat.envMapIntensity = 0.16;
   return mat;
 }
 
@@ -728,10 +778,10 @@ function createCanopyMaterial(options: ShipVisualOptions, u: ShipUniforms): THRE
   const band = smoothstep(0.35, 0.5, uv().x).mul(smoothstep(0.65, 0.5, uv().x));
   mat.colorNode = color(0x05070d);
   mat.emissiveNode = trim.mul(fresnel.mul(0.7).add(band.mul(0.12))).add(trim.mul(u.damage.mul(2)));
-  mat.roughnessNode = float(0.05);
-  mat.metalnessNode = float(0.25);
-  mat.opacityNode = fresnel.mul(0.4).add(0.72).clamp(0, 1);
-  mat.envMapIntensity = 0.5;
+  mat.roughnessNode = float(0.16);
+  mat.metalnessNode = float(0.12);
+  mat.opacityNode = fresnel.mul(0.35).add(0.75).clamp(0, 1);
+  mat.envMapIntensity = 0.14;
   mat.transparent = true;
   return mat;
 }
@@ -807,7 +857,7 @@ function createPadMaterial(options: ShipVisualOptions, u: ShipUniforms): THREE.M
   mat.side = THREE.DoubleSide;
   const r = uv().sub(vec2(0.5, 0.5)).length().mul(2).clamp(0, 1);
   const falloff = r.oneMinus().pow(1.8);
-  const strength = u.grounded.mul(u.speed.mul(0.2).add(0.22)).add(u.boost.mul(0.18));
+  const strength = u.grounded.mul(u.speed.mul(0.14).add(0.14)).add(u.boost.mul(0.12));
   mat.colorNode = vec4(
     mix(color(options.colors.trim), color(0xffffff), falloff.pow(3)).mul(0.9),
     falloff.mul(strength).clamp(0, 1).mul(0.4),
@@ -870,6 +920,13 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   body.add(hull);
   disposables.push(hullGeo, hullMat);
 
+  const structureMat = createStructureMaterial(options, u);
+  if (isGhost) {
+    structureMat.transparent = true;
+    structureMat.depthWrite = false;
+  }
+  disposables.push(structureMat);
+
   // --- Canopy -----------------------------------------------------------
   const canopyGeo = buildCanopyGeometry();
   const canopyMat = createCanopyMaterial(options, u);
@@ -881,7 +938,7 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   // --- Nacelles ---------------------------------------------------------
   for (const side of [-1, 1]) {
     const geo = buildNacelleGeometry(side);
-    const nacelle = new THREE.Mesh(geo, hullMat);
+    const nacelle = new THREE.Mesh(geo, structureMat);
     nacelle.name = `ship-nacelle-${side < 0 ? 'l' : 'r'}`;
     body.add(nacelle);
     disposables.push(geo);
@@ -890,13 +947,13 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   // --- Intake vanes -----------------------------------------------------
   // Three thin blades across each shoulder scoop. Small, but they are what the
   // eye reads as "engineered" when the craft fills the screen.
-  const vaneGeo = new THREE.BoxGeometry(0.045, 0.42, 0.5);
+  const vaneGeo = new THREE.BoxGeometry(0.04, 0.34, 0.36);
   const vaneMat = new THREE.MeshStandardNodeMaterial();
-  vaneMat.colorNode = color(0x0a0d14);
-  vaneMat.emissiveNode = color(options.colors.trim).mul(u.speed.mul(0.4).add(u.boost.mul(0.8)).add(0.12));
+  vaneMat.colorNode = color(0x05070b);
+  vaneMat.emissiveNode = color(options.colors.trim).mul(u.speed.mul(0.2).add(u.boost.mul(0.45)).add(0.06));
   vaneMat.metalnessNode = float(0.7);
   vaneMat.roughnessNode = float(0.4);
-  vaneMat.envMapIntensity = 0.3;
+  vaneMat.envMapIntensity = 0.16;
   const vanes = new THREE.InstancedMesh(vaneGeo, vaneMat, 6);
   vanes.name = 'ship-vanes';
   {
@@ -906,7 +963,7 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
         _scratchVec.set(
           side * (NACELLE_X + curveAt(NACELLE_SPLAY, 0)) + blade * 0.15,
           NACELLE_Y,
-          NACELLE_Z0 + 0.16,
+          NACELLE_Z0 + 0.32,
         );
         _scratchMatrix.compose(_scratchVec, _scratchQuat.identity(), _unitScale);
         vanes.setMatrixAt(i++, _scratchMatrix);
@@ -919,53 +976,70 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
 
   // --- Fins -------------------------------------------------------------
   const finGeo = buildFinGeometry({
-    leadRoot: 0.5,
-    leadTip: 2.45,
-    trailRoot: 4.0,
+    leadRoot: 1.35,
+    leadTip: 2.75,
+    trailRoot: 4.05,
     trailTip: 4.2,
     rootY: 0.0,
-    tipY: 1.55,
-    rootX: 0,
-    tipX: 0,
-    thickness: 0.15,
-  });
-  const canardGeo = buildFinGeometry({
-    leadRoot: -2.35,
-    leadTip: -1.15,
-    trailRoot: -0.5,
-    trailTip: -0.62,
-    rootY: 0,
     tipY: 1.5,
     rootX: 0,
     tipX: 0,
-    thickness: 0.1,
+    thickness: 0.13,
   });
-  disposables.push(finGeo, canardGeo);
+  const canardGeo = buildFinGeometry({
+    leadRoot: -3.0,
+    leadTip: -2.1,
+    trailRoot: -1.5,
+    trailTip: -1.55,
+    rootY: 0,
+    tipY: 1.15,
+    rootX: 0,
+    tipX: 0,
+    thickness: 0.08,
+  });
+  const pylonGeo = buildFinGeometry({
+    leadRoot: -0.35,
+    leadTip: -0.05,
+    trailRoot: 3.4,
+    trailTip: 3.5,
+    rootY: 0,
+    tipY: 1.45,
+    rootX: 0,
+    tipX: 0,
+    thickness: 0.16,
+  });
+  disposables.push(finGeo, canardGeo, pylonGeo);
 
   const fins: THREE.Mesh[] = [];
   const canards: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
-    const fin = new THREE.Mesh(finGeo, hullMat);
+    const fin = new THREE.Mesh(finGeo, structureMat);
     fin.position.set(side * (NACELLE_X + 0.02), 0.18, 0);
     fin.rotation.z = side * -0.3;
     fins.push(fin);
     body.add(fin);
 
     // Canards ride the hull shoulder, rotated so the span runs outboard.
-    const canard = new THREE.Mesh(canardGeo, hullMat);
-    canard.position.set(side * 0.85, -0.04, 0);
+    const canard = new THREE.Mesh(canardGeo, structureMat);
+    canard.position.set(side * 0.42, -0.02, 0);
     canard.rotation.z = side * -Math.PI * 0.5;
     canard.rotation.y = side * 0.1;
     canards.push(canard);
     body.add(canard);
+
+    // Pylon: the same aerofoil laid flat, carrying the pod out from the flank.
+    const pylon = new THREE.Mesh(pylonGeo, structureMat);
+    pylon.position.set(side * 0.62, NACELLE_Y + 0.04, 0);
+    pylon.rotation.z = side * -Math.PI * 0.5;
+    body.add(pylon);
   }
 
   // --- Engine cores and plumes ------------------------------------------
-  const coreGeo = new THREE.CircleGeometry(0.36, 26);
+  const coreGeo = new THREE.CircleGeometry(0.3, 26);
   const coreMat = createCoreMaterial(u);
   disposables.push(coreGeo, coreMat);
 
-  const plumeGeo = new THREE.CylinderGeometry(0.05, 0.32, 5, 18, 1, true);
+  const plumeGeo = new THREE.CylinderGeometry(0.05, 0.28, 5, 18, 1, true);
   plumeGeo.rotateX(Math.PI * 0.5);
   plumeGeo.translate(0, 0, 2.5);
   const plumeMat = createPlumeMaterial(u);
@@ -1020,10 +1094,12 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
   const flashMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
   flashMat.blending = THREE.AdditiveBlending;
   const flashFade = floatUniform(0);
-  const flashFresnel = normalView.z.abs().oneMinus().pow(1.6);
+  // A shell, not a ball: the fresnel keeps the flash reading as an expanding
+  // shockwave rather than a white sphere parked on the track.
+  const flashFresnel = normalView.z.abs().oneMinus().pow(3.5);
   flashMat.colorNode = vec4(
-    mix(color(options.colors.engine), color(0xffffff), flashFade).mul(2),
-    flashFresnel.mul(flashFade).clamp(0, 1),
+    mix(color(options.colors.engine), color(0xffffff), flashFade).mul(1.3),
+    flashFresnel.mul(flashFade).clamp(0, 1).mul(0.8),
   );
   const flash = new THREE.Mesh(flashGeo, flashMat);
   flash.frustumCulled = false;
@@ -1080,12 +1156,17 @@ export function createShipVisual(options: ShipVisualOptions): ShipVisual {
         hullMat.transparent = true;
         hullMat.depthWrite = false;
         hullMat.needsUpdate = true;
+        structureMat.transparent = true;
+        structureMat.depthWrite = false;
+        structureMat.needsUpdate = true;
       }
       hullMat.opacity = state.ghostAlpha;
+      structureMat.opacity = state.ghostAlpha;
       canopyMat.opacity = state.ghostAlpha;
     } else if (u.ghost.value !== 0) {
       u.ghost.value = 0;
       hullMat.opacity = 1;
+      structureMat.opacity = 1;
       canopyMat.opacity = 1;
     }
 

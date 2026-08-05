@@ -196,8 +196,15 @@ export class GameRenderer {
     return this.renderer.getPixelRatio();
   }
 
+  /** Diagnostic escape hatch: renders the scene with no post chain at all. */
+  bypassPost = false;
+
   async render(camera: THREE.PerspectiveCamera, elapsed: number): Promise<void> {
     if (this.disposed) return;
+    if (this.bypassPost) {
+      await this.renderer.renderAsync(this.scene, camera);
+      return;
+    }
     if (!this.postProcessing || this.camera !== camera) this.buildPostProcessing(camera);
     this.uTime.value = elapsed;
     await this.postProcessing!.renderAsync();

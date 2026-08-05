@@ -172,10 +172,10 @@ function createTrailMaterial(tint: number, uStrength: ReturnType<typeof floatUni
   const fade = age.oneMinus().pow(1.7);
 
   const hot = mix(color(tint), color(0xffffff), fade.pow(2.5).mul(0.85));
-  const brightness = uBoost.mul(1.1).add(0.5);
+  const brightness = uBoost.mul(0.9).add(0.34);
   mat.colorNode = vec4(
     hot.mul(profile.add(core.mul(1.2))).mul(brightness),
-    fade.mul(profile).mul(uStrength).clamp(0, 1).mul(0.4),
+    fade.mul(profile).mul(uStrength).clamp(0, 1).mul(0.26),
   );
   return mat;
 }

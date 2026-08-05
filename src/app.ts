@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { PerspectiveCamera, Vector3 } from 'three';
 import { GameRenderer } from './render/renderer';
 import { ChaseCamera, CinematicCamera } from './render/camera';
 import { World } from './game/world';
@@ -49,6 +49,7 @@ export class App implements UiHost {
   private readonly audio: GameAudio;
   private readonly input: InputManager;
   private readonly governor: PerformanceGovernor;
+  private readonly camera: PerspectiveCamera;
   private readonly chase: ChaseCamera;
   private readonly cinematic: CinematicCamera;
 
@@ -87,16 +88,25 @@ export class App implements UiHost {
 
     // A URL override exists so the capture harness (and anyone debugging a
     // tier-specific problem) can pin quality without touching the profile.
-    const override = new URLSearchParams(location.search).get('tier') as QualityTierName | null;
+    const params = new URLSearchParams(location.search);
+    const override = params.get('tier') as QualityTierName | null;
     const tier: QualityTierName =
       override ??
       (profile.settings.qualityTier === 'auto' ? device.suggested : profile.settings.qualityTier);
     this.governor = new PerformanceGovernor(tier, {
       targetFps: profile.settings.targetFps,
-      enabled: profile.settings.adaptiveQuality,
+      // `?adaptive=0` pins resolution. Under software rendering the governor
+      // correctly floors the scale, which is useless for judging how the game
+      // actually looks.
+      enabled: params.get('adaptive') === '0' ? false : profile.settings.adaptiveQuality,
     });
 
-    this.renderer = new GameRenderer(canvas, this.governor.settings, profile.settings.forceWebGL);
+    // `?gpu=webgl` forces the fallback backend. This is not only a debug
+    // affordance: headless Chromium can render WebGPU but cannot composite it
+    // into a screenshot, so every automated visual check depends on it.
+    const forceWebGL = profile.settings.forceWebGL || params.get('gpu') === 'webgl';
+    this.renderer = new GameRenderer(canvas, this.governor.settings, forceWebGL);
+    this.renderer.bypassPost = params.get('nopost') === '1';
     this.audio = createGameAudio();
     this.input = new InputManager(profile.settings.bindings);
     this.input.configure({
@@ -104,13 +114,18 @@ export class App implements UiHost {
       invertPitch: profile.settings.invertPitch,
     });
 
+    // One camera, two controllers. The post-processing chain binds to a
+    // specific camera object, so handing the renderer a different one on every
+    // view change would rebuild the whole graph — and a rebuilt chain rendered
+    // black, which is how this arrangement was arrived at.
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-    this.chase = new ChaseCamera(aspect, {
+    this.camera = new PerspectiveCamera(profile.settings.fieldOfView, aspect, 0.35, 12000);
+    this.chase = new ChaseCamera(this.camera, {
       baseFov: profile.settings.fieldOfView,
       shakeScale: profile.settings.cameraShake,
       reducedMotion: profile.settings.reducedMotion,
     });
-    this.cinematic = new CinematicCamera(aspect);
+    this.cinematic = new CinematicCamera(this.camera);
 
     const touch = matchMedia('(hover: none) and (pointer: coarse)').matches;
     this.ui = createUi({
@@ -140,6 +155,7 @@ export class App implements UiHost {
 
     this.input.attach();
 
+
     // A quiet circuit turning behind the menus, so the title screen is not a
     // still image over a black canvas.
     await this.loadMenuBackdrop();
@@ -162,7 +178,7 @@ export class App implements UiHost {
       [],
       false,
     );
-    this.world.setCamera(this.cinematic.camera);
+    this.world.setCamera(this.camera);
     this.cinematic.frameTrack(this.menuTrack);
   }
 
@@ -170,8 +186,8 @@ export class App implements UiHost {
     const w = window.innerWidth;
     const h = Math.max(1, window.innerHeight);
     this.renderer.setSize(w, h);
-    this.chase.setAspect(w / h);
-    this.cinematic.setAspect(w / h);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
   }
 
   // --- Frame -------------------------------------------------------------
@@ -195,12 +211,11 @@ export class App implements UiHost {
     // rather than a sine that is always half-on.
     const beatPulse = Math.max(0, 1 - beatPhase * 3.2);
 
+    const camera = this.camera;
     const racing = this.race !== null && this.screen === 'race';
-    let camera = this.cinematic.camera;
 
     if (racing && this.race) {
       this.stepRace(dt);
-      camera = this.chase.camera;
     } else {
       this.cinematic.update(dt);
     }
@@ -241,6 +256,14 @@ export class App implements UiHost {
     debug.fps = Math.round(this.governor.fps);
     debug.screen = this.screen;
     debug.backend = this.renderer.backend;
+    debug.sceneChildren = this.renderer.scene.children.length;
+    debug.hasBackground = this.renderer.scene.background !== null;
+    debug.fade = this.renderer.post.fade.value;
+    debug.camPos = `${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}`;
+    debug.camFar = camera.far;
+    debug.pixelRatio = this.renderer.currentPixelRatio;
+    debug.canvas = `${this.renderer.renderer.domElement.width}x${this.renderer.renderer.domElement.height}`;
+    debug.groupChildren = this.world ? this.world.group.children.length : -1;
     if (this.race) {
       debug.phase = this.race.phase;
       debug.speed = Math.round(this.race.player.vehicle.speed);
@@ -418,7 +441,7 @@ export class App implements UiHost {
       race.racers,
       Boolean(config.useGhost && record?.ghost?.length),
     );
-    this.world.setCamera(this.chase.camera);
+    this.world.setCamera(this.camera);
 
     this.ui.setLoading(0.95, 'Spooling engines');
     await nextFrame();

@@ -28,10 +28,21 @@ interface ShakeSource {
   duration: number;
 }
 
-const VIEW_PRESETS: Record<CameraMode, { distance: number; height: number; lookAhead: number; fovBias: number }> = {
-  chase: { distance: 15.5, height: 5.4, lookAhead: 34, fovBias: 0 },
-  close: { distance: 9.5, height: 3.6, lookAhead: 30, fovBias: 3 },
-  cockpit: { distance: -0.6, height: 1.5, lookAhead: 42, fovBias: 6 },
+/**
+ * `aimHeight` is deliberately close to the camera's own height.
+ *
+ * Sitting high and aiming low points the camera down, which pushes the craft
+ * toward the bottom edge of the frame and eventually off it. Keeping the aim
+ * point nearly level holds the craft around the lower third — high enough to
+ * see, low enough that the corner ahead owns the rest of the screen.
+ */
+const VIEW_PRESETS: Record<
+  CameraMode,
+  { distance: number; height: number; lookAhead: number; aimHeight: number; fovBias: number; follow: number }
+> = {
+  chase: { distance: 16, height: 4.9, lookAhead: 38, aimHeight: 4.2, fovBias: 0, follow: 0.82 },
+  close: { distance: 10.5, height: 3.6, lookAhead: 32, aimHeight: 3.2, fovBias: 3, follow: 0.88 },
+  cockpit: { distance: -0.6, height: 1.6, lookAhead: 46, aimHeight: 1.9, fovBias: 6, follow: 1 },
 };
 
 export interface CameraOptions {
@@ -44,6 +55,7 @@ export interface CameraOptions {
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
   mode: CameraMode = 'chase';
+  /** Base field of view this controller targets, before any speed kick. */
 
   private options: CameraOptions;
   private readonly frame: PathFrame = createFrame();
@@ -64,10 +76,18 @@ export class ChaseCamera {
   /** Extra pull-back that ramps in with boost, for the sense of acceleration. */
   private boostPull = 0;
 
-  constructor(aspect: number, options: CameraOptions) {
+  /**
+   * Drives an existing camera rather than owning one.
+   *
+   * The application keeps a single camera and hands it to whichever controller
+   * is active. Swapping in a different camera object instead would force the
+   * post-processing chain — which is bound to a specific camera — to be torn
+   * down and rebuilt on every view change.
+   */
+  constructor(camera: PerspectiveCamera, options: CameraOptions) {
     this.options = options;
     this.fov = options.baseFov;
-    this.camera = new PerspectiveCamera(options.baseFov, aspect, 0.35, 12000);
+    this.camera = camera;
     this.camera.up.set(0, 1, 0);
   }
 
@@ -115,10 +135,11 @@ export class ChaseCamera {
 
     // The ideal point, in track space.
     const targetS = vehicle.s - behind;
-    // Follow the craft across the track, but only partly: tracking lateral
-    // movement one-for-one makes the camera feel welded on and kills the sense
-    // of the craft moving within the frame.
-    const targetLateral = vehicle.lateral * 0.62;
+    // Follow the craft across the track, but not one-for-one: a camera welded
+    // to the craft's lateral position kills the sense of it moving within the
+    // frame. Too loose, though, and a craft running wide slides off the edge
+    // of the screen entirely.
+    const targetLateral = vehicle.lateral * preset.follow;
     const targetHeight = Math.max(vehicle.height + height, height * 0.6);
 
     if (!this.initialised) {
@@ -144,7 +165,7 @@ export class ChaseCamera {
     // Aim ahead of the craft rather than at it, so corners open up early.
     const aheadDistance = preset.lookAhead * (0.75 + speedFraction * 0.5);
     const aimS = vehicle.s + lerp(aheadDistance, -aheadDistance * 0.6, this.lookBackBlend);
-    path.toWorld(aimS, vehicle.lateral * 0.4, vehicle.height + 1.4, this.lookTarget);
+    path.toWorld(aimS, vehicle.lateral * preset.follow * 0.8, vehicle.height + preset.aimHeight, this.lookTarget);
 
     this.applyShake(dt);
 
@@ -208,9 +229,11 @@ export class CinematicCamera {
   private readonly centre = new Vector3();
   private radius = 220;
   private elevation = 60;
+  private readonly fov: number;
 
-  constructor(aspect: number, fov = 55) {
-    this.camera = new PerspectiveCamera(fov, aspect, 0.35, 12000);
+  constructor(camera: PerspectiveCamera, fov = 58) {
+    this.camera = camera;
+    this.fov = fov;
   }
 
   setAspect(aspect: number): void {
@@ -234,6 +257,13 @@ export class CinematicCamera {
 
   update(dt: number, speed = 0.04): void {
     this.angle += dt * speed;
+    // The camera is shared with the chase controller, which leaves its own
+    // speed-kicked field of view behind; ease back to the menu framing.
+    const fov = damp(this.camera.fov, this.fov, 0.02, dt);
+    if (Math.abs(fov - this.camera.fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.camera.position.set(
       this.centre.x + Math.cos(this.angle) * this.radius,
       this.centre.y + this.elevation,
