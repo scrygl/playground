@@ -7,11 +7,12 @@
  * shown as a real placing ("Won" / "3rd of 8") rather than a badge.
  */
 
-import { CHAMPIONSHIPS, TRACKS_BY_ID } from '../../track/library';
+import { CHAMPIONSHIPS, TRACKS_BY_ID, type ChampionshipDefinition } from '../../track/library';
 import type { Screen, UiContext } from '../context';
 import { ordinal } from '../format';
 import { icon } from '../icons';
-import { el, hintBar, screenFrame, trackPreview } from '../widgets';
+import { getShipSafe } from './ship-utils';
+import { button, el, hintBar, screenFrame, trackPreview } from '../widgets';
 
 export function createChampionshipScreen(ctx: UiContext): Screen {
   const frame = screenFrame({ title: 'Championship', kicker: 'Race · Series' });
@@ -21,17 +22,72 @@ export function createChampionshipScreen(ctx: UiContext): Screen {
   const grid = el('div', 'vh-tracks vh-stagger');
   frame.body.appendChild(grid);
 
+  // Same loadout strip as circuit select: the cup card starts the series, and
+  // changing craft is an explicit side-trip. Sending the card itself to the
+  // garage instead would strand the player — the garage returns here, and here
+  // would send them straight back.
+  const loadout = el('div', 'vh-loadout');
+  const craftChip = el('div', 'vh-loadout__craft');
+  craftChip.appendChild(icon('craft', 18));
+  const craftText = el('div');
+  const craftName = el('div', 'vh-loadout__name', '—');
+  const craftSub = el('div', 'vh-loadout__sub', '');
+  craftText.appendChild(craftName);
+  craftText.appendChild(craftSub);
+  craftChip.appendChild(craftText);
+  loadout.appendChild(craftChip);
+  loadout.appendChild(
+    button({
+      label: 'Change craft',
+      kind: 'quiet',
+      iconName: 'chevronRight',
+      onClick: () => {
+        ctx.state.returnTo = 'championship';
+        ctx.sound('uiSelect');
+        ctx.go('garage');
+      },
+    }),
+  );
+  frame.aside.appendChild(loadout);
+
   frame.footer.appendChild(
     hintBar([
       { keys: ['←', '→'], label: 'Browse cups' },
-      { keys: ['Enter'], label: 'Enter series' },
+      { keys: ['Enter'], label: 'Start series' },
       { keys: ['Esc'], label: 'Back' },
     ]),
   );
 
+  /** Puts the player on the grid for round one. Later rounds come from standings. */
+  const startSeries = (cup: ChampionshipDefinition): void => {
+    const summary = ctx.host.getTrackSummary(cup.tracks[0]);
+    const profile = ctx.host.getProfile();
+    ctx.state.mode = 'championship';
+    ctx.state.championshipId = cup.id;
+    ctx.state.round = 0;
+    ctx.state.trackId = summary.id;
+    ctx.sound('uiSelect');
+    ctx.host.startRace({
+      mode: 'championship',
+      trackId: summary.id,
+      shipId: ctx.state.shipId,
+      rivals: 7,
+      laps: summary.laps,
+      difficulty: profile.settings.aiDifficulty,
+      seed: `${summary.id}-championship`,
+      useGhost: profile.settings.showGhost,
+      championshipId: cup.id,
+      round: 0,
+    });
+  };
+
   const build = (): void => {
     grid.replaceChildren();
     const profile = ctx.host.getProfile();
+
+    const ship = getShipSafe(ctx.state.shipId);
+    craftName.textContent = ship.name;
+    craftSub.textContent = ship.manufacturer;
 
     CHAMPIONSHIPS.forEach((cup, index) => {
       const first = ctx.host.getTrackSummary(cup.tracks[0]);
@@ -95,15 +151,7 @@ export function createChampionshipScreen(ctx: UiContext): Screen {
         lock.appendChild(el('span', '', `Finish ${TRACKS_BY_ID.get(cup.tracks[0])?.name ?? 'the opening circuit'} to open this cup.`));
         card.appendChild(lock);
       } else {
-        card.addEventListener('click', () => {
-          ctx.state.mode = 'championship';
-          ctx.state.championshipId = cup.id;
-          ctx.state.round = 0;
-          ctx.state.trackId = cup.tracks[0];
-          ctx.sound('uiSelect');
-          ctx.state.returnTo = 'championship';
-          ctx.go('garage');
-        });
+        card.addEventListener('click', () => startSeries(cup));
       }
 
       grid.appendChild(card);

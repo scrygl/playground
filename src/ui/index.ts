@@ -92,7 +92,8 @@ export class PulsarCircuitUi implements GameUi {
   private fatalLayer: HTMLElement | null = null;
 
   private currentScreen: ScreenName = 'boot';
-  private leaveTimer = 0;
+  /** Pending unmount per screen root — never one shared handle. See scheduleUnmount. */
+  private readonly leaveTimers = new Map<HTMLElement, number>();
   private disposed = false;
 
   private loading!: LoadingScreen;
@@ -193,7 +194,8 @@ export class PulsarCircuitUi implements GameUi {
 
   dispose(): void {
     this.disposed = true;
-    window.clearTimeout(this.leaveTimer);
+    for (const timer of this.leaveTimers.values()) window.clearTimeout(timer);
+    this.leaveTimers.clear();
     this.nav?.detach();
     for (const screen of this.screens.values()) screen.dispose?.();
     this.screens.clear();
@@ -242,17 +244,17 @@ export class PulsarCircuitUi implements GameUi {
       return;
     }
 
+    // The screen coming in is staying, so cancel any unmount still pending
+    // against it — going A → B → A inside the transition window otherwise
+    // tears down the screen the player is now looking at.
+    this.cancelUnmount(next.root);
+
     const previous = this.screens.get(this.currentScreen);
     if (previous) {
       previous.leave?.();
       previous.root.classList.remove('is-active');
       previous.root.classList.add('is-leaving');
-      const leaving = previous.root;
-      window.clearTimeout(this.leaveTimer);
-      this.leaveTimer = window.setTimeout(
-        () => leaving.classList.remove('is-mounted', 'is-leaving'),
-        this.opts.reducedMotion ? 0 : TRANSITION_MS,
-      );
+      this.scheduleUnmount(previous.root);
     }
 
     this.currentScreen = screen;
@@ -273,6 +275,43 @@ export class PulsarCircuitUi implements GameUi {
     this.nav.setScope(next.root, navigable);
     if (navigable) this.nav.focusFirst();
     else (document.activeElement as HTMLElement | null)?.blur?.();
+
+    // Invariant: only the incoming screen and the one animating out may be
+    // mounted. A stranded screen is invisible but not harmless — every screen
+    // is absolutely positioned, full-bleed, and takes pointer events, so one
+    // left behind silently swallows every click aimed at the screens below it.
+    for (const other of this.screens.values()) {
+      if (other === next || other === previous) continue;
+      if (other.root.classList.contains('is-mounted')) this.unmount(other.root);
+    }
+  }
+
+  /**
+   * Unmount is deferred so the leaving screen can animate, and the handle is
+   * kept **per screen**. A single shared handle meant a second navigation
+   * inside the 260 ms window cancelled the first screen's unmount instead of
+   * its own — and `loading` and `results` sit above every menu in the stack,
+   * so one stranded there left the menus visible but completely unclickable.
+   */
+  private scheduleUnmount(root: HTMLElement): void {
+    this.cancelUnmount(root);
+    const timer = window.setTimeout(
+      () => this.unmount(root),
+      this.opts.reducedMotion ? 0 : TRANSITION_MS,
+    );
+    this.leaveTimers.set(root, timer);
+  }
+
+  private cancelUnmount(root: HTMLElement): void {
+    const pending = this.leaveTimers.get(root);
+    if (pending === undefined) return;
+    window.clearTimeout(pending);
+    this.leaveTimers.delete(root);
+  }
+
+  private unmount(root: HTMLElement): void {
+    this.cancelUnmount(root);
+    root.classList.remove('is-mounted', 'is-leaving');
   }
 
   private goBack(to?: ScreenName): void {

@@ -337,8 +337,16 @@ export function getTrack(id: string): TrackDefinition {
   return t;
 }
 
+export interface ChampionshipDefinition {
+  id: string;
+  name: string;
+  tagline: string;
+  /** Circuits in running order; the length is the number of rounds. */
+  tracks: string[];
+}
+
 /** Championship running order — difficulty ramps, environments alternate. */
-export const CHAMPIONSHIPS: { id: string; name: string; tagline: string; tracks: string[] }[] = [
+export const CHAMPIONSHIPS: ChampionshipDefinition[] = [
   {
     id: 'vector',
     name: 'Vector Cup',
