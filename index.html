@@ -77,13 +77,13 @@
 
   /* ---------- overlays ---------- */
   .veil{
-    position:absolute; inset:0; display:flex; align-items:center;
-    justify-content:flex-start; padding:24px clamp(20px,6vw,86px);
+    position:absolute; inset:0; display:flex; justify-content:flex-start;
+    padding:24px clamp(20px,6vw,86px); overflow-y:auto; overscroll-behavior:contain;
     background:linear-gradient(96deg, rgba(1,10,14,.93) 0%, rgba(1,10,14,.86) 46%, rgba(1,12,16,.55) 100%);
     transition:opacity .4s ease, visibility .4s;
   }
   .veil.hide{ opacity:0; visibility:hidden; pointer-events:none; }
-  .panel{ width:min(624px,100%); text-align:left; }
+  .panel{ width:min(624px,100%); text-align:left; margin:auto 0; }
 
   .logo{
     font-family:var(--disp); font-weight:900; font-size:clamp(58px,13vw,132px);
@@ -122,6 +122,57 @@
   .stat b{ display:block; font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:27px; font-weight:500; color:var(--bone); }
   .stat i{ font-style:normal; font-family:var(--mono); font-size:11px; color:var(--mute); }
   .hint{ margin-top:22px; font-family:var(--mono); font-size:12px; color:var(--mute); }
+  .best{ margin-top:16px; font-family:var(--mono); font-size:13px; color:var(--gold); }
+  .row{ margin-top:20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+  .row .go{ margin-top:0; }
+
+  .ghost{
+    pointer-events:auto; cursor:pointer; font:inherit; font-size:14px; font-weight:600;
+    color:#a9cdd0; background:transparent; border:1px solid rgba(42,208,200,.3);
+    border-radius:8px; padding:13px 18px; transition:border-color .15s, color .15s;
+  }
+  .ghost:hover{ border-color:var(--mint); color:var(--bone); }
+  .ghost:focus-visible{ outline:2px solid var(--bone); outline-offset:3px; }
+  .panel .ghost{ margin-top:20px; }
+  .row .ghost{ margin-top:0; }
+
+  /* ---------- course menu ---------- */
+  .panel.wide{ width:min(1000px,100%); }
+  .menu-head{ display:flex; align-items:baseline; justify-content:space-between; gap:20px; }
+  .menu-title{ font-size:clamp(28px,5vw,44px); font-weight:800; letter-spacing:-.035em; }
+  .menu-head .ghost{ margin-top:0; padding:9px 15px; font-size:13px; }
+
+  .cards{ margin-top:22px; display:grid; gap:12px; }
+  .card{
+    position:relative; display:flex; align-items:center; gap:18px; width:100%;
+    text-align:left; font:inherit; color:inherit; pointer-events:auto;
+    background:rgba(8,38,48,.5); border:1px solid rgba(42,208,200,.18);
+    border-radius:12px; padding:14px 18px; cursor:pointer;
+    transition:background .15s, border-color .15s, transform .12s;
+  }
+  .card:hover{ background:rgba(12,52,64,.72); border-color:rgba(42,208,200,.5); transform:translateX(3px); }
+  .card:focus-visible{ outline:2px solid var(--bone); outline-offset:2px; }
+  .card.locked{ opacity:.4; cursor:default; }
+  .card-thumb{ flex:none; width:172px; height:72px; display:grid; place-items:center;
+               background:rgba(1,10,14,.55); border-radius:7px; overflow:hidden; }
+  .card-body{ min-width:0; flex:1; }
+  .card-top{ display:flex; align-items:baseline; gap:10px; }
+  .card-n{ font-family:var(--mono); font-size:12px; color:var(--mint-dim); }
+  .card-name{ font-size:19px; font-weight:700; letter-spacing:-.02em; }
+  .card-brief{ margin-top:4px; font-size:13.5px; color:#8fb3b8; }
+  .card-foot{ margin-top:9px; display:flex; flex-wrap:wrap; gap:16px;
+              font-family:var(--mono); font-size:11.5px; color:var(--mute); font-variant-numeric:tabular-nums; }
+  .card-foot b{ color:#cfe6e6; font-weight:500; }
+  .medal{ flex:none; align-self:flex-start; font-family:var(--mono); font-size:11.5px; }
+
+  @media (max-width:620px){
+    .card{ gap:12px; padding:12px; }
+    .card-thumb{ width:104px; height:52px; }
+    .card-brief{ display:none; }
+    .card-name{ font-size:16px; }
+    .card-foot{ gap:5px 13px; font-size:11px; }
+    .medal{ font-size:10.5px; }
+  }
 
   /* ---------- touch ---------- */
   .pads{ position:absolute; inset:0; display:none; pointer-events:none; }
@@ -193,7 +244,7 @@
   <div class="veil" id="titleVeil">
     <div class="panel">
       <h1 class="logo">Heatline</h1>
-      <p class="tagline">A momentum run. The rail glows <em>hotter the faster you move</em> — and a loop only holds you if you carry enough speed into it. Lose the line, take to the air.</p>
+      <p class="tagline">Five courses of momentum. The rail glows <em>hotter the faster you move</em>, and a loop only holds you if you carry enough speed into it. Beat the target time for gold; clear a course to open the next.</p>
       <div class="keys" id="keyList">
         <div class="key"><span class="cap">← →</span> roll · brake</div>
         <div class="key"><span class="cap">space</span> jump · hold to fly</div>
@@ -202,7 +253,18 @@
         <div class="key"><span class="cap">R</span> restart</div>
         <div class="key"><span class="cap">P</span> pause · <span class="cap">M</span> mute</div>
       </div>
-      <button class="go" id="startBtn">Drop in <span>space</span></button>
+      <button class="go" id="startBtn">Choose a course <span>space</span></button>
+    </div>
+  </div>
+
+  <div class="veil hide" id="menuVeil">
+    <div class="panel wide">
+      <div class="menu-head">
+        <h2 class="menu-title">Courses</h2>
+        <button class="ghost" id="backBtn">Back</button>
+      </div>
+      <div class="cards" id="menuList"></div>
+      <p class="hint">pick with the mouse or keys 1–5 · beat the target time for gold</p>
     </div>
   </div>
 
@@ -210,6 +272,7 @@
     <div class="panel">
       <div class="result"><small>held</small>Paused</div>
       <p class="hint" id="pauseHint">press p to resume · r to restart the run</p>
+      <button class="ghost" id="pauseMenuBtn">Back to courses</button>
     </div>
   </div>
 
@@ -222,7 +285,13 @@
         <div class="stat"><b id="wTop">0</b><i>top speed</i></div>
         <div class="stat"><b id="wScore">0</b><i>score</i></div>
       </div>
-      <button class="go" id="againBtn">Run it again <span>r</span></button>
+      <p class="best" id="winBest"></p>
+      <div class="row">
+        <button class="go" id="nextBtn">Next course <span>space</span></button>
+        <button class="ghost" id="againBtn">Run it again</button>
+        <button class="ghost" id="menuBtn">All courses</button>
+      </div>
+      <p class="hint" id="allDone" style="display:none">Every course cleared. Now go back and take the gold.</p>
     </div>
   </div>
 </div>
@@ -323,6 +392,12 @@ class ChainBuilder {
   hill(R, d) { return this.arc(R, -d).arc(R, 2 * d).arc(R, -d); }
   dip (R, d) { return this.arc(R,  d).arc(R,-2 * d).arc(R,  d); }
   loop(R)    { return this.arc(R, -360); }
+  /* phrase vocabulary the courses are written in */
+  descent(R, d, l) { return this.arc(R,  d).line(l).arc(R, -d); }
+  climb  (R, d, l) { return this.arc(R, -d).line(l).arc(R,  d); }
+  wash(n, R, d)    { for (let i = 0; i < n; i++) this.hill(R, d).dip(R, d); return this; }
+  bowlIn (R, d)    { return this.arc(R,  d).arc(R, -d); }   // down to the floor
+  bowlOut(R, d)    { return this.arc(R, -d).arc(R,  d); }   // and back out
 
   finish() {
     const P = this.pts, n = P.length;
@@ -376,89 +451,239 @@ function sample(ch, s) {
   return SM;
 }
 
-/* ═══════════════ the course ═══════════════ */
-function buildCourse() {
+/* ═══════════════ courses ═══════════════
+
+   Five courses, each authored with the ChainBuilder phrase vocabulary below.
+   A course is just chains + plates + kickers; everything else — ring layout,
+   ballistic ring arcs over gaps, the goal, checkpoint floor and the framing
+   used on the menu — is derived from the geometry in finalizeCourse.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function courseCtx() {
   const chains = [], pads = [], springs = [], marks = [];
-  const pad    = (ci, c) => pads.push({ c: ci, s: c.L });
-  const spring = (ci, c) => springs.push({ c: ci, s: c.L });
-  const mark   = (ci, c, kind) => marks.push({ c: ci, s: c.L, kind });
+  let cur = null, ci = -1;
+  return {
+    chains, pads, springs, marks,
+    start(x, y, a) { if (cur) chains.push(cur.finish()); cur = new ChainBuilder(x, y, a || 0); ci++; return cur; },
+    end()   { return cur.end(); },
+    pad()   { pads.push({ c: ci, s: cur.L }); },
+    spring(){ springs.push({ c: ci, s: cur.L }); marks.push({ c: ci, s: cur.L, kind: 'spring' }); },
+    mark(k) { marks.push({ c: ci, s: cur.L, kind: k }); },
+    done()  { if (cur) chains.push(cur.finish()); cur = null; },
+  };
+}
 
-  /* ── act one: learn the line ── */
-  let c = new ChainBuilder(0, 0, 0);
-  c.line(620);
-  c.hill(900, 10);
-  c.arc(820, 24).line(430).arc(820, -24);            // first real descent
-  c.line(620); pad(0, c); c.line(430);
-  mark(0, c, 'loop'); c.loop(200);                   // loop 1
-  c.line(230);
-  c.hill(540, 22).dip(540, 24);
-  c.arc(700, 30).line(540).arc(700, -30);            // descent 2
-  c.line(150).dip(620, 16).hill(620, 16);
-  c.arc(430, -34).line(170);                         // launch ramp → gap 1
-  chains.push(c.finish());
-  let e = c.end();
+/* ── 1 · First Light ─────────────────────────────────────────────
+   No gaps, no air. Roll, feel the hills, take two loops. */
+function c1(X) {
+  const c = X.start(0, 0, 0);
+  c.line(700).hill(1000, 9);
+  c.descent(900, 22, 380);
+  c.line(520); X.pad(); c.line(360);
+  X.mark('loop'); c.loop(190);
+  c.line(300).hill(700, 14).dip(700, 16);
+  c.descent(760, 26, 420);
+  c.line(420); X.pad(); c.line(340);
+  X.mark('loop'); c.loop(215);
+  c.line(480).dip(700, 18).hill(700, 18);
+  c.line(900);
+  X.done();
+}
 
-  /* ── act two: the gauntlet ──
-     The runway is long on purpose: at full tilt the ramp above throws the
-     ball ~1700px, so nothing punishing may sit inside that window. */
-  c = new ChainBuilder(e.x + 300, e.y + 120, 11 * RAD);
-  c.line(900).hill(1500, 7).line(760).arc(900, -11).line(320);
-  pad(1, c); c.line(170);
-  mark(1, c, 'loop'); c.loop(178);
-  c.line(160);
-  mark(1, c, 'loop'); c.loop(178);                   // back-to-back loops
+/* ── 2 · Kicker Bowl ─────────────────────────────────────────────
+   The kicker plate at the floor of a bowl, a washboard, one gap. */
+function c2(X) {
+  let c = X.start(0, 0, 0);
+  c.line(600).hill(900, 10);
+  c.descent(820, 24, 430);
+  c.line(560); X.pad(); c.line(380);
+  X.mark('loop'); c.loop(200);
+  c.line(280);
+  c.bowlIn(340, 46); X.spring(); c.bowlOut(340, 46);
+  c.line(180).hill(500, 22);
+  c.line(160).wash(4, 260, 20);
+  c.line(320); X.pad(); c.line(300);
+  X.mark('loop'); c.loop(230);
+  c.line(340);
+  c.arc(450, -32).line(180);                       // ramp
+  const e = X.end();
+  c = X.start(e.x + 300, e.y + 140, 12 * RAD);
+  c.line(1400).arc(900, -12).line(500);
+  c.dip(700, 18).hill(700, 18);
+  c.line(300); X.pad(); c.line(820);
+  X.done();
+}
+
+/* ── 3 · The Chasm ───────────────────────────────────────────────
+   Two spans no ramp can throw you across. Fly or fall. */
+function c3(X) {
+  let c = X.start(0, 0, 0);
+  c.line(700);
+  c.descent(800, 26, 460);
+  c.line(560); X.pad(); c.line(380);
+  X.mark('loop'); c.loop(205);
+  c.line(300).wash(3, 280, 22);
   c.line(300);
-  c.arc(340, 48).arc(340, -48);                      // down into the bowl
-  spring(1, c); mark(1, c, 'spring');                // …and the kicker at its floor
-  c.arc(340, -48).arc(340, 48);                      // up and out
-  c.line(150).hill(460, 24);
-  c.line(200).arc(760, -22).line(760).arc(760, 22);  // the climb — bring speed
-  c.line(160);
-  for (let i = 0; i < 5; i++) { c.hill(250, 20); c.dip(250, 20); }   // washboard
-  c.line(260); pad(1, c); c.line(230);
-  mark(1, c, 'loop'); c.loop(255);                   // the big one
-  c.line(420);
-  c.arc(540, -38).line(240);                         // launch ramp → gap 2
-  chains.push(c.finish());
-  e = c.end();
+  c.arc(600, -26).line(200); X.mark('fly');
+  let e = X.end();
+  c = X.start(e.x + 1420, e.y + 205, 12 * RAD);
+  c.line(800).arc(900, -12).line(420);
+  c.dip(760, 20).hill(760, 20);
+  c.line(400); X.pad(); c.line(320);
+  X.mark('loop'); c.loop(240);
+  c.line(400);
+  c.arc(560, -28).line(180); X.mark('fly');
+  e = X.end();
+  c = X.start(e.x + 1330, e.y + 215, 14 * RAD);
+  c.line(900).arc(900, -14);
+  c.descent(850, 24, 520);
+  c.line(340); X.pad(); c.line(320);
+  X.mark('loop'); c.loop(225);
+  c.line(280).wash(3, 270, 22);
+  c.line(280);
+  c.arc(580, -27).line(190); X.mark('fly');
+  e = X.end();
+  c = X.start(e.x + 1380, e.y + 215, 13 * RAD);
+  c.line(950).arc(900, -13).line(460);
+  c.hill(700, 16).dip(700, 16);
+  c.line(300); X.pad(); c.line(850);
+  X.done();
+}
 
-  /* ── act three: the high line ── */
-  c = new ChainBuilder(e.x + 340, e.y + 200, 15 * RAD);
+/* ── 4 · Gauntlet ────────────────────────────────────────────────
+   Back-to-back loops, the bowl, a climb that only momentum clears. */
+function c4(X) {
+  let c = X.start(0, 0, 0);
+  c.line(620).hill(900, 10);
+  c.descent(820, 24, 430);
+  c.line(620); X.pad(); c.line(430);
+  X.mark('loop'); c.loop(200);
+  c.line(250).hill(540, 22).dip(540, 24);
+  c.descent(700, 30, 540);
+  c.line(150).dip(620, 16).hill(620, 16);
+  c.arc(430, -34).line(170);
+  let e = X.end();
+  c = X.start(e.x + 300, e.y + 120, 11 * RAD);
+  c.line(900).hill(1500, 7).line(760).arc(900, -11).line(320);
+  X.pad(); c.line(170);
+  X.mark('loop'); c.loop(178);
+  c.line(160);
+  X.mark('loop'); c.loop(178);
+  c.line(300);
+  c.bowlIn(340, 48); X.spring(); c.bowlOut(340, 48);
+  c.line(150).hill(460, 24);
+  c.line(200).climb(760, 22, 760);
+  c.line(160).wash(5, 250, 20);
+  c.line(260); X.pad(); c.line(230);
+  X.mark('loop'); c.loop(255);
+  c.line(420);
+  c.arc(540, -38).line(240);
+  e = X.end();
+  c = X.start(e.x + 340, e.y + 200, 15 * RAD);
   c.line(1500).arc(900, -15).line(600);
   c.hill(700, 15).dip(700, 15);
-  c.arc(950, 20).line(560).arc(950, -20);
-  c.line(300); pad(2, c); c.line(240);
-  mark(2, c, 'loop'); c.loop(212);
+  c.descent(950, 20, 560);
+  c.line(300); X.pad(); c.line(820);
+  X.done();
+}
+
+/* ── 5 · Overdrive ───────────────────────────────────────────────
+   Every phrase in the vocabulary, back to back, at pace. */
+function c5(X) {
+  let c = X.start(0, 0, 0);
+  c.line(520);
+  c.descent(760, 28, 520);
+  c.line(560); X.pad(); c.line(340);
+  X.mark('loop'); c.loop(185);
+  c.line(150);
+  X.mark('loop'); c.loop(185);
+  c.line(260).wash(4, 240, 24);
+  c.line(280); X.pad(); c.line(230);
+  X.mark('loop'); c.loop(300);
   c.line(320);
-  for (let i = 0; i < 4; i++) { c.hill(300, 24); c.dip(300, 24); }   // washboard II
-  c.line(300);
-  c.arc(620, -26).line(200);                         // ramp into the chasm
-  mark(2, c, 'fly');
-  chains.push(c.finish());
-  e = c.end();
+  c.arc(500, -34).line(200);
+  let e = X.end();
+  c = X.start(e.x + 320, e.y + 170, 14 * RAD);
+  c.line(1250).arc(900, -14).line(420);
+  c.bowlIn(330, 48); X.spring(); c.bowlOut(330, 48);
+  c.line(160).hill(480, 24);
+  c.line(200).climb(720, 22, 820);
+  c.line(220); X.pad(); c.line(280);
+  X.mark('loop'); c.loop(210);
+  c.line(260).wash(5, 230, 22);
+  c.line(260);
+  c.arc(560, -28).line(200); X.mark('fly');
+  e = X.end();
+  c = X.start(e.x + 1440, e.y + 215, 10 * RAD);   // the last span: long, but it drops to meet you
+  c.line(900).arc(900, -10).line(520);
+  c.descent(820, 26, 620);
+  c.line(320); X.pad(); c.line(280);
+  X.mark('loop'); c.loop(268);
+  c.line(400).wash(4, 260, 24);
+  c.line(280); X.pad(); c.line(250);
+  X.mark('loop'); c.loop(230);
+  c.line(380);
+  c.arc(520, -36).line(220);
+  e = X.end();
+  c = X.start(e.x + 360, e.y + 230, 16 * RAD);
+  c.line(1300).arc(900, -16).line(420);
+  c.bowlIn(330, 46); X.spring(); c.bowlOut(330, 46);
+  c.line(200).hill(520, 22);
+  c.line(220).descent(900, 22, 560);
+  c.line(280); X.pad(); c.line(880);
+  X.done();
+}
 
-  /* ── act four: the chasm and the run home ──
-     1500px of nothing. No ramp launches that far — the only way across
-     is to hold the burner-wings up, which is the point. */
-  c = new ChainBuilder(e.x + 1500, e.y + 60, 12 * RAD);
-  c.line(700).arc(900, -12);
-  c.line(420).dip(760, 20).hill(760, 20);
-  c.arc(820, 26).line(660).arc(820, -26);            // last descent
-  c.line(280); pad(3, c); c.line(900);
-  chains.push(c.finish());
+/* Skies. The sun is the light source the whole palette is borrowed from,
+   so moving and recolouring it is what actually changes each course's mood. */
+const LEVELS = [
+  { id: 'first-light', name: 'First Light', build: c1, target: 7,
+    brief: 'Roll, read the hills, hold two loops.',
+    sky: { stops: [[0,'#01080c'],[0.36,'#03181f'],[0.62,'#07303a'],[0.80,'#123f3f'],[1,'#06171c']],
+           sun: { r:0.30, y:-42, a:'#ffe6b0', b:'#ffab48', c:'#ff4f26', g:'255,168,74', g2:'255,110,50' },
+           rA:'#04161d', rB:'#021015', edge:'rgba(90,190,185,0.16)', haze:'255,140,64', amp:[92,148] } },
 
-  /* pad world positions, for catching a ball that sails over the plate */
+  { id: 'kicker-bowl', name: 'Kicker Bowl', build: c2, target: 9,
+    brief: 'A kicker at the floor of a bowl, and the first real gap.',
+    sky: { stops: [[0,'#020a14'],[0.36,'#04182b'],[0.62,'#07293f'],[0.82,'#0d3a4d'],[1,'#04141d']],
+           sun: { r:0.17, y:-232, a:'#eaf6ff', b:'#9fd0e8', c:'#4f8fb0', g:'150,205,235', g2:'90,150,200' },
+           rA:'#041826', rB:'#020d16', edge:'rgba(120,190,220,0.16)', haze:'120,180,220', amp:[118,170] } },
+
+  { id: 'the-chasm', name: 'The Chasm', build: c3, target: 16,
+    brief: 'Two spans no ramp will clear. Hold the wings up.',
+    sky: { stops: [[0,'#0d0407'],[0.34,'#1c0810'],[0.60,'#33101a'],[0.82,'#4a1a18'],[1,'#1a0a0c']],
+           sun: { r:0.40, y:14, a:'#ffd9a0', b:'#ff7a3a', c:'#c02414', g:'255,120,60', g2:'220,70,30' },
+           rA:'#180a12', rB:'#0d050a', edge:'rgba(255,150,100,0.14)', haze:'255,90,50', amp:[74,132] } },
+
+  { id: 'gauntlet', name: 'Gauntlet', build: c4, target: 16,
+    brief: 'Loops back to back, then a climb only momentum takes.',
+    sky: { stops: [[0,'#01050a'],[0.36,'#020c14'],[0.62,'#04161f'],[0.82,'#071f26'],[1,'#020a0f']],
+           sun: { r:0.13, y:-286, a:'#f4fcff', b:'#d2e8f4', c:'#9ec3d6', g:'150,190,215', g2:'70,110,150' },
+           rA:'#03101a', rB:'#01080e', edge:'rgba(120,200,220,0.13)', haze:'90,150,190', amp:[136,196] } },
+
+  { id: 'overdrive', name: 'Overdrive', build: c5, target: 26,
+    brief: 'Everything at once, and the sun already gone.',
+    sky: { stops: [[0,'#000305'],[0.34,'#01080d'],[0.60,'#041018'],[0.86,'#2a1008'],[1,'#0a0508']],
+           sun: { r:0.55, y:268, a:'#ffcf7a', b:'#ff6a25', c:'#b31c05', g:'255,110,40', g2:'190,50,15' },
+           rA:'#0a0a11', rB:'#040409', edge:'rgba(255,150,90,0.13)', haze:'255,110,50', amp:[104,164] } },
+];
+
+/* Everything below is derived from the authored geometry — no course
+   repeats itself in the ring layout or the gap handling. */
+function finalizeCourse(spec) {
+  const X = courseCtx();
+  spec.build(X);
+  const { chains, pads, springs, marks } = X;
+
   pads.forEach(q => { const m = sample(chains[q.c], q.s); q.x = m.x; q.y = m.y; q.tx = m.tx; q.ty = m.ty; });
 
-  /* offsets for the progress read-out */
   let off = 0, total = 0;
   chains.forEach(ch => { ch.offset = off; off += ch.L; total += ch.L; });
 
   const last = chains[chains.length - 1];
   const g = sample(last, last.L - 210);
-  const goal = { x: g.x + g.nx * 62, y: g.y + g.ny * 62, nx: g.nx, ny: g.ny };
+  const goal = { x: g.x + g.nx * 62, y: g.y + g.ny * 62 };
 
-  /* ── collectables ── */
   const rings = [];
   const near = (ci, s, list, d) => list.some(o => o.c === ci && Math.abs(o.s - s) < d);
   chains.forEach((ch, ci) => {
@@ -470,41 +695,52 @@ function buildCourse() {
       rings.push({ x: m.x + m.nx * 42, y: m.y + m.ny * 42, got: false, ph: rnd() * TAU });
     }
   });
-  /* ballistic ring arcs over both gaps, and a plume above the spring */
-  const arcOfRings = (x, y, ang, spd, n, t0, t1) => {
-    for (let i = 0; i < n; i++) {
-      const t = lerp(t0, t1, i / (n - 1));
-      rings.push({ x: x + Math.cos(ang) * spd * t,
-                   y: y + Math.sin(ang) * spd * t + 0.5 * GRAV * t * t - 46,
-                   got: false, ph: rnd() * TAU });
+
+  /* Each gap gets the trail its own width earns: a ballistic arc where a
+     ramp can carry you, a level flight line where nothing can. */
+  for (let i = 0; i < chains.length - 1; i++) {
+    const a = sample(chains[i], chains[i].L - 6);
+    const ax = a.x, ay = a.y, ang = Math.atan2(a.ty, a.tx);
+    const b = sample(chains[i + 1], 120);
+    const span = Math.hypot(b.x - ax, b.y - ay);
+    if (span > 1250) {
+      for (let k = 1; k < 13; k++) {
+        const t = k / 13;
+        rings.push({ x: lerp(ax, b.x, t), y: lerp(ay, b.y, t) - 210 - Math.sin(t * Math.PI) * 90,
+                     got: false, ph: rnd() * TAU });
+      }
+    } else {
+      const spd = 1580;
+      for (let k = 0; k < 11; k++) {
+        const t = lerp(0.05, 0.62, k / 10);
+        rings.push({ x: ax + Math.cos(ang) * spd * t,
+                     y: ay + Math.sin(ang) * spd * t + 0.5 * GRAV * t * t - 46,
+                     got: false, ph: rnd() * TAU });
+      }
     }
-  };
-  const c0 = chains[0], c1 = chains[1], c2 = chains[2];
-  let m0 = sample(c0, c0.L - 6); arcOfRings(m0.x, m0.y, Math.atan2(m0.ty, m0.tx), 1560, 11, 0.05, 0.62);
-  let m1 = sample(c1, c1.L - 6); arcOfRings(m1.x, m1.y, Math.atan2(m1.ty, m1.tx), 1620, 12, 0.05, 0.66);
-  /* a level trail strung across the chasm — it shows the flight line */
-  const m2 = sample(c2, c2.L - 6), m3 = sample(chains[3], 120);
-  for (let i = 1; i < 13; i++) {
-    const t = i / 13;
-    rings.push({ x: lerp(m2.x, m3.x, t), y: lerp(m2.y, m3.y, t) - 210 + Math.sin(t * Math.PI) * -90,
-                 got: false, ph: rnd() * TAU });
   }
-  /* plume tracing the kicker's actual launch arc, not a straight column */
-  const sp = springs[0], spm = sample(chains[sp.c], sp.s);
-  const lvx = spm.tx * 1150 + spm.nx * SPRING_V, lvy = spm.ty * 1150 + spm.ny * SPRING_V;
-  for (let i = 0; i < 9; i++) {
-    const t = 0.10 + i * 0.085;
-    rings.push({ x: spm.x + lvx * t, y: spm.y + lvy * t + 0.5 * GRAV * t * t, got: false, ph: rnd() * TAU });
-  }
+  /* a plume tracing each kicker's real launch arc */
+  springs.forEach(sp => {
+    const m = sample(chains[sp.c], sp.s);
+    const lvx = m.tx * 1150 + m.nx * SPRING_V, lvy = m.ty * 1150 + m.ny * SPRING_V;
+    for (let i = 0; i < 9; i++) {
+      const t = 0.10 + i * 0.085;
+      rings.push({ x: m.x + lvx * t, y: m.y + lvy * t + 0.5 * GRAV * t * t, got: false, ph: rnd() * TAU });
+    }
+  });
 
-  let maxY = -Infinity, minX = Infinity, maxX = -Infinity;
-  chains.forEach(ch => { maxY = Math.max(maxY, ch.bbox[3]); minX = Math.min(minX, ch.bbox[0]); maxX = Math.max(maxX, ch.bbox[2]); });
+  let maxY = -Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity;
+  chains.forEach(ch => {
+    maxY = Math.max(maxY, ch.bbox[3]); minY = Math.min(minY, ch.bbox[1]);
+    minX = Math.min(minX, ch.bbox[0]); maxX = Math.max(maxX, ch.bbox[2]);
+  });
 
-  const hm = marks.find(m => m.kind === 'loop');
+  const hm = marks.find(m => m.kind === 'loop') || { c: 0, s: chains[0].L * 0.5 };
   const hs = sample(chains[hm.c], hm.s);
-  const hero = { x: hs.x + 120, y: hs.y - 210 };
 
-  return { chains, pads, springs, rings, goal, total, marks, hero, floorY: maxY + 1400, minX, maxX };
+  return { chains, pads, springs, rings, goal, total, marks, spec,
+           hero: { x: hs.x + 120, y: hs.y - 210 },
+           floorY: maxY + 1400, bounds: [minX, minY, maxX, maxY] };
 }
 
 /* ═══════════════ broadphase for airborne landings ═══════════════ */
@@ -638,8 +874,10 @@ window.addEventListener('resize', resize);   // first call happens in init, once
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const course = buildCourse();
-indexCourse(course);
+/* every course is built once at load: switching is instant, and the menu
+   can draw a real thumbnail of each one */
+const COURSES = LEVELS.map(finalizeCourse);
+let course = COURSES[0], LV = LEVELS[0], ringTot = 0;
 
 const keys = Object.create(null);
 const ball = {
@@ -652,9 +890,8 @@ const cam = { x: 0, y: 0, z: 1, shake: 0, roll: 0 };
 const trail = [];
 let game = {
   mode: 'title', t: 0, time: 0, rings: 0, top: 0, combo: 1, comboT: 0,
-  score: 0, flash: 0, boostFx: 0, cp: { ci: 0, s: 0, y: 0 }, cpT: 0, goT: 0, prog: 0, padCd: 0,
+  score: 0, flash: 0, boostFx: 0, cp: { ci: 0, s: 0, y: 0 }, cpT: 0, goT: 0, prog: 0, padCd: 0, level: 0,
 };
-const ringTot = course.rings.length;
 
 function resetRun() {
   course.rings.forEach(r => r.got = false);
@@ -762,21 +999,27 @@ function physics(dt) {
     ball.s += ball.v * dt;
 
     /* boost plates & springs sweep-tested against the arc travelled */
-    for (const p of course.pads) if (p.c === ball.ci && (p.s - s0) * (p.s - ball.s) <= 0 && game.padCd <= 0) {
+    /* plates are directional. Firing on a backward crossing would launch the
+       player back up the course at full plate speed, and a failed loop then
+       oscillates across the plate forever. */
+    for (const p of course.pads) if (p.c === ball.ci && ball.v > 0 && (p.s - s0) * (p.s - ball.s) <= 0 && game.padCd <= 0) {
       game.padCd = 0.5;
-      const d = sign(ball.v) || 1;
+      const d = 1;
       ball.v = d * Math.max(Math.abs(ball.v), PAD_SPEED);
       game.boostFx = 1; cam.shake = Math.min(cam.shake + 0.45, 1.2); Sound.pad();
       const pm = sample(ch, p.s);
       for (let i = 0; i < 22; i++) emit(pm.x, pm.y, pm.tx * d * rng(200, 900), pm.ty * d * rng(200, 900) + rng(-160, 160), rng(0.2, 0.5), rng(2, 4), 0.9, 1);
     }
-    for (const p of course.springs) if (p.c === ball.ci && (p.s - s0) * (p.s - ball.s) <= 0) {
+    /* Kickers are forward-only for the same reason plates are: one sits at the
+       floor of a bowl, and firing on a backward pass throws you straight back
+       into that bowl. Rolling backward over it does nothing, so the ball
+       carries up the near wall, returns, and gets kicked out properly. */
+    for (const p of course.springs) if (p.c === ball.ci && ball.v > 0 && (p.s - s0) * (p.s - ball.s) <= 0) {
       const sm = sample(ch, p.s);
       ball.grounded = false;
       ball.x = sm.x + sm.nx * (BALL_R + 2); ball.y = sm.y + sm.ny * (BALL_R + 2);
-      /* keep forward momentum — a kicker that only threw you up would trap
-         you in the bowl it sits in */
-      const vf = (sign(ball.v) || 1) * Math.max(Math.abs(ball.v), 850);
+      /* a floor of forward speed guarantees the launch clears the far lip */
+      const vf = Math.max(ball.v, 950);
       ball.vx = sm.tx * vf + sm.nx * SPRING_V;
       ball.vy = sm.ty * vf + sm.ny * SPRING_V;
       ball.coyote = 0.12; cam.shake = Math.min(cam.shake + 0.5, 1.2); Sound.spring();
@@ -844,8 +1087,9 @@ function physics(dt) {
     if (game.padCd <= 0) for (const p of course.pads) {
       const dx = ball.x - p.x, dy = ball.y - p.y;
       if (dx * dx + dy * dy > 4200) continue;
+      if (ball.vx * p.tx + ball.vy * p.ty <= 0) continue;      // forward only
       const sp2 = Math.hypot(ball.vx, ball.vy);
-      const d = sp2 > 40 ? sign(ball.vx * p.tx + ball.vy * p.ty) || 1 : 1;
+      const d = 1;
       if (sp2 < PAD_SPEED) {
         const hx = sp2 > 40 ? ball.vx / sp2 : p.tx * d, hy = sp2 > 40 ? ball.vy / sp2 : p.ty * d;
         ball.vx = hx * PAD_SPEED; ball.vy = hy * PAD_SPEED;
@@ -964,19 +1208,22 @@ function buildTiles() {
 
 /* ═══════════════ backdrop ═══════════════ */
 const ridgeA = [], ridgeB = [], motes = [];
-(function makeBackdrop() {
-  const build = (arr, w, amp, base, steps) => {
-    let y = base;
+/* silhouettes are regenerated per course — amplitude doubles as the phase
+   seed, so no two skylines repeat */
+function makeRidges(amp) {
+  ridgeA.length = 0; ridgeB.length = 0;
+  const build = (arr, w, a, steps, ph) => {
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      y = base + Math.sin(t * TAU) * 0 + (Math.sin(t * TAU * 3 + 1.1) * 0.5 + Math.sin(t * TAU * 7 + 2.3) * 0.3 + Math.sin(t * TAU * 13) * 0.2) * amp;
-      arr.push([t * w, y]);
+      arr.push([t * w, (Math.sin(t * TAU * 3 + 1.1 + ph) * 0.5 + Math.sin(t * TAU * 7 + 2.3 + ph * 2) * 0.3
+                      + Math.sin(t * TAU * 13 + ph * 3) * 0.2) * a]);
     }
   };
-  build(ridgeA, 2600, 92, 0, 96);
-  build(ridgeB, 2000, 148, 0, 72);
-  for (let i = 0; i < 130; i++) motes.push({ x: rnd(), y: rnd(), s: rng(0.6, 2.1), p: rng(0.05, 0.4), tw: rnd() * TAU });
-})();
+  build(ridgeA, 2600, amp[0], 96, amp[0] * 0.013);
+  build(ridgeB, 2000, amp[1], 72, amp[1] * 0.019);
+}
+makeRidges([92, 148]);
+for (let i = 0; i < 130; i++) motes.push({ x: rnd(), y: rnd(), s: rng(0.6, 2.1), p: rng(0.05, 0.4), tw: rnd() * TAU });
 
 /* Static layers are baked once per resize — the sky, the sun and the vignette
    are three full-screen gradients that would otherwise be recomputed 60x/sec. */
@@ -984,32 +1231,31 @@ let bgSky = null, sunSprite = null, vigSprite = null, sunR = 0, sunS = 0;
 function makeSprites() {
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
+  const SK = LV.sky;
   bgSky = mk(W, H);
   const g = bgSky.getContext('2d');
   const sky = g.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0.00, '#01080c');
-  sky.addColorStop(0.36, '#03181f');
-  sky.addColorStop(0.62, '#07303a');
-  sky.addColorStop(0.80, '#123f3f');
-  sky.addColorStop(1.00, '#06171c');
+  SK.stops.forEach(([o, col]) => sky.addColorStop(o, col));
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
 
-  sunR = Math.min(W, H) * 0.30;
+  sunR = Math.min(W, H) * SK.sun.r;
   sunS = Math.ceil(sunR * 6.4);
   sunSprite = mk(sunS, sunS);
   const q = sunSprite.getContext('2d'), cx = sunS / 2, cy = sunS / 2;
   const glow = q.createRadialGradient(cx, cy, 0, cx, cy, sunR * 3.1);
-  glow.addColorStop(0, 'rgba(255,168,74,0.34)');
-  glow.addColorStop(0.42, 'rgba(255,110,50,0.10)');
-  glow.addColorStop(1, 'rgba(255,110,50,0)');
+  glow.addColorStop(0, `rgba(${SK.sun.g},0.34)`);
+  glow.addColorStop(0.42, `rgba(${SK.sun.g2},0.10)`);
+  glow.addColorStop(1, `rgba(${SK.sun.g2},0)`);
   q.fillStyle = glow; q.fillRect(0, 0, sunS, sunS);
   q.save();
   q.beginPath(); q.arc(cx, cy, sunR, 0, TAU); q.clip();
   const sg = q.createLinearGradient(0, cy - sunR, 0, cy + sunR);
-  sg.addColorStop(0, '#ffe6b0'); sg.addColorStop(0.5, '#ffab48'); sg.addColorStop(1, '#ff4f26');
+  sg.addColorStop(0, SK.sun.a); sg.addColorStop(0.5, SK.sun.b); sg.addColorStop(1, SK.sun.c);
   q.fillStyle = sg; q.fillRect(cx - sunR, cy - sunR, sunR * 2, sunR * 2);
-  q.fillStyle = 'rgba(3,21,27,0.92)';
-  for (let i = 0; i < 12; i++) q.fillRect(cx - sunR, cy - sunR * 0.05 + i * (sunR * 0.17), sunR * 2, Math.max(1.5, i * 0.9 + 1.5));
+  if (sunR > Math.min(W, H) * 0.2) {          // bands only read on a big disc
+    q.fillStyle = 'rgba(3,12,16,0.92)';
+    for (let i = 0; i < 12; i++) q.fillRect(cx - sunR, cy - sunR * 0.05 + i * (sunR * 0.17), sunR * 2, Math.max(1.5, i * 0.9 + 1.5));
+  }
   q.restore();
 
   vigSprite = mk(W, H);
@@ -1025,7 +1271,7 @@ function drawBackdrop(t) {
   ctx.drawImage(bgSky, 0, 0);
 
   /* the light source every warm tone in the scene is borrowed from */
-  const sunX = W * 0.5 - cam.x * 0.02, sunY = horizon - 42;
+  const sunX = W * 0.5 - cam.x * 0.02, sunY = horizon + LV.sky.sun.y;
   ctx.drawImage(sunSprite, sunX - sunS / 2, sunY - sunS / 2);
 
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -1052,11 +1298,11 @@ function drawBackdrop(t) {
     ctx.fillStyle = fill; ctx.fill();
     ctx.strokeStyle = edge; ctx.lineWidth = 1.4; ctx.stroke();
   };
-  ridge(ridgeA, 2600, 0.10, horizon - 24, '#04161d', 'rgba(90,190,185,0.16)');
+  ridge(ridgeA, 2600, 0.10, horizon - 24, LV.sky.rA, LV.sky.edge);
 
   /* other heatlines, running far out in the valley */
   ctx.save();
-  ctx.strokeStyle = 'rgba(96,206,200,0.085)'; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = LV.sky.edge; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.55;
   const gstep = 1500, gpar = 0.30, gfirst = Math.floor((cam.x * gpar - 500) / gstep);
   for (let i = gfirst; i < gfirst + Math.ceil(W / gstep) + 2; i++) {
     if ((i * 97) % 3) continue;
@@ -1068,12 +1314,12 @@ function drawBackdrop(t) {
   }
   ctx.restore();
 
-  ridge(ridgeB, 2000, 0.22, horizon + 58, '#021015', 'rgba(90,190,185,0.10)');
+  ridge(ridgeB, 2000, 0.22, horizon + 58, LV.sky.rB, LV.sky.edge);
 
   const hz = ctx.createLinearGradient(0, horizon - 90, 0, horizon + 130);
-  hz.addColorStop(0, 'rgba(255,140,64,0)');
-  hz.addColorStop(0.45, 'rgba(255,140,64,0.09)');
-  hz.addColorStop(1, 'rgba(255,140,64,0)');
+  hz.addColorStop(0, `rgba(${LV.sky.haze},0)`);
+  hz.addColorStop(0.45, `rgba(${LV.sky.haze},0.10)`);
+  hz.addColorStop(1, `rgba(${LV.sky.haze},0)`);
   ctx.fillStyle = hz; ctx.fillRect(0, horizon - 90, W, 220);
 
   /* mid-ground pylons — what you actually read speed from */
@@ -1086,7 +1332,7 @@ function drawBackdrop(t) {
     ctx.fillStyle = 'rgba(2,14,19,0.85)';
     ctx.fillRect(x, horizon + 30 - h, 12, h + 200);
     ctx.fillRect(x - 34, horizon + 30 - h, 80, 9);
-    ctx.fillStyle = 'rgba(255,206,110,0.16)';
+    ctx.fillStyle = `rgba(${LV.sky.haze},0.20)`;
     ctx.fillRect(x - 34, horizon + 30 - h, 80, 2);
   }
 }
@@ -1394,14 +1640,17 @@ const ui = {
   ringTot: el('ringTot'), timeNum: el('timeNum'), fuelFill: el('fuelFill'), fuelMeter: el('fuelMeter'),
   combo: el('combo'), progDone: el('progDone'), progYou: el('progYou'), rail: el('rail'),
 };
-ui.ringTot.textContent = ringTot;
-course.marks.forEach(m => {
-  const pip = document.createElement('span');
-  pip.className = 'pip';
-  const p = (course.chains[m.c].offset + m.s) / course.total * 100;
-  pip.style.left = p.toFixed(2) + '%';
-  ui.rail.appendChild(pip);
-});
+/* the progress rail is rebuilt per course — its pips mark that course's
+   loops, kickers and chasms, so it doubles as a map of what's ahead */
+function buildProgressPips() {
+  ui.rail.querySelectorAll('.pip').forEach(n => n.remove());
+  course.marks.forEach(m => {
+    const pip = document.createElement('span');
+    pip.className = 'pip' + (m.kind === 'fly' ? ' fly' : m.kind === 'spring' ? ' kick' : '');
+    pip.style.left = ((course.chains[m.c].offset + m.s) / course.total * 100).toFixed(2) + '%';
+    ui.rail.appendChild(pip);
+  });
+}
 
 let hudAcc = 0;
 function updateHUD(dt) {
@@ -1422,40 +1671,198 @@ function updateHUD(dt) {
   ui.progYou.style.left = game.prog.toFixed(2) + '%';
 }
 
+/* ═══════════════ progression ═══════════════ */
+const SAVE_KEY = 'heatline.progress.1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; } catch (_) { saved = {}; }
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(saved)); } catch (_) {} }
+
+const MEDALS = [
+  { id: 'gold',   label: 'gold',   mult: 1.00, col: '#ffce6e' },
+  { id: 'silver', label: 'silver', mult: 1.30, col: '#cfe0e4' },
+  { id: 'bronze', label: 'bronze', mult: 1.70, col: '#d08a52' },
+];
+const medalFor = (lv, t) => MEDALS.find(m => t <= lv.target * m.mult) || null;
+const unlocked = i => i === 0 || !!(saved[LEVELS[i - 1].id] || {}).cleared;
+
 /* ═══════════════ flow ═══════════════ */
 const titleVeil = el('titleVeil'), pauseVeil = el('pauseVeil'), winVeil = el('winVeil');
-const padsEl = el('pads');
+const menuVeil = el('menuVeil'), padsEl = el('pads');
 pauseVeil.style.pointerEvents = 'auto';
-pauseVeil.addEventListener('click', () => { if (game.mode === 'pause') togglePause(); });
-function start() {
-  Sound.init(); Sound.resume();
+pauseVeil.addEventListener('click', e => { if (game.mode === 'pause' && e.target === pauseVeil) togglePause(); });
+
+function loadLevel(i) {
+  game.level = clamp(i, 0, LEVELS.length - 1);
+  LV = LEVELS[game.level]; course = COURSES[game.level];
+  ringTot = course.rings.length;
+  makeRidges(LV.sky.amp);
+  makeSprites();
+  indexCourse(course);
+  buildTiles();
+  buildProgressPips();
+  ui.ringTot.textContent = ringTot;
   resetRun();
+}
+
+function play(i) {
+  Sound.init(); Sound.resume();
+  if (i !== undefined && i !== game.level) loadLevel(i); else resetRun();
   game.mode = 'play';
-  titleVeil.classList.add('hide'); winVeil.classList.add('hide'); pauseVeil.classList.add('hide');
+  for (const v of [titleVeil, winVeil, pauseVeil, menuVeil]) v.classList.add('hide');
   ui.hud.classList.add('on');
 }
+
 function finish() {
   game.mode = 'win';
-  const timeBonus = Math.max(0, Math.round((150 - game.time) * 60));
-  game.score += timeBonus + Math.round(game.top) + game.rings * 25;
+  game.score += Math.max(0, Math.round((LV.target * 2.5 - game.time) * 90)) + Math.round(game.top) + game.rings * 25;
+
+  const rec = saved[LV.id] || (saved[LV.id] = {});
+  const best = rec.time, isBest = !best || game.time < best;
+  if (isBest) { rec.time = +game.time.toFixed(2); rec.rings = game.rings; rec.score = game.score; }
+  rec.rings = Math.max(rec.rings || 0, game.rings);
+  rec.cleared = true;
+  persist();
+
+  const med = medalFor(LV, game.time);
   el('wTime').textContent = game.time.toFixed(2);
   el('wRings').textContent = game.rings + '/' + ringTot;
   el('wTop').textContent = Math.round(game.top);
   el('wScore').textContent = game.score.toLocaleString();
-  el('winTag').textContent = game.rings === ringTot ? 'every ring, clean run' : 'course cleared';
-  el('winTitle').textContent = game.time < 60 ? 'Blistering' : game.time < 95 ? 'Clean line' : 'Finished';
+  el('winTitle').textContent = LV.name;
+  el('winTag').textContent = med
+    ? `${med.label} · target ${LV.target.toFixed(0)}s`
+    : `cleared · target ${LV.target.toFixed(0)}s`;
+  el('winTag').style.color = med ? med.col : 'var(--mute)';
+  el('winBest').textContent = isBest ? 'new best' : 'best ' + best.toFixed(2) + 's';
+  el('winBest').style.color = isBest ? 'var(--gold)' : 'var(--mute)';
+
+  const nextI = game.level + 1;
+  const nextBtn = el('nextBtn');
+  if (nextI < LEVELS.length) {
+    nextBtn.style.display = '';
+    nextBtn.firstChild.textContent = 'Next: ' + LEVELS[nextI].name + ' ';
+  } else nextBtn.style.display = 'none';
+  el('allDone').style.display = nextI < LEVELS.length ? 'none' : '';
+
   winVeil.classList.remove('hide');
   ui.hud.classList.remove('on');
   Sound.win();
-  for (let i = 0; i < 90; i++) { const a = rnd() * TAU; emit(course.goal.x, course.goal.y, Math.cos(a) * rng(120, 900), Math.sin(a) * rng(120, 900), rng(0.5, 1.3), rng(2, 5), rnd(), 1); }
+  for (let i = 0; i < 90; i++) {
+    const a = rnd() * TAU;
+    emit(course.goal.x, course.goal.y, Math.cos(a) * rng(120, 900), Math.sin(a) * rng(120, 900), rng(0.5, 1.3), rng(2, 5), rnd(), 1);
+  }
 }
+
 function togglePause() {
   if (game.mode === 'play') { game.mode = 'pause'; pauseVeil.classList.remove('hide'); }
   else if (game.mode === 'pause') { game.mode = 'play'; pauseVeil.classList.add('hide'); }
 }
 
-el('startBtn').addEventListener('click', start);
-el('againBtn').addEventListener('click', start);
+/* ── course menu ── */
+/* A course fitted to 168px is a flat squiggle — 42,000px of track has no
+   readable shape at that size. So the card shows a profile instead: terrain
+   height against distance, with a glyph per feature. It answers the question
+   the player actually has, which is what's in this run. */
+function thumbFor(cr, w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = w * 2; cv.height = h * 2;
+  const g = cv.getContext('2d');
+  g.scale(2, 2);
+
+  const N = 260, ys = [];
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k <= N; k++) {
+    const S = cr.total * k / N;
+    let ci = 0;
+    while (ci < cr.chains.length - 1 && S > cr.chains[ci].offset + cr.chains[ci].L) ci++;
+    const ch = cr.chains[ci];
+    const y = sample(ch, S - ch.offset).y;
+    ys.push(y);
+    if (y < lo) lo = y; if (y > hi) hi = y;
+  }
+  const top = 20, bot = h - 9, span = hi - lo || 1;
+  const px = k => 4 + (k / N) * (w - 8);
+  const py = y => top + (y - lo) / span * (bot - top);
+
+  g.beginPath();
+  g.moveTo(px(0), py(ys[0]));
+  for (let k = 1; k <= N; k++) g.lineTo(px(k), py(ys[k]));
+  g.lineTo(px(N), h); g.lineTo(px(0), h); g.closePath();
+  const fill = g.createLinearGradient(0, top, 0, h);
+  fill.addColorStop(0, 'rgba(42,208,200,0.20)');
+  fill.addColorStop(1, 'rgba(42,208,200,0.02)');
+  g.fillStyle = fill; g.fill();
+
+  g.beginPath();
+  g.moveTo(px(0), py(ys[0]));
+  for (let k = 1; k <= N; k++) g.lineTo(px(k), py(ys[k]));
+  g.strokeStyle = 'rgba(90,226,214,0.9)'; g.lineWidth = 1.3; g.stroke();
+
+  /* one glyph per feature: ring = loop, wedge = kicker, break = chasm */
+  for (const m of cr.marks) {
+    const x = 4 + ((cr.chains[m.c].offset + m.s) / cr.total) * (w - 8);
+    if (m.kind === 'loop') {
+      g.strokeStyle = '#ffce6e'; g.lineWidth = 1.2;
+      g.beginPath(); g.arc(x, 10, 3.1, 0, TAU); g.stroke();
+    } else if (m.kind === 'spring') {
+      g.fillStyle = '#7ce8d6';
+      g.beginPath(); g.moveTo(x - 3.4, 13); g.lineTo(x, 6.6); g.lineTo(x + 3.4, 13); g.closePath(); g.fill();
+    } else {
+      g.strokeStyle = '#ff5e30'; g.lineWidth = 1.4;
+      g.setLineDash([2.4, 2.4]);
+      g.beginPath(); g.moveTo(x, 6); g.lineTo(x, h - 6); g.stroke();
+      g.setLineDash([]);
+    }
+  }
+  g.fillStyle = '#ffce6e';
+  g.beginPath(); g.arc(px(N), py(ys[N]), 2.6, 0, TAU); g.fill();
+
+  cv.style.width = '100%'; cv.style.height = '100%'; cv.style.display = 'block';
+  return cv;
+}
+
+function openMenu() {
+  const list = el('menuList');
+  list.innerHTML = '';
+  LEVELS.forEach((lv, i) => {
+    const rec = saved[lv.id] || {};
+    const open = unlocked(i);
+    const med = rec.time != null ? medalFor(lv, rec.time) : null;
+    const card = document.createElement(open ? 'button' : 'div');
+    card.className = 'card' + (open ? '' : ' locked');
+    card.innerHTML = `
+      <div class="card-thumb"></div>
+      <div class="card-body">
+        <div class="card-top"><span class="card-n">${i + 1}</span><span class="card-name">${lv.name}</span></div>
+        <p class="card-brief">${open ? lv.brief : 'Clear ' + LEVELS[i - 1].name + ' to open this course.'}</p>
+        <div class="card-foot">
+          ${open ? `<span>target <b>${lv.target}s</b></span>
+                    <span>${rec.time != null ? 'best <b>' + rec.time.toFixed(2) + 's</b>' : '<b>not run</b>'}</span>
+                    <span>${rec.rings ? '<b>' + rec.rings + '</b>/' + COURSES[i].rings.length + ' rings' : COURSES[i].rings.length + ' rings'}</span>`
+                 : '<span>locked</span>'}
+        </div>
+      </div>
+      ${med ? `<span class="medal" style="color:${med.col}">◆ ${med.label}</span>` : ''}`;
+    if (open) {
+      card.querySelector('.card-thumb').appendChild(thumbFor(COURSES[i], 168, 74));
+      card.addEventListener('click', () => play(i));
+    }
+    list.appendChild(card);
+  });
+  for (const v of [titleVeil, winVeil, pauseVeil]) v.classList.add('hide');
+  menuVeil.classList.remove('hide');
+  ui.hud.classList.remove('on');
+  game.mode = 'menu';
+}
+
+el('startBtn').addEventListener('click', openMenu);
+el('againBtn').addEventListener('click', () => play());
+el('nextBtn').addEventListener('click', () => play(game.level + 1));
+el('menuBtn').addEventListener('click', openMenu);
+el('pauseMenuBtn').addEventListener('click', openMenu);
+el('backBtn').addEventListener('click', () => {
+  titleVeil.classList.remove('hide'); menuVeil.classList.add('hide'); game.mode = 'title';
+});
 
 const HANDLED = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 window.addEventListener('keydown', e => {
@@ -1463,7 +1870,9 @@ window.addEventListener('keydown', e => {
   if (e.repeat) { keys[e.code] = true; return; }
   keys[e.code] = true;
   if (e.code === 'Space') {
-    if (game.mode === 'title' || game.mode === 'win') { start(); return; }
+    if (game.mode === 'title') { openMenu(); return; }
+    if (game.mode === 'menu')  { play(game.level); return; }
+    if (game.mode === 'win')   { play(game.level + 1 < LEVELS.length ? game.level + 1 : game.level); return; }
     if (game.mode === 'play' && (ball.grounded || ball.coyote > 0)) {
       const ch = course.chains[ball.ci], m = sample(ch, ball.s);
       if (ball.grounded) {
@@ -1476,8 +1885,15 @@ window.addEventListener('keydown', e => {
       for (let i = 0; i < 10; i++) emit(ball.x, ball.y, rng(-220, 220), rng(-220, 220), rng(0.15, 0.35), rng(1.4, 3), 0.42, 0);
     }
   }
-  if (e.code === 'KeyR') start();
-  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyR' && game.mode !== 'menu' && game.mode !== 'title') play();
+  if (e.code === 'KeyP') togglePause();
+  if (e.code === 'Escape') {
+    if (game.mode === 'menu') { titleVeil.classList.remove('hide'); menuVeil.classList.add('hide'); game.mode = 'title'; }
+    else if (game.mode === 'play' || game.mode === 'pause') togglePause();
+  }
+  if (e.code === 'KeyC' && (game.mode === 'play' || game.mode === 'pause' || game.mode === 'win')) openMenu();
+  const n = e.code.match(/^Digit([1-9])$/);
+  if (n && game.mode !== 'play') { const i = +n[1] - 1; if (i < LEVELS.length && unlocked(i)) play(i); }
   if (e.code === 'KeyM') { Sound.init(); Sound.toggle(); }
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1527,7 +1943,7 @@ function frame(now) {
     Sound.speed(clamp(sp / REF_SPD, 0, 1), !ball.grounded);
   } else {
     Sound.speed(0, false);
-    if (game.mode === 'title') {           // slow drift across the first loop
+    if (game.mode === 'title' || game.mode === 'menu') {   // slow drift across a loop
       cam.x = course.hero.x - 430 + Math.sin(t * 0.16) * 240;
       cam.y = course.hero.y + Math.cos(t * 0.11) * 40;
       cam.z = 0.60; cam.roll = 0;
@@ -1545,12 +1961,12 @@ function frame(now) {
   drawScreenFx(t, f);
 }
 resize();
-buildTiles();
-resetRun();
+loadLevel(0);
 requestAnimationFrame(frame);
 
 /* handle for tuning + automated playtests */
-window.heatline = { ball, game, cam, course, keys, start, sample, physics };
+window.heatline = { ball, game, cam, keys, sample, physics, LEVELS, play, openMenu,
+                    loadLevel, get course() { return course; }, get saved() { return saved; } };
 
 })();
 </script>
