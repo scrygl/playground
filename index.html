@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="A gentle typing and reading game for 4-year-olds. Letters, sounds, words and little sentences.">
+<meta name="theme-color" content="#fff6e9">
+<title>Letter Friends</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐻</text></svg>">
+</head>
+<body>
+
+<!-- ===== Start gate: one tap unlocks audio + speech on mobile ===== -->
+<div id="start-screen" class="start-screen">
+  <div class="start-card">
+    <div class="start-bear">🐻</div>
+    <h1 class="start-title">Letter Friends</h1>
+    <p class="start-sub">Letters, sounds and little words</p>
+    <button id="start-btn" class="btn btn-big btn-grass">Tap to play</button>
+    <p class="start-note">Best with sound on 🔊</p>
+  </div>
+</div>
+
+<!-- ===== App shell ===== -->
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <button id="back-btn" class="icon-btn" aria-label="Back to menu" hidden>
+      <span aria-hidden="true">🏠</span>
+    </button>
+    <h2 id="mode-title" class="mode-title">Letter Friends</h2>
+    <div class="topbar-right">
+      <div id="star-tray" class="star-tray" aria-label="Stars earned" role="status">
+        <span class="star-icon" aria-hidden="true">⭐</span>
+        <span id="star-count" class="star-count">0</span>
+      </div>
+      <button id="full-btn" class="icon-btn" aria-label="Full screen"><span aria-hidden="true">⛶</span></button>
+      <button id="parent-btn" class="icon-btn parent-btn" aria-label="Grown-up settings: press and hold">
+        <svg class="hold-ring" viewBox="0 0 44 44" aria-hidden="true">
+          <circle class="hold-ring-track" cx="22" cy="22" r="19"></circle>
+          <circle class="hold-ring-fill" cx="22" cy="22" r="19"></circle>
+        </svg>
+        <span aria-hidden="true">⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Menu ===== -->
+  <main id="menu" class="menu screen">
+    <p class="menu-hello">What shall we play?</p>
+    <div class="menu-grid">
+      <button class="game-card game-card-mango" data-mode="play">
+        <span class="game-emoji" aria-hidden="true">🎹</span>
+        <span class="game-name">Letter Play</span>
+        <span class="game-desc">Press any key and see what happens</span>
+      </button>
+      <button class="game-card game-card-sky" data-mode="hunt">
+        <span class="game-emoji" aria-hidden="true">🔍</span>
+        <span class="game-name">Find the Letter</span>
+        <span class="game-desc">I say a letter, you find it</span>
+      </button>
+      <button class="game-card game-card-grass" data-mode="build">
+        <span class="game-emoji" aria-hidden="true">🧩</span>
+        <span class="game-name">Build a Word</span>
+        <span class="game-desc">Type the letters, make a word</span>
+      </button>
+      <button class="game-card game-card-berry" data-mode="read">
+        <span class="game-emoji" aria-hidden="true">📖</span>
+        <span class="game-name">Read With Me</span>
+        <span class="game-desc">Tap the words and hear them</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- ===== Letter Play ===== -->
+  <main id="screen-play" class="screen play-screen" hidden>
+    <div id="play-stage" class="stage">
+      <div class="stage-hint" id="play-hint">Press a letter on the keyboard 👇</div>
+      <div class="letter-card" id="play-card" hidden>
+        <div class="letter-glyph" id="play-glyph">A</div>
+        <div class="letter-word">
+          <span class="letter-word-emoji" id="play-emoji">🍎</span>
+          <span class="letter-word-text" id="play-word">apple</span>
+        </div>
+      </div>
+    </div>
+    <div class="alphabet-track" id="play-track" aria-hidden="true"></div>
+  </main>
+
+  <!-- ===== Find the Letter ===== -->
+  <main id="screen-hunt" class="screen hunt-screen" hidden>
+    <div class="stage">
+      <p class="prompt-line">Can you find…</p>
+      <div class="letter-card letter-card-target" id="hunt-card">
+        <div class="letter-glyph" id="hunt-glyph">A</div>
+        <div class="letter-word">
+          <span class="letter-word-emoji" id="hunt-emoji">🍎</span>
+          <span class="letter-word-text" id="hunt-word">apple</span>
+        </div>
+      </div>
+      <button class="btn btn-sky btn-say" id="hunt-repeat">🔊 Say it again</button>
+    </div>
+  </main>
+
+  <!-- ===== Build a Word ===== -->
+  <main id="screen-build" class="screen build-screen" hidden>
+    <div class="stage">
+      <div class="word-picture" id="build-emoji">🐱</div>
+      <div class="word-slots" id="build-slots"></div>
+      <button class="btn btn-sky btn-say" id="build-repeat">🔊 Say it again</button>
+    </div>
+  </main>
+
+  <!-- ===== Read With Me ===== -->
+  <main id="screen-read" class="screen read-screen" hidden>
+    <div class="stage">
+      <div class="read-picture" id="read-emoji">🐱</div>
+      <p class="read-sentence" id="read-sentence"></p>
+      <div class="read-controls">
+        <button class="btn btn-sky" id="read-play">🔊 Read it to me</button>
+        <button class="btn btn-grass" id="read-next">Next page →</button>
+      </div>
+      <p class="read-tip">Tap any word to hear it</p>
+    </div>
+  </main>
+
+  <!-- ===== Shared on-screen keyboard ===== -->
+  <div id="keyboard" class="keyboard" hidden></div>
+</div>
+
+<!-- ===== Celebration layer ===== -->
+<canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+<div id="cheer" class="cheer" aria-hidden="true"></div>
+
+<!-- ===== Grown-up settings ===== -->
+<div id="parent-panel" class="parent-panel" hidden>
+  <div class="parent-card" role="dialog" aria-modal="true" aria-labelledby="parent-title">
+    <h2 id="parent-title" class="parent-title">Grown-up settings</h2>
+
+    <label class="setting">
+      <span class="setting-name">Letters look like</span>
+      <select id="set-case">
+        <option value="upper">ABC (capitals)</option>
+        <option value="lower">abc (lowercase)</option>
+        <option value="both">Aa (both)</option>
+      </select>
+    </label>
+
+    <label class="setting">
+      <span class="setting-name">Keyboard order</span>
+      <select id="set-layout">
+        <option value="abc">A B C order</option>
+        <option value="qwerty">Q W E R T Y</option>
+      </select>
+    </label>
+
+    <label class="setting">
+      <span class="setting-name">Letter sounds</span>
+      <select id="set-phonics">
+        <option value="both">Name and sound ("A… ah")</option>
+        <option value="name">Letter name only ("A")</option>
+        <option value="sound">Letter sound only ("ah")</option>
+      </select>
+    </label>
+
+    <label class="setting">
+      <span class="setting-name">Talking speed</span>
+      <input id="set-rate" type="range" min="0.6" max="1.1" step="0.05">
+      <output id="set-rate-out" class="setting-out"></output>
+    </label>
+
+    <label class="setting setting-row">
+      <span class="setting-name">Voice</span>
+      <input id="set-voice-on" type="checkbox">
+    </label>
+
+    <label class="setting setting-row">
+      <span class="setting-name">Show on-screen keyboard</span>
+      <input id="set-kb-on" type="checkbox">
+    </label>
+
+    <label class="setting" id="voice-setting">
+      <span class="setting-name">Voice used</span>
+      <select id="set-voice"></select>
+    </label>
+
+    <p id="speech-warning" class="parent-note" hidden>
+      This browser has no speech voices, so the game will play with sounds and pictures only.
+    </p>
+    <p class="parent-note">
+      Stars are just for fun — nothing is ever wrong, and there is no timer.
+    </p>
+
+    <div class="parent-actions">
+      <button class="btn btn-plain" id="reset-stars">Reset stars</button>
+      <button class="btn btn-grass" id="parent-close">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

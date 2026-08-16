@@ -1,0 +1,512 @@
+/* Letter Friends — visual language: paper, crayon, sticker book.
+ *
+ * Font note: the stack leads with faces that have single-storey "a" and "g"
+ * (Comic Sans MS, Chalkboard, Andika). Those are the letterforms a 4-year-old
+ * is taught to write, so a double-storey "a" in a phonics game is genuinely
+ * confusing. This is a reading decision, not a style joke.
+ */
+
+:root {
+  --paper: #fff6e9;
+  --paper-deep: #ffe9cd;
+  --ink: #3b2d23;
+  --ink-soft: #7a6353;
+  --white: #fffdf9;
+
+  --tomato: #ee5133;
+  --mango: #f39c12;
+  --sun: #ffcf33;
+  --grass: #43a047;
+  --sky: #2b96d8;
+  --berry: #e0457b;
+  --grape: #8a5cc4;
+
+  --lift: 0 7px 0;
+  --radius: 26px;
+  --font: 'Comic Sans MS', 'Chalkboard SE', 'Andika', 'Baloo 2', 'Trebuchet MS',
+    system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* Author `display` rules beat the UA rule for [hidden], and nearly every
+ * panel here is a flex/grid container — so hiding needs to be explicit. */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background-color: var(--paper);
+  /* Faint paper speckle so the ground is not a flat colour field. */
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255, 207, 51, 0.18) 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 60%, rgba(43, 150, 216, 0.14) 0 2px, transparent 3px),
+    radial-gradient(circle at 45% 85%, rgba(224, 69, 123, 0.12) 0 2px, transparent 3px);
+  background-size: 180px 180px, 240px 240px, 300px 300px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button, select, input { font-family: inherit; }
+
+/* ---------------- Buttons ---------------- */
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.7em 1.5em;
+  font-size: clamp(1rem, 2.4vw, 1.35rem);
+  font-weight: bold;
+  color: var(--white);
+  background: var(--sky);
+  box-shadow: var(--lift) rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+}
+.btn:active {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.22);
+}
+.btn-big { font-size: clamp(1.3rem, 4vw, 2rem); padding: 0.7em 2em; }
+.btn-grass { background: var(--grass); }
+.btn-sky { background: var(--sky); }
+.btn-plain { background: var(--paper-deep); color: var(--ink-soft); box-shadow: var(--lift) rgba(0, 0, 0, 0.12); }
+.btn-say { margin-top: 0.9rem; }
+
+/* ---------------- Start screen ---------------- */
+
+.start-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  z-index: 50;
+}
+.start-card { text-align: center; padding: 2rem; }
+.start-bear { font-size: clamp(4rem, 18vw, 9rem); animation: bob 2.6s ease-in-out infinite; }
+.start-title {
+  margin: 0.1em 0 0;
+  font-size: clamp(2.2rem, 9vw, 4.5rem);
+  color: var(--tomato);
+  text-shadow: 3px 3px 0 var(--sun);
+}
+.start-sub { margin: 0.3em 0 1.6em; color: var(--ink-soft); font-size: clamp(1rem, 3vw, 1.4rem); }
+.start-note { margin-top: 1.4em; color: var(--ink-soft); }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-14px) rotate(3deg); }
+}
+
+/* ---------------- Shell ---------------- */
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: max(0.5rem, env(safe-area-inset-top)) 0.6rem
+           max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+}
+.mode-title {
+  flex: 1;
+  margin: 0;
+  font-size: clamp(1.1rem, 3.2vw, 1.7rem);
+  color: var(--ink-soft);
+}
+.topbar-right { display: flex; align-items: center; gap: 0.4rem; }
+
+.icon-btn {
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 18px;
+  background: var(--white);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.13);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.13); }
+
+.star-tray {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: var(--white);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.13);
+  font-size: clamp(1.1rem, 3vw, 1.5rem);
+  font-weight: bold;
+  color: #a56f05;
+}
+.star-icon { font-size: 1.1em; }
+.star-tray.pop { animation: starpop 0.5s ease; }
+@keyframes starpop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35) rotate(-6deg); }
+  100% { transform: scale(1); }
+}
+
+.parent-btn { position: relative; }
+.hold-ring { position: absolute; inset: 4px; width: 44px; height: 44px; pointer-events: none; }
+.hold-ring-track, .hold-ring-fill { fill: none; stroke-width: 4; }
+.hold-ring-track { stroke: transparent; }
+.hold-ring-fill {
+  stroke: var(--grass);
+  stroke-linecap: round;
+  stroke-dasharray: 119.4;
+  stroke-dashoffset: 119.4;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+.parent-btn.holding .hold-ring-fill {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1.2s linear;
+}
+
+/* ---------------- Screens ---------------- */
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+.stage-hint {
+  font-size: clamp(1.2rem, 4vw, 2rem);
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* ---------------- Menu ---------------- */
+
+.menu-hello {
+  font-size: clamp(1.4rem, 4.5vw, 2.4rem);
+  margin: 0.2em 0 0.6em;
+  color: var(--ink);
+}
+/* Four games, so a 2x2 block reads as one tidy set rather than 3-and-1. */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  width: min(720px, 100%);
+  padding: 0 0.4rem 0.6rem;
+}
+.game-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 1.1rem 1rem 1.3rem;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--mango);
+  color: var(--white);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.07s ease, box-shadow 0.07s ease;
+}
+.game-card:active { transform: translateY(6px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2); }
+.game-card-mango { background: var(--mango); }
+.game-card-sky   { background: var(--sky); }
+.game-card-grass { background: var(--grass); }
+.game-card-berry { background: var(--berry); }
+.game-emoji { font-size: clamp(2.6rem, 8vw, 4rem); }
+.game-name { font-size: clamp(1.3rem, 3.6vw, 1.9rem); font-weight: bold; }
+.game-desc { font-size: clamp(0.85rem, 2.2vw, 1.05rem); opacity: 0.92; }
+
+/* ---------------- Letter cards ---------------- */
+
+.letter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0.4em 1.2em 0.6em;
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: 0 10px 0 rgba(0, 0, 0, 0.12);
+}
+.letter-glyph {
+  font-size: clamp(5rem, 26vh, 13rem);
+  line-height: 1;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  color: var(--tomato);
+}
+.letter-word {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: clamp(1.3rem, 4.5vw, 2.4rem);
+  color: var(--ink);
+}
+.letter-word-emoji { font-size: 1.4em; }
+
+.tone-tomato .letter-glyph { color: var(--tomato); }
+.tone-mango  .letter-glyph { color: #d3820a; }
+.tone-grass  .letter-glyph { color: var(--grass); }
+.tone-sky    .letter-glyph { color: var(--sky); }
+.tone-berry  .letter-glyph { color: var(--berry); }
+.tone-grape  .letter-glyph { color: var(--grape); }
+
+.prompt-line {
+  margin: 0;
+  font-size: clamp(1.2rem, 3.6vw, 1.9rem);
+  color: var(--ink-soft);
+}
+
+.drop-in { animation: dropin 0.4s cubic-bezier(0.2, 1.4, 0.5, 1); }
+@keyframes dropin {
+  0% { transform: translateY(-30px) scale(0.7); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.wiggle { animation: wiggle 0.45s ease; }
+@keyframes wiggle {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-11px) rotate(-2deg); }
+  50% { transform: translateX(11px) rotate(2deg); }
+  80% { transform: translateX(-6px); }
+}
+
+/* Alphabet strip in Letter Play — fills in as letters are discovered. */
+.alphabet-track {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  flex: none;
+}
+.track-letter {
+  width: clamp(20px, 3.2vw, 30px);
+  text-align: center;
+  font-size: clamp(0.8rem, 2.2vw, 1.1rem);
+  color: rgba(122, 99, 83, 0.35);
+}
+.track-letter.found { color: var(--grass); font-weight: bold; transform: scale(1.15); }
+
+/* ---------------- Build a Word ---------------- */
+
+.word-picture { font-size: clamp(4rem, 20vh, 9rem); line-height: 1; }
+.word-slots { display: flex; gap: 0.5rem; }
+.word-slots.done .slot { animation: starpop 0.5s ease; }
+.slot {
+  display: grid;
+  place-items: center;
+  width: clamp(56px, 13vw, 110px);
+  height: clamp(66px, 15vh, 128px);
+  border-radius: 20px;
+  background: var(--paper-deep);
+  color: transparent;
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  font-weight: bold;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.07);
+}
+.slot.filled {
+  background: var(--white);
+  color: var(--grass);
+  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.12);
+  animation: dropin 0.35s cubic-bezier(0.2, 1.4, 0.5, 1);
+}
+
+/* ---------------- Read With Me ---------------- */
+
+.read-picture { font-size: clamp(3.5rem, 17vh, 8rem); line-height: 1; }
+.read-sentence {
+  max-width: 18ch;
+  margin: 0.2em 0;
+  text-align: center;
+  font-size: clamp(1.8rem, 6.5vw, 3.4rem);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.read-word {
+  display: inline-block;
+  padding: 0 0.12em;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.read-word.speaking { background: var(--sun); transform: scale(1.08); }
+.read-controls { display: flex; gap: 0.7rem; flex-wrap: wrap; justify-content: center; }
+.read-tip { color: var(--ink-soft); margin: 0.4em 0 0; }
+
+/* ---------------- Keyboard ---------------- */
+
+.keyboard {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0 0.7rem;
+}
+/* Keys stretch to fill their row and cap out at a comfortable size, so a
+ * 7-letter row and a 10-digit row both fit any width without clipping.
+ * Height is viewport-relative so the last row never falls off the screen. */
+.kb-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+.kb-key {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 76px;
+  height: clamp(40px, 6.4vh, 68px);
+  border: none;
+  border-radius: 14px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: clamp(1.1rem, 3.4vw, 1.9rem);
+  font-weight: bold;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+.kb-key-digit { background: var(--paper-deep); }
+.kb-key.pressed {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+  background: var(--sky);
+  color: var(--white);
+}
+.kb-key.hint {
+  background: var(--sun);
+  color: #5c3f04;
+  animation: hintpulse 1s ease-in-out infinite;
+}
+@keyframes hintpulse {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.07); }
+}
+
+/* ---------------- Celebration ---------------- */
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+.cheer {
+  position: fixed;
+  top: clamp(64px, 10vh, 104px);
+  left: 50%;
+  transform: translate(-50%, 0) scale(0.4);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 41;
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  font-weight: bold;
+  color: var(--grass);
+  text-shadow: 3px 3px 0 var(--white);
+}
+.cheer.show { animation: cheer 1.5s ease forwards; }
+@keyframes cheer {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(0.4); }
+  20% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  70% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -40px) scale(1); }
+}
+
+/* ---------------- Grown-up panel ---------------- */
+
+.parent-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 45, 35, 0.45);
+  padding: 1rem;
+}
+.parent-card {
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 1.4rem;
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+  font-family: system-ui, sans-serif;
+}
+.parent-title { margin: 0 0 1rem; font-size: 1.4rem; }
+.setting { display: block; margin-bottom: 1rem; font-size: 0.95rem; }
+.setting-name { display: block; margin-bottom: 0.3rem; color: var(--ink-soft); }
+.setting select, .setting input[type='range'] {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: 2px solid var(--paper-deep);
+  background: var(--paper);
+}
+.setting input[type='range'] { padding: 0; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.setting-row .setting-name { margin: 0; }
+.setting-row input[type='checkbox'] { width: 26px; height: 26px; }
+.setting-out { color: var(--ink-soft); font-size: 0.85rem; }
+.parent-note { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.5; }
+.parent-actions { display: flex; justify-content: space-between; gap: 0.8rem; margin-top: 1.2rem; }
+
+/* ---------------- Fit ---------------- */
+
+/* When the drawn keyboard is up the stage gives it room rather than scrolling. */
+body.has-keyboard .letter-glyph { font-size: clamp(3.4rem, 15vh, 8rem); }
+body.has-keyboard .letter-word { font-size: clamp(1.1rem, 3.4vw, 1.9rem); }
+body.has-keyboard .word-picture { font-size: clamp(2.6rem, 11vh, 5.5rem); }
+body.has-keyboard .slot { height: clamp(56px, 12vh, 110px); }
+
+@media (max-width: 520px) {
+  .menu-grid { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .game-desc { display: none; }
+  .icon-btn { width: 44px; height: 44px; font-size: 1.2rem; }
+  .hold-ring { inset: 2px; width: 40px; height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
