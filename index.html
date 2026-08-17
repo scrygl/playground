@@ -526,7 +526,7 @@ function c3(X) {
   c.line(300);
   c.arc(600, -26).line(200); X.mark('fly');
   let e = X.end();
-  c = X.start(e.x + 1420, e.y + 205, 12 * RAD);
+  c = X.start(e.x + 2000, e.y + 235, 12 * RAD);
   c.line(800).arc(900, -12).line(420);
   c.dip(760, 20).hill(760, 20);
   c.line(400); X.pad(); c.line(320);
@@ -534,7 +534,7 @@ function c3(X) {
   c.line(400);
   c.arc(560, -28).line(180); X.mark('fly');
   e = X.end();
-  c = X.start(e.x + 1330, e.y + 215, 14 * RAD);
+  c = X.start(e.x + 2020, e.y + 245, 14 * RAD);
   c.line(900).arc(900, -14);
   c.descent(850, 24, 520);
   c.line(340); X.pad(); c.line(320);
@@ -543,7 +543,7 @@ function c3(X) {
   c.line(280);
   c.arc(580, -27).line(190); X.mark('fly');
   e = X.end();
-  c = X.start(e.x + 1380, e.y + 215, 13 * RAD);
+  c = X.start(e.x + 1980, e.y + 240, 13 * RAD);
   c.line(950).arc(900, -13).line(460);
   c.hill(700, 16).dip(700, 16);
   c.line(300); X.pad(); c.line(850);
@@ -614,7 +614,7 @@ function c5(X) {
   c.line(260);
   c.arc(560, -28).line(200); X.mark('fly');
   e = X.end();
-  c = X.start(e.x + 1440, e.y + 215, 10 * RAD);   // the last span: long, but it drops to meet you
+  c = X.start(e.x + 2030, e.y + 245, 10 * RAD);   // past ballistic reach, but it drops to meet the wings
   c.line(900).arc(900, -10).line(520);
   c.descent(820, 26, 620);
   c.line(320); X.pad(); c.line(280);
@@ -763,6 +763,40 @@ function indexCourse(course) {
   });
 }
 
+/* Swept landing test. The point probe below only sees where the ball *is*;
+   this one sees the line it travelled, so a step that carries the centre clean
+   through a rail's front face still lands. Together they make passing through
+   the track impossible regardless of speed or approach angle. */
+function probeSwept(course, x0, y0, x1, y1, vx, vy) {
+  let best = null, bestT = Infinity;
+  const rad = BALL_R;
+  const bx0 = Math.min(x0, x1) - rad, bx1 = Math.max(x0, x1) + rad;
+  const by0 = Math.min(y0, y1) - rad, by1 = Math.max(y0, y1) + rad;
+  for (let cx = Math.floor(bx0 / CELL); cx <= Math.floor(bx1 / CELL); cx++)
+    for (let cy = Math.floor(by0 / CELL); cy <= Math.floor(by1 / CELL); cy++) {
+      const bucket = grid.get(gkey(cx, cy)); if (!bucket) continue;
+      for (let q = 0; q < bucket.length; q += 2) {
+        const ci = bucket[q], i = bucket[q + 1], ch = course.chains[ci];
+        const ax = ch.xs[i], ay = ch.ys[i];
+        const ex = ch.xs[i + 1] - ax, ey = ch.ys[i + 1] - ay;
+        const el = Math.hypot(ex, ey); if (el < 1e-9) continue;
+        const ux = ex / el, uy = ey / el, nx = uy, ny = -ux;
+        const s0 = (x0 - ax) * nx + (y0 - ay) * ny;
+        const s1 = (x1 - ax) * nx + (y1 - ay) * ny;
+        if (s0 <= 0 || s1 > 0) continue;                 // front face, crossed this step
+        if (vx * nx + vy * ny >= 0) continue;
+        const t = s0 / (s0 - s1);
+        if (t >= bestT) continue;
+        const px = x0 + (x1 - x0) * t, py = y0 + (y1 - y0) * t;
+        const al = ((px - ax) * ux + (py - ay) * uy) / el;
+        if (al < 0 || al > 1) continue;
+        bestT = t;
+        best = { ci, s: ch.cum[i] + al * (ch.cum[i + 1] - ch.cum[i]), vn: vx * nx + vy * ny };
+      }
+    }
+  return best;
+}
+
 /* nearest valid landing surface: must be approached from the n̂ side, moving in */
 function probeLanding(course, px, py, vx, vy, rad) {
   let best = null, bestD = Infinity;
@@ -884,7 +918,7 @@ const ball = {
   ci: 0, s: 0, v: 0, grounded: true,
   x: 0, y: 0, vx: 0, vy: 0,
   rot: 0, fuel: FUEL_MAX, flying: false, diving: false, boosting: false,
-  face: 1, fwd: 1, squash: 0, tuck: false, coyote: 0, slip: 0,
+  face: 1, fwd: 1, squash: 0, tuck: false, coyote: 0, noLand: 0, slip: 0,
 };
 const cam = { x: 0, y: 0, z: 1, shake: 0, roll: 0 };
 const trail = [];
@@ -898,7 +932,7 @@ function resetRun() {
   par.n = 0; trail.length = 0;
   ball.ci = 0; ball.s = 40; ball.v = 0; ball.grounded = true;
   ball.fuel = FUEL_MAX; ball.flying = ball.diving = ball.boosting = false;
-  ball.rot = 0; ball.face = 1; ball.fwd = 1; ball.squash = 0; ball.coyote = 0; ball.slip = 0;
+  ball.rot = 0; ball.face = 1; ball.fwd = 1; ball.squash = 0; ball.coyote = 0; ball.noLand = 0; ball.slip = 0;
   const m = sample(course.chains[0], ball.s);
   ball.x = m.x + m.nx * BALL_R; ball.y = m.y + m.ny * BALL_R; ball.vx = ball.vy = 0;
   game.t = 0; game.time = 0; game.rings = 0; game.top = 0; game.combo = 1; game.comboT = 0;
@@ -914,7 +948,7 @@ function detach(nudge) {
   ball.vx = m.tx * ball.v; ball.vy = m.ty * ball.v;
   ball.x = m.x + m.nx * (BALL_R + (nudge || 0.6));
   ball.y = m.y + m.ny * (BALL_R + (nudge || 0.6));
-  ball.coyote = 0.09;
+  ball.coyote = 0.09; ball.noLand = 0.03;
 }
 function land(ci, s, impact) {
   const ch = course.chains[ci], m = sample(ch, s);
@@ -1022,7 +1056,7 @@ function physics(dt) {
       const vf = Math.max(ball.v, 950);
       ball.vx = sm.tx * vf + sm.nx * SPRING_V;
       ball.vy = sm.ty * vf + sm.ny * SPRING_V;
-      ball.coyote = 0.12; cam.shake = Math.min(cam.shake + 0.5, 1.2); Sound.spring();
+      ball.coyote = 0.12; ball.noLand = 0.03; cam.shake = Math.min(cam.shake + 0.5, 1.2); Sound.spring();
       for (let i = 0; i < 24; i++) emit(sm.x, sm.y, sm.nx * rng(120, 700) + rng(-200, 200), sm.ny * rng(120, 700) + rng(-200, 200), rng(0.25, 0.6), rng(2, 4.4), 0.72, 1);
       return;
     }
@@ -1047,6 +1081,7 @@ function physics(dt) {
   } else {
     /* ── airborne ── */
     ball.coyote = Math.max(0, ball.coyote - dt);
+    ball.noLand = Math.max(0, ball.noLand - dt);
     ball.flying = !!holdJump && ball.fuel > 0 && ball.coyote <= 0;
     ball.diving = !!inD && !ball.flying;
 
@@ -1079,6 +1114,7 @@ function physics(dt) {
     const sp = Math.hypot(ball.vx, ball.vy);
     if (sp > 2400) { const f = 2400 / sp; ball.vx *= f; ball.vy *= f; }
 
+    const px0 = ball.x, py0 = ball.y;
     ball.x += ball.vx * dt; ball.y += ball.vy * dt;
     ball.rot += (ball.vx / BALL_R) * dt * 0.7;
 
@@ -1101,10 +1137,11 @@ function physics(dt) {
       break;
     }
 
-    if (ball.coyote <= 0) {
-      const hit = probeLanding(course, ball.x, ball.y, ball.vx, ball.vy, BALL_R);
-      if (hit) land(hit.ci, hit.s, hit.vn);
-    }
+    /* The point probe is muted for a few steps after leaving a surface so the
+       ball can clear it; the swept probe never is, so nothing gets through. */
+    let hit = ball.noLand <= 0 ? probeLanding(course, ball.x, ball.y, ball.vx, ball.vy, BALL_R) : null;
+    if (!hit) hit = probeSwept(course, px0, py0, ball.x, ball.y, ball.vx, ball.vy);
+    if (hit) land(hit.ci, hit.s, hit.vn);
     if (ball.y > game.cp.y + 1250 || ball.y > course.floorY) respawn();
   }
 
@@ -1881,7 +1918,7 @@ window.addEventListener('keydown', e => {
         ball.vy = m.ty * ball.v + m.ny * JUMP_V;
         ball.x = m.x + m.nx * (BALL_R + 2); ball.y = m.y + m.ny * (BALL_R + 2);
       } else { ball.vx += 0; ball.vy -= JUMP_V * 0.8; }
-      ball.coyote = 0.10; ball.squash = 0.5; Sound.jump();
+      ball.coyote = 0.10; ball.noLand = 0.03; ball.squash = 0.5; Sound.jump();
       for (let i = 0; i < 10; i++) emit(ball.x, ball.y, rng(-220, 220), rng(-220, 220), rng(0.15, 0.35), rng(1.4, 3), 0.42, 0);
     }
   }
@@ -1965,7 +2002,32 @@ loadLevel(0);
 requestAnimationFrame(frame);
 
 /* handle for tuning + automated playtests */
-window.heatline = { ball, game, cam, keys, sample, physics, LEVELS, play, openMenu,
+/* test hook: did the motion p0->p1 cross a rail segment from its front face? */
+function crossedRail(x0, y0, x1, y1) {
+  const rad = BALL_R;
+  const bx0 = Math.min(x0, x1) - rad, bx1 = Math.max(x0, x1) + rad;
+  const by0 = Math.min(y0, y1) - rad, by1 = Math.max(y0, y1) + rad;
+  for (let cx = Math.floor(bx0 / CELL); cx <= Math.floor(bx1 / CELL); cx++)
+    for (let cy = Math.floor(by0 / CELL); cy <= Math.floor(by1 / CELL); cy++) {
+      const b = grid.get(gkey(cx, cy)); if (!b) continue;
+      for (let q = 0; q < b.length; q += 2) {
+        const ch = course.chains[b[q]], i = b[q + 1];
+        const ax = ch.xs[i], ay = ch.ys[i], ex = ch.xs[i + 1] - ax, ey = ch.ys[i + 1] - ay;
+        const el = Math.hypot(ex, ey) || 1, ux = ex / el, uy = ey / el;
+        const nx = uy, ny = -ux;
+        const s0 = (x0 - ax) * nx + (y0 - ay) * ny, s1 = (x1 - ax) * nx + (y1 - ay) * ny;
+        if (s0 <= 0 || s1 > 0) continue;
+        const t = s0 / (s0 - s1);
+        const px = x0 + (x1 - x0) * t, py = y0 + (y1 - y0) * t;
+        const al = ((px - ax) * ux + (py - ay) * uy) / el;
+        if (al < 0 || al > 1) continue;
+        return { ci: b[q], i };
+      }
+    }
+  return null;
+}
+
+window.heatline = { ball, game, cam, keys, sample, physics, crossedRail, LEVELS, play, openMenu,
                     loadLevel, get course() { return course; }, get saved() { return saved; } };
 
 })();

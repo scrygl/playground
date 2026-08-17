@@ -82,7 +82,31 @@ Each of these exists because a playtest found the failure it prevents:
 - **Plates catch you in the air.** Sailing over one off a crest silently cost you
   the next loop.
 - **Chasms drop to meet you.** A long span with a level landing is unfair to a
-  player who only flies on the way down; every chasm now lands ~200px lower.
+  player who only flies on the way down; every chasm now lands ~240px lower —
+  and is set past ballistic reach, so flight (or the burner) is still the only
+  way over.
+
+### Falling through the track
+
+Reported from real play: "sometimes when the angle is just right, the ball falls
+through the track."
+
+It was not tunneling — a 1/240s step moves at most 10px against a 17px ball, and
+a sweep of 1,701 clean approaches across every angle and speed found zero
+failures. The cause was the grace window after leaving a surface. One timer was
+doing two jobs: coyote time for jumping, *and* muting collision so the ball
+doesn't instantly re-attach to the rail it just left. At 0.09–0.12s that mute is
+up to 290px of blind travel at speed — far enough to cross the opposite wall of
+a loop. Every reproduction sat at a loop mouth.
+
+The fix is in two parts. The timers are split, so the collision mute is 0.03s
+and coyote time keeps its own. And landing now also runs a **swept** test: as
+well as asking where the ball *is*, it tests the line it just travelled against
+the rail, and lands at the crossing. The point probe can be muted; the swept
+probe never is. A pass-through is now impossible at any speed or angle rather
+than merely unlikely.
+
+Before: 1,475 pass-throughs out of 44,832 departures. After: zero.
 
 ## Courses are authored, not generated
 
@@ -107,10 +131,23 @@ visible tiles are stroked.
 
 ## Testing
 
-Driven in headless Chromium rather than eyeballed. `scratchpad/` isn't shipped,
-but the suites were: all five courses under a roll-and-fly agent and a
-boost-holding agent, plus five player behaviours on Gauntlet (idle, roll-only,
-jump-mashing, random input, boost-spam). Last run: 20 consecutive level-clears
-across four passes, zero respawns, no page errors, 60fps under software
-rendering. There is no way to get permanently stuck — 25 seconds of jump-mashing
-stalls progress at 10%, and running clean afterwards recovers to the end.
+Driven in headless Chromium rather than eyeballed.
+
+The strongest check drives the physics directly at 1/240s and asserts an
+invariant after **every substep**: the ball's centre must never cross a rail's
+front face. It runs six play styles (roll, boost, roll-and-fly, jump-mashing,
+tuck-diving, random input) across all five courses — about fifteen simulated
+minutes per pass — using a crossing test written independently of the collision
+solver, so it can't rubber-stamp the code it's checking. Current result: zero
+breaches in 30 runs.
+
+That same harness doubles as a design check, since it reports which styles reach
+the goal. It is what caught the chasms becoming ballistically crossable: `roll`,
+which never flies, was finishing The Chasm. Courses 1, 2 and 4 are clearable by
+every style; 3 and 5 require flight or the burner, by design.
+
+Alongside it: real-time runs of all five courses under two agents, five player
+behaviours on Gauntlet, and an approach sweep of 1,701 angle/speed combinations.
+Last run: no page errors, 60fps under software rendering. There is no way to get
+permanently stuck — 25 seconds of jump-mashing stalls progress at 10%, and
+running clean afterwards recovers to the end.
