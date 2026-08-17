@@ -66,7 +66,7 @@
   .read .big{ font-size:38px; font-weight:500; letter-spacing:-.02em; }
   .read i{ font-style:normal; font-size:11px; color:var(--mute); }
 
-  .meter{ width:190px; height:5px; background:rgba(23,112,122,.28); border-radius:3px; overflow:hidden; }
+  .meter{ width:190px; height:5px; background:rgba(130,196,196,.16); border-radius:3px; overflow:hidden; }
   .meter > span{ display:block; height:100%; width:0%; border-radius:3px; transition:width .06s linear; }
   .meter.fuel{ width:132px; }
   #fuelFill{ background:linear-gradient(90deg, #17707a, var(--mint)); }
@@ -74,6 +74,22 @@
 
   .combo{ font-family:var(--mono); font-size:12px; color:var(--gold); opacity:0; transition:opacity .2s; }
   .combo.on{ opacity:1; }
+
+  .read u{ font-family:var(--mono); font-size:12px; color:var(--ember); text-decoration:none;
+           opacity:0; transform:translateY(0); transition:opacity .25s, transform .25s; }
+  .read u.on{ opacity:1; transform:translateY(-7px); }
+
+  .meter.hot{ width:190px; height:8px; position:relative; overflow:visible;
+              background:rgba(130,196,196,.16); box-shadow:inset 0 0 0 1px rgba(150,210,210,.20); }
+  .meter.hot > span{ border-radius:3px; }
+  #heatFill{ transition:none; }
+  .meter.hot .mark{ position:absolute; top:-2px; bottom:-2px; left:78%; width:1px;
+                    background:rgba(255,240,214,.5); }
+  .meter.hot.warn{ box-shadow:0 0 0 1px rgba(255,94,48,.55), 0 0 12px rgba(255,94,48,.4); }
+  #heatNum{ font-size:12px; color:#8fb6bb; }
+  #heatNum.warn{ color:var(--ember); }
+  @media (max-width:560px){ .meter.hot{ width:118px; } }
+  body.touch .meter.hot{ width:120px; }
 
   /* ---------- overlays ---------- */
   .veil{
@@ -224,12 +240,14 @@
           <div class="read"><b id="ringNum">0</b><i>/ <span id="ringTot">0</span> rings</i></div>
           <div class="combo" id="combo">×1</div>
         </div>
-        <div class="read"><b id="timeNum">0.00</b><i>sec</i></div>
+        <div class="read"><b id="timeNum">0.00</b><i>sec</i><u id="penalty"></u></div>
       </div>
 
       <div class="cluster right">
-        <div class="read"><i>flight</i></div>
+        <div class="read"><b id="heatNum">cool</b><i>heat</i></div>
+        <div class="meter hot" id="heatMeter"><span id="heatFill"></span><em class="mark"></em></div>
         <div class="meter fuel" id="fuelMeter"><span id="fuelFill"></span></div>
+        <div class="read"><i>flight</i></div>
       </div>
     </div>
   </div>
@@ -244,11 +262,11 @@
   <div class="veil" id="titleVeil">
     <div class="panel">
       <h1 class="logo">Heatline</h1>
-      <p class="tagline">Five courses of momentum. The rail glows <em>hotter the faster you move</em>, and a loop only holds you if you carry enough speed into it. Beat the target time for gold; clear a course to open the next.</p>
+      <p class="tagline">Five courses of momentum. Speed builds heat, and heat eats your grip on the rail — <em>hold the accelerator down and it lets go of you</em>. Tuck to cool, burn where it counts, and carry enough speed into the loops to stay on the line.</p>
       <div class="keys" id="keyList">
         <div class="key"><span class="cap">← →</span> roll · brake</div>
         <div class="key"><span class="cap">space</span> jump · hold to fly</div>
-        <div class="key"><span class="cap">↓</span> tuck · dive</div>
+        <div class="key"><span class="cap">↓</span> tuck to shed heat · dive</div>
         <div class="key"><span class="cap">shift</span> burn the boost</div>
         <div class="key"><span class="cap">R</span> restart</div>
         <div class="key"><span class="cap">P</span> pause · <span class="cap">M</span> mute</div>
@@ -284,6 +302,7 @@
         <div class="stat"><b id="wRings">0</b><i>rings</i></div>
         <div class="stat"><b id="wTop">0</b><i>top speed</i></div>
         <div class="stat"><b id="wScore">0</b><i>score</i></div>
+        <div class="stat"><b id="wFalls">clean</b><i>falls</i></div>
       </div>
       <p class="best" id="winBest"></p>
       <div class="row">
@@ -360,8 +379,30 @@ const FLY_ACC   = 1450;
 const FLY_GRAV  = 0.20;
 const DIVE_GRAV = 2.7;
 const FUEL_MAX  = 100;
-const FLY_COST  = 26, BOOST_COST = 32, FUEL_REGEN = 24, RING_FUEL = 7;
+const FLY_COST  = 21, BOOST_COST = 32, FUEL_REGEN = 24, RING_FUEL = 7;
+/* The burner will not touch the last third of the tank. Boost and flight draw
+   on the same fuel, and without a reserve a player who habitually burns
+   arrives at a chasm dry with no way across — a dead end rather than a cost. */
+const BOOST_FLOOR = 35;
 const PAD_SPEED = 2050, SPRING_V = 1520;
+
+/* ── thermal ──────────────────────────────────────────────────────────
+   The rail's glow stops being a metaphor here. Speed above the redline
+   builds heat; heat eats your grip on the rail; tucking sheds it. That
+   makes a held accelerator actively worse than a modulated one, which is
+   the decision the game was missing. Drive, burn and tuck are mutually
+   exclusive — three tools, never all at once. */
+const REDLINE    = 900;    // px/s: above this the rail starts cooking
+const HEAT_RATE  = 0.045;  // heat/s per px/s over the redline
+const HEAT_BOOST = 46;     // extra heat/s while the burner is lit
+const COOL_TUCK  = 62;     // tuck is the tool: fast, cool, but no drive
+const COOL_AIR   = 22;     // air over the rail cools you, but won't wipe the gauge
+const COOL_IDLE  = 20;
+const HEAT_GRIP  = 1500;   // grip lost to a full gauge, in px/s² — enough to
+                           // skip you off curvature, not to strand you on flat
+const HEAT_DRIVE = 0.45;   // and a hot ball simply cannot put power down
+const BURN_HEAT  = 100;
+const FALL_TIME  = 4;      // seconds a fall costs against the clock
 const STEP      = 7;          // rail sampling resolution (px)
 const PHYS_DT   = 1 / 240;    // fixed physics step → ≤9px per substep
 
@@ -479,11 +520,11 @@ function c1(X) {
   const c = X.start(0, 0, 0);
   c.line(700).hill(1000, 9);
   c.descent(900, 22, 380);
-  c.line(520); X.pad(); c.line(360);
+  c.line(740); X.pad(); c.line(140);
   X.mark('loop'); c.loop(190);
   c.line(300).hill(700, 14).dip(700, 16);
   c.descent(760, 26, 420);
-  c.line(420); X.pad(); c.line(340);
+  c.line(620); X.pad(); c.line(140);
   X.mark('loop'); c.loop(215);
   c.line(480).dip(700, 18).hill(700, 18);
   c.line(900);
@@ -496,13 +537,13 @@ function c2(X) {
   let c = X.start(0, 0, 0);
   c.line(600).hill(900, 10);
   c.descent(820, 24, 430);
-  c.line(560); X.pad(); c.line(380);
+  c.line(800); X.pad(); c.line(140);
   X.mark('loop'); c.loop(200);
   c.line(280);
   c.bowlIn(340, 46); X.spring(); c.bowlOut(340, 46);
   c.line(180).hill(500, 22);
   c.line(160).wash(4, 260, 20);
-  c.line(320); X.pad(); c.line(300);
+  c.line(480); X.pad(); c.line(140);
   X.mark('loop'); c.loop(230);
   c.line(340);
   c.arc(450, -32).line(180);                       // ramp
@@ -520,7 +561,7 @@ function c3(X) {
   let c = X.start(0, 0, 0);
   c.line(700);
   c.descent(800, 26, 460);
-  c.line(560); X.pad(); c.line(380);
+  c.line(800); X.pad(); c.line(140);
   X.mark('loop'); c.loop(205);
   c.line(300).wash(3, 280, 22);
   c.line(300);
@@ -529,7 +570,7 @@ function c3(X) {
   c = X.start(e.x + 2000, e.y + 235, 12 * RAD);
   c.line(800).arc(900, -12).line(420);
   c.dip(760, 20).hill(760, 20);
-  c.line(400); X.pad(); c.line(320);
+  c.line(580); X.pad(); c.line(140);
   X.mark('loop'); c.loop(240);
   c.line(400);
   c.arc(560, -28).line(180); X.mark('fly');
@@ -537,7 +578,7 @@ function c3(X) {
   c = X.start(e.x + 2020, e.y + 245, 14 * RAD);
   c.line(900).arc(900, -14);
   c.descent(850, 24, 520);
-  c.line(340); X.pad(); c.line(320);
+  c.line(520); X.pad(); c.line(140);
   X.mark('loop'); c.loop(225);
   c.line(280).wash(3, 270, 22);
   c.line(280);
@@ -556,7 +597,7 @@ function c4(X) {
   let c = X.start(0, 0, 0);
   c.line(620).hill(900, 10);
   c.descent(820, 24, 430);
-  c.line(620); X.pad(); c.line(430);
+  c.line(910); X.pad(); c.line(140);
   X.mark('loop'); c.loop(200);
   c.line(250).hill(540, 22).dip(540, 24);
   c.descent(700, 30, 540);
@@ -565,7 +606,7 @@ function c4(X) {
   let e = X.end();
   c = X.start(e.x + 300, e.y + 120, 11 * RAD);
   c.line(900).hill(1500, 7).line(760).arc(900, -11).line(320);
-  X.pad(); c.line(170);
+  X.pad(); c.line(140);
   X.mark('loop'); c.loop(178);
   c.line(160);
   X.mark('loop'); c.loop(178);
@@ -574,7 +615,7 @@ function c4(X) {
   c.line(150).hill(460, 24);
   c.line(200).climb(760, 22, 760);
   c.line(160).wash(5, 250, 20);
-  c.line(260); X.pad(); c.line(230);
+  c.line(350); X.pad(); c.line(140);
   X.mark('loop'); c.loop(255);
   c.line(420);
   c.arc(540, -38).line(240);
@@ -593,12 +634,12 @@ function c5(X) {
   let c = X.start(0, 0, 0);
   c.line(520);
   c.descent(760, 28, 520);
-  c.line(560); X.pad(); c.line(340);
+  c.line(760); X.pad(); c.line(140);
   X.mark('loop'); c.loop(185);
   c.line(150);
   X.mark('loop'); c.loop(185);
   c.line(260).wash(4, 240, 24);
-  c.line(280); X.pad(); c.line(230);
+  c.line(370); X.pad(); c.line(140);
   X.mark('loop'); c.loop(300);
   c.line(320);
   c.arc(500, -34).line(200);
@@ -608,7 +649,7 @@ function c5(X) {
   c.bowlIn(330, 48); X.spring(); c.bowlOut(330, 48);
   c.line(160).hill(480, 24);
   c.line(200).climb(720, 22, 820);
-  c.line(220); X.pad(); c.line(280);
+  c.line(360); X.pad(); c.line(140);
   X.mark('loop'); c.loop(210);
   c.line(260).wash(5, 230, 22);
   c.line(260);
@@ -617,10 +658,10 @@ function c5(X) {
   c = X.start(e.x + 2030, e.y + 245, 10 * RAD);   // past ballistic reach, but it drops to meet the wings
   c.line(900).arc(900, -10).line(520);
   c.descent(820, 26, 620);
-  c.line(320); X.pad(); c.line(280);
+  c.line(460); X.pad(); c.line(140);
   X.mark('loop'); c.loop(268);
   c.line(400).wash(4, 260, 24);
-  c.line(280); X.pad(); c.line(250);
+  c.line(390); X.pad(); c.line(140);
   X.mark('loop'); c.loop(230);
   c.line(380);
   c.arc(520, -36).line(220);
@@ -637,31 +678,31 @@ function c5(X) {
 /* Skies. The sun is the light source the whole palette is borrowed from,
    so moving and recolouring it is what actually changes each course's mood. */
 const LEVELS = [
-  { id: 'first-light', name: 'First Light', build: c1, target: 7,
+  { id: 'first-light', name: 'First Light', build: c1, target: 8,
     brief: 'Roll, read the hills, hold two loops.',
     sky: { stops: [[0,'#01080c'],[0.36,'#03181f'],[0.62,'#07303a'],[0.80,'#123f3f'],[1,'#06171c']],
            sun: { r:0.30, y:-42, a:'#ffe6b0', b:'#ffab48', c:'#ff4f26', g:'255,168,74', g2:'255,110,50' },
            rA:'#04161d', rB:'#021015', edge:'rgba(90,190,185,0.16)', haze:'255,140,64', amp:[92,148] } },
 
-  { id: 'kicker-bowl', name: 'Kicker Bowl', build: c2, target: 9,
+  { id: 'kicker-bowl', name: 'Kicker Bowl', build: c2, target: 11,
     brief: 'A kicker at the floor of a bowl, and the first real gap.',
     sky: { stops: [[0,'#020a14'],[0.36,'#04182b'],[0.62,'#07293f'],[0.82,'#0d3a4d'],[1,'#04141d']],
            sun: { r:0.17, y:-232, a:'#eaf6ff', b:'#9fd0e8', c:'#4f8fb0', g:'150,205,235', g2:'90,150,200' },
            rA:'#041826', rB:'#020d16', edge:'rgba(120,190,220,0.16)', haze:'120,180,220', amp:[118,170] } },
 
-  { id: 'the-chasm', name: 'The Chasm', build: c3, target: 16,
+  { id: 'the-chasm', name: 'The Chasm', build: c3, target: 19,
     brief: 'Two spans no ramp will clear. Hold the wings up.',
     sky: { stops: [[0,'#0d0407'],[0.34,'#1c0810'],[0.60,'#33101a'],[0.82,'#4a1a18'],[1,'#1a0a0c']],
            sun: { r:0.40, y:14, a:'#ffd9a0', b:'#ff7a3a', c:'#c02414', g:'255,120,60', g2:'220,70,30' },
            rA:'#180a12', rB:'#0d050a', edge:'rgba(255,150,100,0.14)', haze:'255,90,50', amp:[74,132] } },
 
-  { id: 'gauntlet', name: 'Gauntlet', build: c4, target: 16,
+  { id: 'gauntlet', name: 'Gauntlet', build: c4, target: 19,
     brief: 'Loops back to back, then a climb only momentum takes.',
     sky: { stops: [[0,'#01050a'],[0.36,'#020c14'],[0.62,'#04161f'],[0.82,'#071f26'],[1,'#020a0f']],
            sun: { r:0.13, y:-286, a:'#f4fcff', b:'#d2e8f4', c:'#9ec3d6', g:'150,190,215', g2:'70,110,150' },
            rA:'#03101a', rB:'#01080e', edge:'rgba(120,200,220,0.13)', haze:'90,150,190', amp:[136,196] } },
 
-  { id: 'overdrive', name: 'Overdrive', build: c5, target: 26,
+  { id: 'overdrive', name: 'Overdrive', build: c5, target: 27,
     brief: 'Everything at once, and the sun already gone.',
     sky: { stops: [[0,'#000305'],[0.34,'#01080d'],[0.60,'#041018'],[0.86,'#2a1008'],[1,'#0a0508']],
            sun: { r:0.55, y:268, a:'#ffcf7a', b:'#ff6a25', c:'#b31c05', g:'255,110,40', g2:'190,50,15' },
@@ -884,6 +925,7 @@ const Sound = (() => {
     pad()   { blip(420, 0.3, 'sawtooth', 0.12, 3.2); },
     spring(){ blip(520, 0.26, 'square', 0.1, 2.6); },
     fly()   { blip(640, 0.1, 'sine', 0.05, 1.4); },
+    burn()  { blip(180, 0.5, 'sawtooth', 0.16, 0.3); blip(900, 0.3, 'square', 0.06, 0.2); },
     win()   { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.34, 'triangle', 0.15, 1), i * 105)); },
     speed(f, air) {
       if (!ready || muted) return;
@@ -918,13 +960,14 @@ const ball = {
   ci: 0, s: 0, v: 0, grounded: true,
   x: 0, y: 0, vx: 0, vy: 0,
   rot: 0, fuel: FUEL_MAX, flying: false, diving: false, boosting: false,
-  face: 1, fwd: 1, squash: 0, tuck: false, coyote: 0, noLand: 0, slip: 0,
+  face: 1, fwd: 1, squash: 0, tuck: false, coyote: 0, noLand: 0, slip: 0, heat: 0, retreat: 0, burning: false,
 };
 const cam = { x: 0, y: 0, z: 1, shake: 0, roll: 0 };
 const trail = [];
 let game = {
   mode: 'title', t: 0, time: 0, rings: 0, top: 0, combo: 1, comboT: 0,
   score: 0, flash: 0, boostFx: 0, cp: { ci: 0, s: 0, y: 0 }, cpT: 0, goT: 0, prog: 0, padCd: 0, level: 0,
+  falls: 0, penFx: 0, burnFx: 0,
 };
 
 function resetRun() {
@@ -932,11 +975,12 @@ function resetRun() {
   par.n = 0; trail.length = 0;
   ball.ci = 0; ball.s = 40; ball.v = 0; ball.grounded = true;
   ball.fuel = FUEL_MAX; ball.flying = ball.diving = ball.boosting = false;
-  ball.rot = 0; ball.face = 1; ball.fwd = 1; ball.squash = 0; ball.coyote = 0; ball.noLand = 0; ball.slip = 0;
+  ball.rot = 0; ball.face = 1; ball.fwd = 1; ball.squash = 0; ball.coyote = 0; ball.noLand = 0; ball.slip = 0; ball.heat = 0; ball.retreat = 0; ball.burning = false;
   const m = sample(course.chains[0], ball.s);
   ball.x = m.x + m.nx * BALL_R; ball.y = m.y + m.ny * BALL_R; ball.vx = ball.vy = 0;
   game.t = 0; game.time = 0; game.rings = 0; game.top = 0; game.combo = 1; game.comboT = 0;
   game.score = 0; game.flash = 0; game.boostFx = 0; game.goT = 1.1; game.prog = 0; game.padCd = 0;
+  game.falls = 0; game.penFx = 0; game.burnFx = 0;
   game.cp = { ci: 0, s: 40, y: ball.y }; game.cpT = 0;
   cam.x = ball.x; cam.y = ball.y; cam.z = 1; cam.shake = 0; cam.roll = 0;
 }
@@ -968,6 +1012,27 @@ function land(ci, s, impact) {
   if (ball.diving) { cam.shake = Math.min(cam.shake + 0.7, 1.6); game.flash = 0.4; shock(ball.x, ball.y); }
   ball.diving = false;
 }
+/* Redline long enough and the rail simply lets go of you. Fully telegraphed
+   by the gauge, never random — and the air cools you on the way down. */
+function burnOff(m) {
+  /* The cost has to be momentum, not spectacle. Cooking the gauge throws away
+     most of what the last few seconds built, which is what makes tucking before
+     the redline the faster line rather than the timid one. */
+  ball.v *= 0.42;
+  detach(2.5);
+  ball.slip = 0.45;
+  ball.heat = 50;
+  game.burnFx = 1;
+  game.flash = 0.34;
+  cam.shake = Math.min(cam.shake + 0.9, 1.5);
+  Sound.burn();
+  for (let i = 0; i < 34; i++) {
+    const a = rnd() * TAU;
+    emit(ball.x, ball.y, Math.cos(a) * rng(160, 700), Math.sin(a) * rng(160, 700) - 120,
+         rng(0.3, 0.7), rng(2, 4.6), rng(0.82, 1), 1);
+  }
+}
+
 function shock(x, y) {
   for (let i = 0; i < 26; i++) {
     const a = (i / 26) * TAU;
@@ -981,7 +1046,13 @@ function physics(dt) {
   const inD = (keys.ArrowDown  || keys.KeyS) ? 1 : 0;
   const inU = (keys.ArrowUp    || keys.KeyW) ? 1 : 0;
   const dir = inR - inL;
-  const wantBoost = (keys.ShiftLeft || keys.ShiftRight || keys.KeyX) && ball.fuel > 1;
+  const tucking = inD && ball.grounded;
+  /* hysteresis: the burner needs a real tank to light and runs until dry, so
+     holding shift gives a burn/cool rhythm instead of a permanent warm stutter */
+  const askBoost = (keys.ShiftLeft || keys.ShiftRight || keys.KeyX) && !tucking;
+  if (!askBoost || ball.fuel <= BOOST_FLOOR) ball.burning = false;
+  else if (ball.fuel > BOOST_FLOOR + 14) ball.burning = true;
+  const wantBoost = askBoost && ball.burning;
   const holdJump = keys.Space || keys.KeyZ;
 
   ball.boosting = !!wantBoost;
@@ -991,6 +1062,13 @@ function physics(dt) {
     const ch = course.chains[ball.ci];
     let m = sample(ch, ball.s);
     ball.tuck = !!inD;
+
+    /* thermal: the gauge is the whole reason to ever lift off the accelerator */
+    let dh = ball.tuck ? -COOL_TUCK
+           : Math.abs(ball.v) > REDLINE ? (Math.abs(ball.v) - REDLINE) * HEAT_RATE
+           : -COOL_IDLE;
+    if (wantBoost) dh += HEAT_BOOST;
+    ball.heat = clamp(ball.heat + dh * dt, 0, BURN_HEAT);
 
     /* Which way along s counts as "right"? Only re-read it from the rail while
        the rail is floor-like. Inside a loop you travel leftward through the top,
@@ -1011,11 +1089,19 @@ function physics(dt) {
       emit(ball.x, ball.y, m.nx * rng(30, 180) + rng(-90, 90), m.ny * rng(30, 180) + rng(-90, 90),
            rng(0.2, 0.45), rng(1.2, 2.6), 0.12, 0);
 
+    /* Retreat. Lose a climb and you slide, and you cannot arrest that slide
+       until you are back on the level. Without it, holding forward brakes your
+       own escape: the ball parks a few metres inside a loop mouth with too
+       short a run-up to ever clear it, and no way back to the plate behind. */
+    if (sign(ball.v) === -fwd && Math.abs(m.ty) > 0.12 && Math.abs(ball.v) > 60) ball.retreat = 1.0;
+    ball.retreat = Math.max(0, ball.retreat - dt);
+
     if (dir && grip) {
       const want = dir * fwd;
       if (sign(ball.v) === want || Math.abs(ball.v) < 22) {
-        if (Math.abs(ball.v) < MAX_SPD) acc += want * ACCEL * (ball.tuck ? 0.45 : 1);
-      } else acc += want * BRAKE;
+        if (Math.abs(ball.v) < MAX_SPD)
+          acc += want * ACCEL * (ball.tuck ? 0.45 : 1) * (1 - HEAT_DRIVE * (ball.heat / BURN_HEAT) ** 2);
+      } else if (ball.retreat <= 0) acc += want * BRAKE;
     } else if (!dir && grip) {
       const fr = ball.tuck ? 190 : 660;
       if (Math.abs(ball.v) > fr * dt) acc -= sign(ball.v) * fr; else ball.v = 0;
@@ -1064,14 +1150,19 @@ function physics(dt) {
     if (ball.s <= 0 || ball.s >= ch.L) { ball.s = clamp(ball.s, 0, ch.L); detach(1.5); return; }
 
     m = sample(ch, ball.s);
-    const N = ball.v * ball.v * m.k - GRAV * m.ny;             // ← the whole loop mechanic
+    /* Grip lost to heat enters the same expression that holds you on the rail,
+       so a hot ball skips off crests it would otherwise have carried. */
+    const hf = ball.heat / BURN_HEAT;
+    const N = ball.v * ball.v * m.k - GRAV * m.ny - HEAT_GRIP * hf * hf;
     if (N < 0) { detach(1.0); return; }
+
+    if (ball.heat >= BURN_HEAT) { burnOff(m); return; }
 
     ball.x = m.x + m.nx * BALL_R; ball.y = m.y + m.ny * BALL_R;
     ball.rot += ball.v * dt / BALL_R;
 
     if (Math.abs(ball.v) > 320 && rnd() < Math.min(0.9, Math.abs(ball.v) / 2400)) {
-      const f = clamp(Math.abs(ball.v) / REF_SPD, 0, 1);
+      const f = clamp(0.3 + 0.7 * (ball.heat / BURN_HEAT), 0, 1);
       emit(ball.x + m.nx * -2, ball.y + m.ny * -2,
            -m.tx * ball.v * 0.16 + rng(-70, 70), -m.ty * ball.v * 0.16 + rng(-70, 70) - 40,
            rng(0.18, 0.42), rng(1.2, 3), 0.35 + f * 0.55, 0);
@@ -1082,6 +1173,8 @@ function physics(dt) {
     /* ── airborne ── */
     ball.coyote = Math.max(0, ball.coyote - dt);
     ball.noLand = Math.max(0, ball.noLand - dt);
+    ball.slip   = Math.max(0, ball.slip - dt);
+    ball.heat = clamp(ball.heat + (wantBoost ? HEAT_BOOST : -COOL_AIR) * dt, 0, BURN_HEAT);
     ball.flying = !!holdJump && ball.fuel > 0 && ball.coyote <= 0;
     ball.diving = !!inD && !ball.flying;
 
@@ -1118,11 +1211,14 @@ function physics(dt) {
     ball.x += ball.vx * dt; ball.y += ball.vy * dt;
     ball.rot += (ball.vx / BALL_R) * dt * 0.7;
 
-    /* plates fire on contact, not only on contact-while-rolling — sailing
-       over one off a crest used to silently cost you the next loop */
+    /* Plates fire on contact, not only on contact-while-rolling. The catch
+       field is generous on purpose: a loop needs v >= sqrt(5gR), which for the
+       big ones is above what rolling alone gives, so the plate is the only way
+       through — and several sit just past a crest that launches you over them.
+       A missed plate means an unclearable loop, so this errs toward catching. */
     if (game.padCd <= 0) for (const p of course.pads) {
       const dx = ball.x - p.x, dy = ball.y - p.y;
-      if (dx * dx + dy * dy > 4200) continue;
+      if (dx * dx + dy * dy > 22500) continue;
       if (ball.vx * p.tx + ball.vy * p.ty <= 0) continue;      // forward only
       const sp2 = Math.hypot(ball.vx, ball.vy);
       const d = 1;
@@ -1155,6 +1251,8 @@ function respawn() {
   ball.x = m.x + m.nx * BALL_R; ball.y = m.y + m.ny * BALL_R;
   ball.vx = ball.vy = 0; ball.fuel = FUEL_MAX; ball.flying = ball.diving = false;
   game.flash = 0.6; cam.shake = 0.5; game.combo = 1;
+  ball.heat = 0;
+  game.time += FALL_TIME; game.falls++; game.penFx = 1.6;
   for (let i = 0; i < 30; i++) { const a = rnd() * TAU; emit(ball.x, ball.y, Math.cos(a) * rng(100, 500), Math.sin(a) * rng(100, 500), rng(0.3, 0.6), rng(2, 4), 0.5, 1); }
 }
 
@@ -1210,6 +1308,8 @@ function updateCamera(dt) {
 
   game.boostFx = Math.max(0, game.boostFx - dt * 2.4);
   game.flash = Math.max(0, game.flash - dt * 2.6);
+  game.penFx = Math.max(0, game.penFx - dt);
+  game.burnFx = Math.max(0, game.burnFx - dt * 1.6);
 }
 
 /* ═══════════════ render: rail tiles ═══════════════ */
@@ -1377,7 +1477,8 @@ function drawBackdrop(t) {
 /* ═══════════════ render: world ═══════════════ */
 function drawWorld(t) {
   const sp = ball.grounded ? Math.abs(ball.v) : Math.hypot(ball.vx, ball.vy);
-  const f  = clamp(sp / REF_SPD, 0, 1);
+  /* the glow is the gauge: heat dominates, speed only tints it */
+  const f  = clamp(0.24 * (sp / REF_SPD) + 0.86 * (ball.heat / BURN_HEAT), 0, 1);
 
   ctx.save();
   ctx.translate(W / 2, H / 2);
@@ -1570,6 +1671,15 @@ function drawBall(t, f) {
   ctx.fillStyle = gr;
   ctx.beginPath(); ctx.arc(0, 0, BALL_R * (3.2 + f * 4.4), 0, TAU); ctx.fill();
 
+  /* the ball itself warns before it lets go */
+  if (ball.heat > 78) {
+    const w = (ball.heat - 78) / 22;
+    ctx.strokeStyle = `rgba(255,${Math.round(200 - w * 150)},${Math.round(120 - w * 100)},${0.35 + w * 0.5})`;
+    ctx.lineWidth = 1.6 + w * 2.2;
+    const r = BALL_R * (1.5 + w * 0.5) + Math.sin(t * (14 + w * 26)) * (2 + w * 4);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  }
+
   /* wings while flying — earned by the mechanic, drawn only when it's on */
   if (ball.flying) {
     const flap = Math.sin(t * 22) * 0.34;
@@ -1652,8 +1762,16 @@ function drawScreenFx(t, f) {
   }
   ctx.drawImage(vigSprite, 0, 0);
 
+  if (game.burnFx > 0.01) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.1, W / 2, H / 2, Math.max(W, H) * 0.8);
+    g.addColorStop(0, `rgba(255,110,40,${game.burnFx * 0.22})`);
+    g.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
   if (game.flash > 0.01) {
-    ctx.fillStyle = `rgba(255,240,214,${game.flash * 0.4})`;
+    ctx.fillStyle = `rgba(255,240,214,${game.flash * 0.20})`;
     ctx.fillRect(0, 0, W, H);
   }
   if (game.goT > 0 && game.mode === 'play') {
@@ -1676,6 +1794,7 @@ const ui = {
   hud: el('hud'), spdNum: el('spdNum'), spdFill: el('spdFill'), ringNum: el('ringNum'),
   ringTot: el('ringTot'), timeNum: el('timeNum'), fuelFill: el('fuelFill'), fuelMeter: el('fuelMeter'),
   combo: el('combo'), progDone: el('progDone'), progYou: el('progYou'), rail: el('rail'),
+  heatFill: el('heatFill'), heatMeter: el('heatMeter'), heatNum: el('heatNum'), penalty: el('penalty'),
 };
 /* the progress rail is rebuilt per course — its pips mark that course's
    loops, kickers and chasms, so it doubles as a map of what's ahead */
@@ -1691,7 +1810,7 @@ function buildProgressPips() {
 
 let hudAcc = 0;
 function updateHUD(dt) {
-  hudAcc += dt; if (hudAcc < 0.05) return; hudAcc = 0;
+  hudAcc += dt; if (hudAcc < 0.033) return; hudAcc = 0;
   const sp = ball.grounded ? Math.abs(ball.v) : Math.hypot(ball.vx, ball.vy);
   const f = clamp(sp / REF_SPD, 0, 1);
   ui.spdNum.textContent = Math.round(sp);
@@ -1701,6 +1820,15 @@ function updateHUD(dt) {
   ui.timeNum.textContent = game.time.toFixed(2);
   ui.fuelFill.style.width = (ball.fuel / FUEL_MAX * 100).toFixed(1) + '%';
   ui.fuelMeter.classList.toggle('low', ball.fuel < 28);
+
+  const hf = ball.heat / BURN_HEAT;
+  ui.heatFill.style.width = (hf * 100).toFixed(1) + '%';
+  ui.heatFill.style.background = `linear-gradient(90deg, ${heat(Math.max(0.05, hf * 0.55))}, ${heat(Math.min(1, hf * 1.05))})`;
+  ui.heatMeter.classList.toggle('warn', hf > 0.78);
+  ui.heatNum.classList.toggle('warn', hf > 0.78);
+  ui.heatNum.textContent = hf > 0.90 ? 'letting go' : hf > 0.72 ? 'redline' : hf > 0.42 ? 'hot' : hf > 0.15 ? 'warm' : 'cool';
+  ui.penalty.textContent = game.penFx > 0 ? '+' + FALL_TIME.toFixed(2) + 's' : '';
+  ui.penalty.classList.toggle('on', game.penFx > 0);
   if (game.combo > 1) { ui.combo.textContent = '×' + game.combo; ui.combo.classList.add('on'); }
   else ui.combo.classList.remove('on');
   if (ball.grounded) game.prog = clamp((course.chains[ball.ci].offset + ball.s) / course.total, 0, 1) * 100;
@@ -1764,6 +1892,7 @@ function finish() {
   el('wTime').textContent = game.time.toFixed(2);
   el('wRings').textContent = game.rings + '/' + ringTot;
   el('wTop').textContent = Math.round(game.top);
+  el('wFalls').textContent = game.falls ? game.falls + ' \u00d7 +' + FALL_TIME + 's' : 'clean';
   el('wScore').textContent = game.score.toLocaleString();
   el('winTitle').textContent = LV.name;
   el('winTag').textContent = med
@@ -1992,7 +2121,8 @@ function frame(now) {
   updateHUD(dt);
 
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const f = clamp((ball.grounded ? Math.abs(ball.v) : Math.hypot(ball.vx, ball.vy)) / REF_SPD, 0, 1);
+  const f = clamp(0.24 * ((ball.grounded ? Math.abs(ball.v) : Math.hypot(ball.vx, ball.vy)) / REF_SPD)
+                  + 0.86 * (ball.heat / BURN_HEAT), 0, 1);
   drawBackdrop(t);
   drawWorld(t);
   drawScreenFx(t, f);

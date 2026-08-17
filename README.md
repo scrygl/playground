@@ -11,9 +11,9 @@ self-contained file.
 | | |
 |---|---|
 | `←` `→` | roll · brake |
-| `space` | jump — **hold it in the air to fly** |
-| `↓` | tuck on the ground · dive in the air |
-| `shift` | burn the boost |
+| `↓` | **tuck to shed heat** on the ground · dive in the air |
+| `space` | jump — hold it in the air to fly |
+| `shift` | burn the boost (won't touch the last third of the tank) |
 | `R` · `P` · `C` · `M` | restart · pause · courses · mute |
 
 Touch devices get on-screen thumb pads.
@@ -22,17 +22,57 @@ Touch devices get on-screen thumb pads.
 
 | # | Course | Length | Gold | Introduces |
 |---|---|---|---|---|
-| 1 | First Light | 12.6k | 7s | rolling, two loops |
-| 2 | Kicker Bowl | 17.7k | 9s | the kicker bowl, washboards, a jump gap |
-| 3 | The Chasm | 26.6k | 16s | three spans that only flight crosses |
-| 4 | Gauntlet | 32.2k | 16s | back-to-back loops, a momentum-gated climb |
-| 5 | Overdrive | 42.4k | 26s | all of it, at pace |
+| 1 | First Light | 12.6k | 8s | rolling, two loops |
+| 2 | Kicker Bowl | 17.7k | 11s | the kicker bowl, washboards, a jump gap |
+| 3 | The Chasm | 26.6k | 19s | three spans that only flight crosses |
+| 4 | Gauntlet | 32.1k | 19s | back-to-back loops, a momentum-gated climb |
+| 5 | Overdrive | 42.4k | 27s | all of it, at pace |
 
-Clear a course to open the next. Gold demands the boost — a clean roll-through
-lands around silver. Best times, ring counts and medals persist in
+Clear a course to open the next. Gold demands modulation — see below.
+A fall costs four seconds against the clock, so sloppiness is priced rather
+than punished. Best times, ring counts and medals persist in
 `localStorage`. Each course has its own sky, because the sun is the light source
 the whole palette is borrowed from: moving and recolouring it is what actually
 changes the mood.
+
+## Heat, or why you can't just hold forward
+
+The first version of this game had a fatal flaw: holding `→` was the optimal
+strategy. Instrumenting it made that concrete — **on half of all grounded
+frames the accelerate key was doing literally nothing**, because the ball was
+already at the speed cap, and fuel sat at 100% for entire runs, so the boost was
+free and never a decision. There was no resource, no cost, and nothing to press.
+
+So the rail's glow stopped being a metaphor and became the mechanic. Speed above
+a redline builds **heat**; heat eats your grip on the rail and throttles how
+much power you can put down; cook the gauge to full and the rail simply lets go
+of you, throwing away most of the momentum you spent the last few seconds
+building. Tucking (`↓`) sheds heat fast while costing you almost no speed, and
+air over the rail cools you too. Drive, burn and tuck are mutually exclusive —
+three tools, never all at once.
+
+The result is a continuous decision instead of a held key: burn on the straights,
+tuck before the loop, spend the gauge where it buys you something. The same
+value drives the rail's colour, so the gauge is readable without looking away
+from the ball.
+
+Measured across all five courses, driving the physics directly with three play
+styles — pinning the accelerator, pinning it with the burner held, and
+modulating with the gauge:
+
+| course | modulated | pinned | advantage |
+|---|---|---|---|
+| First Light | 6.6s | 11.7s | 5.1s |
+| Kicker Bowl | 9.4s | 32.9s | 23.5s |
+| The Chasm | 16.6s | 31.8s | 15.2s |
+| Gauntlet | 20.3s | 18.5s | −1.8s |
+| Overdrive | 23.3s | 52.3s | 29.0s |
+
+Modulating never redlines and never burns off; holding the burner sits at the
+redline 5–18% of the time and pays for it. Gauntlet is the one course where a
+steady line still beats an aggressive one, which seems like fair variety rather
+than a fault. Every style still finishes every course — the mechanic prices bad
+play, it doesn't wall it off.
 
 ## How it works
 
@@ -81,6 +121,20 @@ Each of these exists because a playtest found the failure it prevents:
   back into that bowl.
 - **Plates catch you in the air.** Sailing over one off a crest silently cost you
   the next loop.
+- **Retreat.** Lose a climb and you cannot arrest the slide until you are back
+  on the level. Without it, holding forward brakes your own escape: the ball
+  parks a few metres inside a loop mouth, with too short a run-up to ever clear
+  it and no way back to the plate behind it. Found by an agent that held the
+  burner down, which overshot the opening entirely and landed in the loop.
+- **Plates catch generously, and sit at the loop mouth.** A loop needs
+  `v >= sqrt(5gR)`, which for the larger ones is above what rolling alone
+  gives — so the plate is the only way through, and several sit just past a
+  crest that launches you clean over them. A missed plate meant an unclearable
+  loop and a seven-second limit cycle, so the catch field errs toward catching.
+- **The burner won't touch the last third of the tank.** Boost and flight draw
+  on the same fuel. Without a reserve, a player who habitually burns arrives at
+  a chasm dry with no way across — a dead end rather than a cost. One test agent
+  racked up 69 falls this way before the reserve existed.
 - **Chasms drop to meet you.** A long span with a level landing is unfair to a
   player who only flies on the way down; every chasm now lands ~240px lower —
   and is set past ballistic reach, so flight (or the burner) is still the only
